@@ -1,0 +1,36 @@
+.room-settings-root .practice-room-content { pointer-events: auto; }
+.room-info-panel { position: absolute; left: 0; top: 0; width: 395px; height: 645px; color: #f7e8c7; background-size: 100% 100%; }
+.room-map-panel { position: absolute; left: 15px; top: 46px; width: 374px; height: 281px; background-size: 100% 100%; }
+.room-map-image { position: absolute; left: 34px; top: 9px; width: 306px; height: 172px; display: grid; place-items: center; color: #f7e8c7; background-color: #404b45; background-size: 100% 100%; font-size: 14px; }
+.room-map-details { position: absolute; left: 38px; top: 182px; width: 296px; margin: 0; display: grid; grid-template-columns: 109px 187px; grid-auto-rows: 21px; font-size: 14px; line-height: 21px; }
+.room-map-details dt, .room-map-details dd { margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.room-map-details dt { color: #f8f2e9; }
+.room-map-details dd { color: #ffdd54; }
+.room-chat-panel { position: absolute; left: 10px; top: 332px; width: 384px; height: 267px; padding: 8px 8px; overflow-y: auto; background-size: 100% 100%; color: #81d9e4; font-size: 13px; line-height: 18px; }
+.room-chat-input { position: absolute; left: 10px; top: 599px; width: 384px; height: 38px; display: flex; align-items: center; padding: 3px 5px; background-size: 100% 100%; }
+.room-chat-input input { flex: 1; min-width: 0; height: 28px; padding: 2px 7px; color: #f8eddb; background: #3b332b; border: 0; font-size: 14px; }
+.room-chat-input button { flex: 0 0 43px; height: 27px; color: #f5dfbb; background: #6a3b20; border: 1px solid #ba8751; border-radius: 4px; font-size: 13px; }
+.room-team-panel { position: absolute; left: 395px; top: 46px; width: 726px; height: 591px; color: #f6e9cc; background-size: 100% 100%; }
+.room-team-panel h2 { position: absolute; left: 11px; top: 5px; width: 440px; height: 21px; margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 16px; font-weight: normal; line-height: 21px; }
+.room-password { position: absolute; top: 5px; right: 17px; max-width: 230px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #ffe63d; font-size: 14px; }
+.room-score { position: absolute; left: 17px; top: 34px; width: 693px; height: 100px; background-size: 100% 100%; }
+.room-score-red, .room-score-blue { position: absolute; top: 14px; width: 63px; color: white; font-size: 58px; font-weight: bold; font-style: italic; text-align: center; line-height: 69px; text-shadow: 2px 3px #6e382e; }
+.room-score-red { left: 12px; }.room-score-blue { right: 12px; text-shadow: 2px 3px #215381; }
+.room-teams-frame { position: absolute; left: 6px; top: 135px; width: 714px; height: 389px; background-size: 100% 100%; }
+.room-team-list { position: absolute; top: 7px; width: 349px; height: 375px; display: flex; flex-direction: column; gap: 1px; }
+.room-team-list.red { left: 7px; }.room-team-list.blue { left: 359px; }
+.room-player-row { position: relative; flex: 0 0 46px; width: 349px; height: 46px; background-size: 100% 100%; }
+.room-player-row:hover:not(:disabled) { filter: brightness(1.12); }
+.room-player-row:disabled { cursor: default; }
+.room-player-row:disabled:not(.occupied) { opacity: .72; }
+.room-player-job { position: absolute; left: 3px; top: 10px; width: 24px; height: 24px; }
+.room-player-name { position: absolute; left: 80px; top: 12px; width: 174px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #513b2d; text-align: left; font-size: 16px; }
+.room-player-host { position: absolute; right: 12px; top: 3px; width: 63px; height: 39px; object-fit: contain; }
+.room-actions { position: absolute; left: 7px; top: 525px; width: 710px; height: 60px; }
+.room-action { position: absolute; top: 0; width: 128px; height: 56px; display: flex; align-items: center; justify-content: center; gap: 3px; color: #f8e2bd !important; font-size: 15px !important; text-shadow: 1px 1px #4b2c1d; }
+.room-action:hover { filter: brightness(1.12); }
+.room-action img { width: 42px; height: 42px; object-fit: contain; }
+.room-action:nth-child(1) { left: 0; }.room-action:nth-child(2) { left: 253px; }.room-action:nth-child(3) { left: 389px; }
+.room-action:not(.room-start) { top: 1px; }
+.room-action.room-start { left: 526px; width: 184px; height: 60px; color: #fff1cf !important; font-size: 17px !important; }
+.room-action.room-start img { width: 47px; height: 47px; }

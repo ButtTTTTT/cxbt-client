@@ -1,0 +1,792 @@
+{
+  "ui": {
+    "background": "ui/background.png",
+    "frame": "ui/frame.png",
+    "panel": "ui/panel.png",
+    "pill": "ui/pill.png",
+    "jobPill": "ui/jobPill.png",
+    "description": "ui/description.png",
+    "diamondOn": "ui/diamondOn.png",
+    "diamondOff": "ui/diamondOff.png",
+    "page": "ui/page.png",
+    "back": "ui/back.png",
+    "settings": "ui/settings.png",
+    "jobIcon": "ui/jobIcon.png",
+    "input": "ui/input.png",
+    "button_normal": "ui/button_normal.png",
+    "finish_normal": "ui/finish_normal.png",
+    "left_normal": "ui/left_normal.png",
+    "right_normal": "ui/right_normal.png",
+    "button_hover": "ui/button_hover.png",
+    "finish_hover": "ui/finish_hover.png",
+    "left_hover": "ui/left_hover.png",
+    "right_hover": "ui/right_hover.png",
+    "button_down": "ui/button_down.png",
+    "finish_down": "ui/finish_down.png",
+    "left_down": "ui/left_down.png",
+    "right_down": "ui/right_down.png",
+    "button_disabled": "ui/button_disabled.png",
+    "finish_disabled": "ui/finish_disabled.png",
+    "left_disabled": "ui/left_disabled.png",
+    "right_disabled": "ui/right_disabled.png",
+    "male_normal": "ui/male_normal.png",
+    "male_hover": "ui/male_hover.png",
+    "male_down": "ui/male_down.png",
+    "female_normal": "ui/female_normal.png",
+    "female_hover": "ui/female_hover.png",
+    "female_down": "ui/female_down.png",
+    "weaponPanel": "ui/weaponPanel.png",
+    "modalPanel": "ui/modalPanel.png",
+    "sparkle": "ui/sparkle.png",
+    "pistol_01": "ui/pistol_01.png",
+    "sniperrifle_01": "ui/sniperrifle_01.png",
+    "knives_01": "ui/knives_01.png"
+  },
+  "models": {
+    "body01": "models/body01.glb",
+    "head01": "models/head01.glb",
+    "l_eye": "models/l_eye.glb",
+    "r_eye": "models/r_eye.glb",
+    "mouth": "models/mouth.glb",
+    "nose": "models/nose.glb",
+    "noseTexture": "textures/nose.png"
+  },
+  "jobs": {
+    "guardian": {
+      "background": "ui/bg_normal02.png",
+      "icon": "ui/job-guardian.png",
+      "weapons": [
+        {
+          "id": "smg_01",
+          "label": "步枪",
+          "parts": [
+            {
+              "model": "models/smg_01-rv.glb",
+              "texture": "textures/smg_01-rv.png",
+              "bone": "handweapon_r"
+            },
+            {
+              "model": "models/smg_01-mz.glb",
+              "texture": "textures/smg_01-mz.png",
+              "bone": "handweapon_r"
+            }
+          ],
+          "animation": "animations/smg_01.json",
+          "icon": "ui/smg_01.png"
+        },
+        {
+          "id": "shotgun_01",
+          "label": "散弹枪",
+          "parts": [
+            {
+              "model": "models/shotgun_01-rv.glb",
+              "texture": "textures/shotgun_01-rv.png",
+              "bone": "handweapon_r"
+            },
+            {
+              "model": "models/shotgun_01-bh.glb",
+              "texture": "textures/shotgun_01-bh.png",
+              "bone": "handweapon_r"
+            }
+          ],
+          "animation": "animations/shotgun_01.json",
+          "icon": "ui/shotgun_01.png"
+        },
+        {
+          "id": "bow_01",
+          "label": "复合弓",
+          "parts": [
+            {
+              "model": "models/bow_01-rv.glb",
+              "texture": "textures/bow_01-rv.png",
+              "bone": "handweapon_r"
+            },
+            {
+              "model": "models/bow_01-mz.glb",
+              "texture": "textures/bow_01-mz.png",
+              "bone": "handweapon_r"
+            }
+          ],
+          "animation": "animations/bow_01.json",
+          "icon": "ui/bow_01.png"
+        }
+      ],
+      "presets": [
+        {
+          "id": "guardian-male",
+          "body": "textures/guardian-male-body.png",
+          "hair": [
+            {
+              "model": "models/guardman.glb",
+              "texture": "textures/guardman.png"
+            },
+            {
+              "model": "models/guardmans.glb",
+              "texture": "textures/guardmans.png"
+            },
+            {
+              "model": "models/guardman01.glb",
+              "texture": "textures/guardman01.png"
+            },
+            {
+              "model": "models/guardman02.glb",
+              "texture": "textures/guardman02.png"
+            }
+          ],
+          "ears": [
+            "models/guardian-male-ear-left.glb",
+            "models/guardian-male-ear-right.glb"
+          ],
+          "fixedParts": [],
+          "accessories": [
+            {
+              "model": "models/guardian-male-accessory-1.glb",
+              "texture": "textures/guardian-male-accessory-1.png"
+            },
+            {
+              "model": "models/guardian-male-accessory-2.glb",
+              "texture": "textures/guardian-male-accessory-2.png"
+            }
+          ],
+          "defaultHair": 0,
+          "eyes": [
+            "textures/guardian-male-eye-0.png",
+            "textures/guardian-male-eye-1.png",
+            "textures/guardian-male-eye-2.png"
+          ],
+          "mouths": [
+            "textures/guardian-male-mouth-0.png",
+            "textures/guardian-male-mouth-1.png",
+            "textures/guardian-male-mouth-2.png",
+            "textures/guardian-male-mouth-3.png"
+          ],
+          "accessorySets": [
+            [],
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              0,
+              1
+            ]
+          ]
+        },
+        {
+          "id": "guardian-female",
+          "body": "textures/guardian-female-body.png",
+          "hair": [
+            {
+              "model": "models/guardwoman.glb",
+              "texture": "textures/guardwoman.png"
+            },
+            {
+              "model": "models/guardwomans.glb",
+              "texture": "textures/guardwomans.png"
+            },
+            {
+              "model": "models/guardwomanss.glb",
+              "texture": "textures/guardwomanss.png"
+            },
+            {
+              "model": "models/guardwoman02.glb",
+              "texture": "textures/guardwoman02.png"
+            }
+          ],
+          "ears": [
+            "models/guardian-female-ear-left.glb",
+            "models/guardian-female-ear-right.glb"
+          ],
+          "fixedParts": [],
+          "accessories": [
+            {
+              "model": "models/guardian-female-accessory-1.glb",
+              "texture": "textures/guardian-female-accessory-1.png"
+            },
+            {
+              "model": "models/guardian-female-accessory-2.glb",
+              "texture": "textures/guardian-female-accessory-2.png"
+            }
+          ],
+          "defaultHair": 0,
+          "eyes": [
+            "textures/guardian-female-eye-0.png",
+            "textures/guardian-female-eye-1.png",
+            "textures/guardian-female-eye-2.png"
+          ],
+          "mouths": [
+            "textures/guardian-female-mouth-0.png",
+            "textures/guardian-female-mouth-1.png",
+            "textures/guardian-female-mouth-2.png",
+            "textures/guardian-female-mouth-3.png"
+          ],
+          "accessorySets": [
+            [],
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              0,
+              1
+            ]
+          ]
+        }
+      ]
+    },
+    "gunner": {
+      "background": "ui/bg_normal31.png",
+      "icon": "ui/job-gunner.png",
+      "weapons": [
+        {
+          "id": "machinegun_01",
+          "label": "机关枪",
+          "parts": [
+            {
+              "model": "models/machinegun_01-rv.glb",
+              "texture": "textures/machinegun_01-rv.png",
+              "bone": "handweapon_r"
+            },
+            {
+              "model": "models/machinegun_01-mz.glb",
+              "texture": "textures/machinegun_01-mz.png",
+              "bone": "handweapon_r"
+            }
+          ],
+          "animation": "animations/machinegun_01.json",
+          "icon": "ui/machinegun_01.png"
+        },
+        {
+          "id": "rpg_01",
+          "label": "火箭筒",
+          "parts": [
+            {
+              "model": "models/rpg_01-rv.glb",
+              "texture": "textures/rpg_01-rv.png",
+              "bone": "handweapon_r"
+            },
+            {
+              "model": "models/rpg_01-mz.glb",
+              "texture": "textures/rpg_01-mz.png",
+              "bone": "handweapon_r"
+            }
+          ],
+          "animation": "animations/rpg_01.json",
+          "icon": "ui/rpg_01.png"
+        },
+        {
+          "id": "shield_01",
+          "label": "盾牌",
+          "parts": [
+            {
+              "model": "models/shield_01-rvl.glb",
+              "texture": "textures/shield_01-rvl.png",
+              "bone": "handweapon_l"
+            },
+            {
+              "model": "models/shield_01-rvr.glb",
+              "texture": "textures/shield_01-rvr.png",
+              "bone": "handweapon_r"
+            }
+          ],
+          "animation": "animations/shield_01.json",
+          "icon": "ui/shield_01.png"
+        }
+      ],
+      "presets": [
+        {
+          "id": "gunner-male",
+          "body": "textures/gunner-male-body.png",
+          "hair": [
+            {
+              "model": "models/heavyman.glb",
+              "texture": "textures/heavyman.png"
+            },
+            {
+              "model": "models/heavymans.glb",
+              "texture": "textures/heavymans.png"
+            },
+            {
+              "model": "models/heavymanss.glb",
+              "texture": "textures/heavymanss.png"
+            },
+            {
+              "model": "models/heavymansss.glb",
+              "texture": "textures/heavymansss.png"
+            }
+          ],
+          "ears": [
+            "models/gunner-male-ear-left.glb",
+            "models/gunner-male-ear-right.glb"
+          ],
+          "fixedParts": [],
+          "accessories": [
+            {
+              "model": "models/gunner-male-accessory-1.glb",
+              "texture": "textures/gunner-male-accessory-1.png"
+            },
+            {
+              "model": "models/gunner-male-accessory-2.glb",
+              "texture": "textures/gunner-male-accessory-2.png"
+            },
+            {
+              "model": "models/gunner-male-accessory-3.glb",
+              "texture": "textures/gunner-male-accessory-3.png"
+            },
+            {
+              "model": "models/gunner-male-accessory-4.glb",
+              "texture": "textures/gunner-male-accessory-4.png"
+            },
+            {
+              "model": "models/gunner-male-accessory-5.glb",
+              "texture": "textures/gunner-male-accessory-5.png"
+            },
+            {
+              "model": "models/gunner-male-accessory-6.glb",
+              "texture": "textures/gunner-male-accessory-6.png"
+            },
+            {
+              "model": "models/gunner-male-accessory-7.glb",
+              "texture": "textures/gunner-male-accessory-7.png"
+            }
+          ],
+          "defaultHair": 0,
+          "eyes": [
+            "textures/gunner-male-eye-0.png",
+            "textures/gunner-male-eye-1.png",
+            "textures/gunner-male-eye-2.png"
+          ],
+          "mouths": [
+            "textures/gunner-male-mouth-0.png",
+            "textures/gunner-male-mouth-1.png",
+            "textures/gunner-male-mouth-2.png",
+            "textures/gunner-male-mouth-3.png"
+          ],
+          "accessorySets": [
+            [],
+            [
+              0,
+              2,
+              4,
+              6
+            ],
+            [
+              1,
+              3,
+              5
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          ]
+        },
+        {
+          "id": "gunner-female",
+          "body": "textures/gunner-female-body.png",
+          "hair": [
+            {
+              "model": "models/heavywoman.glb",
+              "texture": "textures/heavywoman.png"
+            },
+            {
+              "model": "models/heavywomans.glb",
+              "texture": "textures/heavywomans.png"
+            },
+            {
+              "model": "models/heavywomanss.glb",
+              "texture": "textures/heavywomanss.png"
+            },
+            {
+              "model": "models/heavywomansss.glb",
+              "texture": "textures/heavywomansss.png"
+            }
+          ],
+          "ears": [
+            "models/gunner-female-ear-left.glb",
+            "models/gunner-female-ear-right.glb"
+          ],
+          "fixedParts": [],
+          "accessories": [
+            {
+              "model": "models/gunner-female-accessory-1.glb",
+              "texture": "textures/gunner-female-accessory-1.png"
+            },
+            {
+              "model": "models/gunner-female-accessory-2.glb",
+              "texture": "textures/gunner-female-accessory-2.png"
+            },
+            {
+              "model": "models/gunner-female-accessory-3.glb",
+              "texture": "textures/gunner-female-accessory-3.png"
+            },
+            {
+              "model": "models/gunner-female-accessory-4.glb",
+              "texture": "textures/gunner-female-accessory-4.png"
+            },
+            {
+              "model": "models/gunner-female-accessory-5.glb",
+              "texture": "textures/gunner-female-accessory-5.png"
+            },
+            {
+              "model": "models/gunner-female-accessory-6.glb",
+              "texture": "textures/gunner-female-accessory-6.png"
+            }
+          ],
+          "defaultHair": 0,
+          "eyes": [
+            "textures/gunner-female-eye-0.png",
+            "textures/gunner-female-eye-1.png",
+            "textures/gunner-female-eye-2.png"
+          ],
+          "mouths": [
+            "textures/gunner-female-mouth-0.png",
+            "textures/gunner-female-mouth-1.png",
+            "textures/gunner-female-mouth-2.png",
+            "textures/gunner-female-mouth-3.png"
+          ],
+          "accessorySets": [
+            [],
+            [
+              0,
+              2,
+              4
+            ],
+            [
+              1,
+              3,
+              5
+            ],
+            [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          ]
+        }
+      ]
+    },
+    "assassin": {
+      "background": "ui/bg_normal.png",
+      "icon": "ui/job-assassin.png",
+      "weapons": [
+        {
+          "id": "pistol_01",
+          "label": "手枪",
+          "parts": [
+            {
+              "model": "models/pistol_01-rv.glb",
+              "texture": "textures/pistol_01-rv.png",
+              "bone": "handweapon_r"
+            }
+          ],
+          "animation": "animations/pistol_01.json",
+          "icon": "ui/pistol_01.png"
+        },
+        {
+          "id": "sniperrifle_01",
+          "label": "狙击枪",
+          "parts": [
+            {
+              "model": "models/sniperrifle_01-rv.glb",
+              "texture": "textures/sniperrifle_01-rv.png",
+              "bone": "handweapon_r"
+            },
+            {
+              "model": "models/sniperrifle_01-mz.glb",
+              "texture": "textures/sniperrifle_01-mz.png",
+              "bone": "handweapon_r"
+            }
+          ],
+          "animation": "animations/sniperrifle_01.json",
+          "icon": "ui/sniperrifle_01.png"
+        },
+        {
+          "id": "knives_01",
+          "label": "短刀",
+          "parts": [
+            {
+              "model": "models/knives_01-rv.glb",
+              "texture": "textures/knives_01-rv.png",
+              "bone": "handweapon_r"
+            }
+          ],
+          "animation": "animations/knives_01.json",
+          "icon": "ui/knives_01.png"
+        }
+      ],
+      "presets": [
+        {
+          "body": "textures/male-body.png",
+          "hair": [
+            {
+              "model": "models/malecommandos.glb",
+              "texture": "textures/malecommandos.png"
+            },
+            {
+              "model": "models/malecommandoss.glb",
+              "texture": "textures/malecommandoss.png"
+            },
+            {
+              "model": "models/malecommandosss.glb",
+              "texture": "textures/malecommandosss.png"
+            },
+            {
+              "model": "models/malecommandos02.glb",
+              "texture": "textures/malecommandos02.png"
+            }
+          ],
+          "ears": [
+            "models/male-ear-left.glb",
+            "models/male-ear-right.glb"
+          ],
+          "accessories": [
+            {
+              "model": "models/male-accessory-01.glb",
+              "texture": "textures/male-accessories.png"
+            },
+            {
+              "model": "models/male-accessory-02.glb",
+              "texture": "textures/male-accessories.png"
+            }
+          ],
+          "eyes": [
+            "textures/male-eye-0.png",
+            "textures/male-eye-1.png",
+            "textures/male-eye-2.png"
+          ],
+          "mouths": [
+            "textures/male-mouth-0.png",
+            "textures/male-mouth-1.png",
+            "textures/male-mouth-2.png",
+            "textures/male-mouth-3.png"
+          ],
+          "id": "assassin-male",
+          "fixedParts": [],
+          "accessorySets": [
+            [],
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "defaultHair": 1
+        },
+        {
+          "body": "textures/female-body.png",
+          "hair": [
+            {
+              "model": "models/femalecommandos.glb",
+              "texture": "textures/femalecommandos.png"
+            },
+            {
+              "model": "models/femalecommandoss.glb",
+              "texture": "textures/femalecommandoss.png"
+            },
+            {
+              "model": "models/femalecommandos01.glb",
+              "texture": "textures/femalecommandos01.png"
+            },
+            {
+              "model": "models/femalecommandos02.glb",
+              "texture": "textures/femalecommandos02.png"
+            }
+          ],
+          "ears": [
+            "models/female-ear-left.glb",
+            "models/female-ear-right.glb"
+          ],
+          "accessories": [
+            {
+              "model": "models/female-accessory-01.glb",
+              "texture": "textures/female-accessories.png"
+            },
+            {
+              "model": "models/female-accessory-02.glb",
+              "texture": "textures/female-accessories.png"
+            }
+          ],
+          "eyes": [
+            "textures/female-eye-0.png",
+            "textures/female-eye-1.png",
+            "textures/female-eye-2.png"
+          ],
+          "mouths": [
+            "textures/female-mouth-0.png",
+            "textures/female-mouth-1.png",
+            "textures/female-mouth-2.png",
+            "textures/female-mouth-3.png"
+          ],
+          "id": "assassin-female",
+          "fixedParts": [],
+          "accessorySets": [
+            [],
+            [
+              0
+            ],
+            [
+              1
+            ],
+            [
+              0,
+              1
+            ]
+          ],
+          "defaultHair": 1
+        }
+      ]
+    },
+    "biochemist": {
+      "background": "ui/bg_normal04.png",
+      "icon": "ui/job-biochemist.png",
+      "weapons": [
+        {
+          "id": "sprayer_01",
+          "label": "生化喷射器",
+          "parts": [
+            {
+              "model": "models/sprayer_01-rv.glb",
+              "texture": "textures/sprayer_01-rv.png",
+              "bone": "handweapon_r"
+            }
+          ],
+          "animation": "animations/sprayer_01.json",
+          "icon": "ui/sprayer_01.png"
+        }
+      ],
+      "presets": [
+        {
+          "id": "biochemist-male",
+          "body": "textures/biochemist-male-body.png",
+          "hair": [
+            {
+              "model": "models/shenghuanan00.glb",
+              "texture": "textures/shenghuanan00.png"
+            },
+            {
+              "model": "models/shenghuanan01.glb",
+              "texture": "textures/shenghuanan01.png"
+            },
+            {
+              "model": "models/shenghuanan02.glb",
+              "texture": "textures/shenghuanan02.png"
+            },
+            {
+              "model": "models/shenghuanan03.glb",
+              "texture": "textures/shenghuanan03.png"
+            }
+          ],
+          "ears": [
+            "models/biochemist-male-ear-left.glb",
+            "models/biochemist-male-ear-right.glb"
+          ],
+          "fixedParts": [
+            {
+              "model": "models/shenghuanan00-coat.glb",
+              "texture": "textures/shenghuanan00-coat.png"
+            }
+          ],
+          "accessories": [
+            {
+              "model": "models/shenghuananvip-belt.glb",
+              "texture": "textures/shenghuananvip-belt.png"
+            }
+          ],
+          "defaultHair": 0,
+          "eyes": [
+            "textures/biochemist-male-eye-0.png",
+            "textures/biochemist-male-eye-1.png",
+            "textures/biochemist-male-eye-2.png"
+          ],
+          "mouths": [
+            "textures/biochemist-male-mouth-0.png",
+            "textures/biochemist-male-mouth-1.png",
+            "textures/biochemist-male-mouth-2.png",
+            "textures/biochemist-male-mouth-3.png"
+          ],
+          "accessorySets": [
+            [],
+            [
+              0
+            ]
+          ]
+        },
+        {
+          "id": "biochemist-female",
+          "body": "textures/biochemist-female-body.png",
+          "hair": [
+            {
+              "model": "models/shenghuanv00.glb",
+              "texture": "textures/shenghuanv00.png"
+            },
+            {
+              "model": "models/shenghuanv01.glb",
+              "texture": "textures/shenghuanv01.png"
+            },
+            {
+              "model": "models/shenghuanv02.glb",
+              "texture": "textures/shenghuanv02.png"
+            },
+            {
+              "model": "models/shenghuanv03.glb",
+              "texture": "textures/shenghuanv03.png"
+            }
+          ],
+          "ears": [
+            "models/biochemist-female-ear-left.glb",
+            "models/biochemist-female-ear-right.glb"
+          ],
+          "fixedParts": [
+            {
+              "model": "models/shenghuanv00-coat.glb",
+              "texture": "textures/shenghuanv00-coat.png"
+            }
+          ],
+          "accessories": [
+            {
+              "model": "models/shenghuanvvip-belt.glb",
+              "texture": "textures/shenghuanvvip-belt.png"
+            }
+          ],
+          "defaultHair": 0,
+          "eyes": [
+            "textures/biochemist-female-eye-0.png",
+            "textures/biochemist-female-eye-1.png",
+            "textures/biochemist-female-eye-2.png"
+          ],
+          "mouths": [
+            "textures/biochemist-female-mouth-0.png",
+            "textures/biochemist-female-mouth-1.png",
+            "textures/biochemist-female-mouth-2.png",
+            "textures/biochemist-female-mouth-3.png"
+          ],
+          "accessorySets": [
+            [],
+            [
+              0
+            ]
+          ]
+        }
+      ]
+    }
+  },
+  "skinColor": "#f4c691"
+}

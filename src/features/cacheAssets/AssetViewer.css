@@ -1,0 +1,15 @@
+.cache-viewer { display: grid; grid-template-columns: minmax(260px, 34%) 1fr; width: 100%; min-height: 100vh; background: #111a28; color: #e8f0fa; font: 14px/1.5 system-ui, sans-serif; text-align: left; }
+.cache-viewer aside, .cache-viewer section { min-width: 0; padding: 24px; }
+.cache-viewer aside { background: #1c293b; }
+.cache-viewer h1 { font-size: 24px; }
+.cache-viewer h2 { font-size: 16px; overflow-wrap: anywhere; }
+.cache-viewer a { color: #77dfcd; }
+.cache-viewer label { display: block; margin-top: 18px; }
+.cache-viewer input, .cache-viewer select { box-sizing: border-box; width: 100%; padding: 9px; background: #101b2a; color: #e8f0fa; border: 1px solid #56708a; border-radius: 4px; }
+.cache-viewer select { font-size: 12px; }
+.cache-viewer option { padding: 5px; }
+.cache-preview { width: 100%; height: 70vh; min-height: 300px; }
+.cache-preview canvas { display: block; }
+.cache-status { color: #77dfcd; }
+.cache-viewer [role="alert"] { color: #ffc886; overflow-wrap: anywhere; }
+@media (max-width: 800px) { .cache-viewer { grid-template-columns: 1fr; } .cache-viewer select { height: 160px; } }

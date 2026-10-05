@@ -1,0 +1,1 @@
+{"source":"animation/character/indie/wing/wing10/idle.anim","fps":60,"duration":1.5333333333333334,"tracks":[{"name":"chest","positions":[[0.0,0.0,0.0]],"rotations":[[0.130526,0.0,0.0,0.991445]]},{"name":"Wing","positions":[[-0.0,0.32247,-0.261285]],"rotations":[[0.0,0.0,0.0,1.0]]},{"name":"Wing_Fire","positions":[[0.0,-0.766181,0.0]],"rotations":[[0.0,0.0,0.0,1.0]]}]}

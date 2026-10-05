@@ -1,0 +1,960 @@
+{
+  "ui/background.png": [
+    "ui/skinf/bg_normal.dds"
+  ],
+  "ui/frame.png": [
+    "ui/skinf/skin_windowtop_background01_03.tga"
+  ],
+  "ui/panel.png": [
+    "ui/skinf/skin_chara_bg01_10.tga"
+  ],
+  "ui/pill.png": [
+    "ui/skinf/skin_chara_bg01_title01.tga"
+  ],
+  "ui/jobPill.png": [
+    "ui/skinf/skin_chara_bg01_title02.tga"
+  ],
+  "ui/description.png": [
+    "ui/skinf/skin_chara_bg02_11.tga"
+  ],
+  "ui/diamondOn.png": [
+    "ui/skinf/skin_chara_icon_02.tga"
+  ],
+  "ui/diamondOff.png": [
+    "ui/skinf/skin_chara_icon_01.tga"
+  ],
+  "ui/page.png": [
+    "ui/skinf/skin_common_pagebar_bg.tga"
+  ],
+  "ui/back.png": [
+    "ui/skinf/skin_button_icon_backsmall.tga"
+  ],
+  "ui/settings.png": [
+    "ui/skinf/skin_button_icon_setupsmall.tga"
+  ],
+  "ui/jobIcon.png": [
+    "ui/skinf/skin_common_icon03.tga"
+  ],
+  "ui/input.png": [
+    "ui/skinf/skin_avatarroom_bg06.tga"
+  ],
+  "ui/button_normal.png": [
+    "ui/skinf/skin_common_button01_normal_10.tga"
+  ],
+  "ui/finish_normal.png": [
+    "ui/skinf/skin_common_button01_normal_10.tga"
+  ],
+  "ui/left_normal.png": [
+    "ui/skinf/skin_common_pagebar_left_normal.tga"
+  ],
+  "ui/right_normal.png": [
+    "ui/skinf/skin_common_pagebar_right_normal.tga"
+  ],
+  "ui/button_hover.png": [
+    "ui/skinf/skin_common_button01_hover_10.tga"
+  ],
+  "ui/finish_hover.png": [
+    "ui/skinf/skin_common_button01_hover_10.tga"
+  ],
+  "ui/left_hover.png": [
+    "ui/skinf/skin_common_pagebar_left_hover.tga"
+  ],
+  "ui/right_hover.png": [
+    "ui/skinf/skin_common_pagebar_right_hover.tga"
+  ],
+  "ui/button_down.png": [
+    "ui/skinf/skin_common_button01_down_10.tga"
+  ],
+  "ui/finish_down.png": [
+    "ui/skinf/skin_common_button01_down_10.tga"
+  ],
+  "ui/left_down.png": [
+    "ui/skinf/skin_common_pagebar_left_down.tga"
+  ],
+  "ui/right_down.png": [
+    "ui/skinf/skin_common_pagebar_right_down.tga"
+  ],
+  "ui/button_disabled.png": [
+    "ui/skinf/skin_common_button01_disabled_10.tga"
+  ],
+  "ui/finish_disabled.png": [
+    "ui/skinf/skin_common_button01_disabled_10.tga"
+  ],
+  "ui/left_disabled.png": [
+    "ui/skinf/skin_common_pagebar_left_disabled.tga"
+  ],
+  "ui/right_disabled.png": [
+    "ui/skinf/skin_common_pagebar_right_disabled.tga"
+  ],
+  "ui/male_normal.png": [
+    "ui/skinf/skin_chara_icon02_normal.tga"
+  ],
+  "ui/male_hover.png": [
+    "ui/skinf/skin_chara_icon02_hover.tga"
+  ],
+  "ui/male_down.png": [
+    "ui/skinf/skin_chara_icon02_down.tga"
+  ],
+  "ui/female_normal.png": [
+    "ui/skinf/skin_chara_icon01_normal.tga"
+  ],
+  "ui/female_hover.png": [
+    "ui/skinf/skin_chara_icon01_hover.tga"
+  ],
+  "ui/female_down.png": [
+    "ui/skinf/skin_chara_icon01_down.tga"
+  ],
+  "ui/weaponPanel.png": [
+    "ui/skinf/skin_chara_bg01_10.tga"
+  ],
+  "ui/modalPanel.png": [
+    "ui/skinf/skin_chara_bg01_10.tga"
+  ],
+  "ui/sparkle.png": [
+    "vfx/textures/vfx_glow_8.dds",
+    "vfx/vfx_ui_creat_glowp.vfx"
+  ],
+  "ui/pistol_01.png": [
+    "ui/skinf/lobby/pistol_01.tga"
+  ],
+  "ui/sniperrifle_01.png": [
+    "ui/skinf/lobby/sniperrifle_01.tga"
+  ],
+  "ui/knives_01.png": [
+    "ui/skinf/lobby/knives_01.tga"
+  ],
+  "models/body01.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/basemodel/body01.mesh.glb"
+  ],
+  "models/head01.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/basemodel/head01.mesh.glb"
+  ],
+  "models/l_eye.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/basemodel/l_eye.mesh.glb"
+  ],
+  "models/r_eye.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/basemodel/r_eye.mesh.glb"
+  ],
+  "models/mouth.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/basemodel/mouth.mesh.glb"
+  ],
+  "models/nose.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/basemodel/nose.mesh.glb"
+  ],
+  "textures/nose.png": [
+    "mesh/character/thirdperson/avatar/head/nose/tex_huweinan_nose_c.dds"
+  ],
+  "textures/male-body.png": [
+    "mesh/character/thirdperson/avatar/dress/outerwear/tex_malecommandos_outerwear_c.dds",
+    "mesh/character/thirdperson/avatar/dress/outerwear/tex_malecommandos_outerwear_m.dds",
+    "mesh/character/thirdperson/avatar/dress/trousers/tex_malecommandos_trousers_c.dds",
+    "mesh/character/thirdperson/avatar/dress/trousers/tex_malecommandos_trousers_m.dds",
+    "mesh/character/thirdperson/avatar/dress/glove/tex_malecommandos_glove_c.dds",
+    "mesh/character/thirdperson/avatar/dress/glove/tex_malecommandos_glove_m.dds",
+    "mesh/character/thirdperson/avatar/dress/shoes/tex_malecommandos_shoes_c.dds",
+    "mesh/character/thirdperson/avatar/dress/shoes/tex_malecommandos_shoes_m.dds"
+  ],
+  "models/malecommandos.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_malecommandos_hair_lod0.mesh.glb"
+  ],
+  "textures/malecommandos.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_malecommandos_hair_c.dds",
+    "mesh/character/thirdperson/avatar/head/hair/tex_malecommandos_hair_m.dds"
+  ],
+  "models/malecommandoss.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_malecommandoss_hair_lod0.mesh.glb"
+  ],
+  "textures/malecommandoss.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_malecommandoss_hair_c.dds",
+    "mesh/character/thirdperson/avatar/head/hair/tex_malecommandoss_hair_m.dds"
+  ],
+  "models/malecommandosss.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_malecommandosss_hair_lod0.mesh.glb"
+  ],
+  "textures/malecommandosss.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_malecommandosss_hair_c.dds",
+    "mesh/character/thirdperson/avatar/head/hair/tex_malecommandosss_hair_m.dds"
+  ],
+  "models/malecommandos02.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_malecommandos02_hair_lod0.mesh.glb"
+  ],
+  "textures/malecommandos02.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_malecommandos02_hair_c.dds",
+    "mesh/character/thirdperson/avatar/head/hair/tex_malecommandos02_hair_m.dds"
+  ],
+  "models/male-ear-left.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/ear/mesh_malecommandos_ear_left.mesh.glb"
+  ],
+  "models/male-ear-right.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/ear/mesh_malecommandos_ear_right.mesh.glb"
+  ],
+  "textures/male-eye-0.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_malecommandos_eye_c.dds",
+    "mesh/character/thirdperson/avatar/head/eye/tex_malecommandos_eye_m.dds"
+  ],
+  "textures/male-eye-1.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_malecommandos_eye_c.dds",
+    "mesh/character/thirdperson/avatar/head/eye/tex_malecommandos_eye_m.dds"
+  ],
+  "textures/male-eye-2.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_malecommandos_eye_c.dds",
+    "mesh/character/thirdperson/avatar/head/eye/tex_malecommandos_eye_m.dds"
+  ],
+  "textures/male-mouth-0.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_malecommandos_mouth_c.dds"
+  ],
+  "textures/male-mouth-1.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_malecommandos_mouth_c.dds"
+  ],
+  "textures/male-mouth-2.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_malecommandos_mouth_c.dds"
+  ],
+  "textures/male-mouth-3.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_malecommandos_mouth_c.dds"
+  ],
+  "textures/male-accessories.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_malecommandos_trinket_c.dds"
+  ],
+  "models/male-accessory-01.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_malecommandos01_trinket_lod0.mesh.glb"
+  ],
+  "models/male-accessory-02.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_malecommandos02_trinket_lod0.mesh.glb"
+  ],
+  "textures/female-body.png": [
+    "mesh/character/thirdperson/avatar/dress/outerwear/tex_femalecommandos_outerwear_c.dds",
+    "mesh/character/thirdperson/avatar/dress/outerwear/tex_femalecommandos_outerwear_m.dds",
+    "mesh/character/thirdperson/avatar/dress/trousers/tex_femalecommandos_trousers_c.dds",
+    "mesh/character/thirdperson/avatar/dress/trousers/tex_femalecommandos_trousers_m.dds",
+    "mesh/character/thirdperson/avatar/dress/glove/tex_femalecommandos_glove_c.dds",
+    "mesh/character/thirdperson/avatar/dress/glove/tex_femalecommandos_glove_m.dds",
+    "mesh/character/thirdperson/avatar/dress/shoes/tex_femalecommandos_shoes_c.dds",
+    "mesh/character/thirdperson/avatar/dress/shoes/tex_femalecommandos_shoes_m.dds"
+  ],
+  "models/femalecommandos.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_femalecommandos_hair_lod0.mesh.glb"
+  ],
+  "textures/femalecommandos.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_femalecommandos_hair_c.dds",
+    "mesh/character/thirdperson/avatar/head/hair/tex_femalecommandos_hair_m.dds"
+  ],
+  "models/femalecommandoss.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_femalecommandoss_hair_lod0.mesh.glb"
+  ],
+  "textures/femalecommandoss.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_femalecommandoss_hair_c.dds",
+    "mesh/character/thirdperson/avatar/head/hair/tex_femalecommandoss_hair_m.dds"
+  ],
+  "models/femalecommandos01.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_femalecommandos01_hair_lod0.mesh.glb"
+  ],
+  "textures/femalecommandos01.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_femalecommandos01_hair_c.dds",
+    "mesh/character/thirdperson/avatar/head/hair/tex_femalecommandos01_hair_m.dds"
+  ],
+  "models/femalecommandos02.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_femalecommandos02_hair_lod0.mesh.glb"
+  ],
+  "textures/femalecommandos02.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_femalecommandos02_hair_c.dds",
+    "mesh/character/thirdperson/avatar/head/hair/tex_femalecommandos02_hair_m.dds"
+  ],
+  "models/female-ear-left.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/ear/mesh_avatar_ear_left.mesh.glb"
+  ],
+  "models/female-ear-right.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/ear/mesh_avatar_ear_right.mesh.glb"
+  ],
+  "textures/female-eye-0.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_femalecommandos_eye_c.dds",
+    "mesh/character/thirdperson/avatar/head/eye/tex_femalecommandos_eye_m.dds"
+  ],
+  "textures/female-eye-1.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_femalecommandos_eye_c.dds",
+    "mesh/character/thirdperson/avatar/head/eye/tex_femalecommandos_eye_m.dds"
+  ],
+  "textures/female-eye-2.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_femalecommandos_eye_c.dds",
+    "mesh/character/thirdperson/avatar/head/eye/tex_femalecommandos_eye_m.dds"
+  ],
+  "textures/female-mouth-0.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_femalecommandos_mouth_c.dds"
+  ],
+  "textures/female-mouth-1.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_femalecommandos_mouth_c.dds"
+  ],
+  "textures/female-mouth-2.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_femalecommandos_mouth_c.dds"
+  ],
+  "textures/female-mouth-3.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_femalecommandos_mouth_c.dds"
+  ],
+  "textures/female-accessories.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_femalecommandos_trinket_c.dds"
+  ],
+  "models/female-accessory-01.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_femalecommandos01_trinket_lod0.mesh.glb"
+  ],
+  "models/female-accessory-02.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_femalecommandos02_trinket_lod0.mesh.glb"
+  ],
+  "ui/bg_normal02.png": [
+    "ui/skinf/bg_normal02.dds"
+  ],
+  "ui/job-guardian.png": [
+    "ui/skinf/skin_common_icon01.tga"
+  ],
+  "textures/smg_01-rv.png": [
+    "GameMesh/textures/mesh/weapon/smg_01/smg_01_d.png",
+    "weapon/smg_01.lua"
+  ],
+  "models/smg_01-rv.glb": [
+    "GameMesh/mesh/weapon/smg_01/rv1_lod0.mesh.glb"
+  ],
+  "textures/smg_01-mz.png": [
+    "GameMesh/textures/mesh/weapon/smg_01/smg_01_d.png",
+    "weapon/smg_01.lua"
+  ],
+  "models/smg_01-mz.glb": [
+    "GameMesh/mesh/weapon/smg_01/mz1_lod0.mesh.glb"
+  ],
+  "ui/smg_01.png": [
+    "ui/skinf/lobby/smg_01.tga"
+  ],
+  "textures/shotgun_01-rv.png": [
+    "GameMesh/textures/mesh/weapon/shotgun_01/shotgun_01_d.png",
+    "weapon/shotgun_01.lua"
+  ],
+  "models/shotgun_01-rv.glb": [
+    "GameMesh/mesh/weapon/shotgun_01/rv1_lod0.mesh.glb"
+  ],
+  "textures/shotgun_01-bh.png": [
+    "GameMesh/textures/mesh/weapon/shotgun_01/shotgun_01_d.png",
+    "weapon/shotgun_01.lua"
+  ],
+  "models/shotgun_01-bh.glb": [
+    "GameMesh/mesh/weapon/shotgun_01/mz1_lod0.mesh.glb"
+  ],
+  "ui/shotgun_01.png": [
+    "ui/skinf/lobby/shotgun_01.tga"
+  ],
+  "textures/bow_01-rv.png": [
+    "GameMesh/textures/mesh/weapon/bow_01/bow_01_d.png",
+    "weapon/bow_01.lua"
+  ],
+  "models/bow_01-rv.glb": [
+    "GameMesh/mesh/weapon/bow_01/rv1_lod0.mesh.glb"
+  ],
+  "textures/bow_01-mz.png": [
+    "GameMesh/textures/mesh/weapon/bow_01/bow_01_d.png",
+    "weapon/bow_01.lua"
+  ],
+  "models/bow_01-mz.glb": [
+    "GameMesh/mesh/weapon/bow_01/mz1_lod0.mesh.glb"
+  ],
+  "ui/bow_01.png": [
+    "ui/skinf/lobby/bow_01.tga"
+  ],
+  "textures/guardian-male-body.png": [
+    "mesh/character/thirdperson/avatar/dress/outerwear/tex_guardman_outerwear_c.dds",
+    "mesh/character/thirdperson/avatar/dress/outerwear/tex_guardman_outerwear_m.dds",
+    "mesh/character/thirdperson/avatar/dress/trousers/tex_guardman_trousers_c.dds",
+    "mesh/character/thirdperson/avatar/dress/trousers/tex_guardman_trousers_m.dds",
+    "mesh/character/thirdperson/avatar/dress/glove/tex_guardman_glove_c.dds",
+    "mesh/character/thirdperson/avatar/dress/glove/tex_guardman_glove_m.dds",
+    "mesh/character/thirdperson/avatar/dress/shoes/tex_guardman_shoes_c.dds",
+    "mesh/character/thirdperson/avatar/dress/shoes/tex_guardman_shoes_m.dds"
+  ],
+  "models/guardman.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_guardman_hair_lod0.mesh.glb"
+  ],
+  "textures/guardman.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_guardman_hair_c.dds"
+  ],
+  "models/guardmans.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_guardmans_hair_lod0.mesh.glb"
+  ],
+  "textures/guardmans.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_guardmans_hair_c.dds"
+  ],
+  "models/guardman01.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_guardman01_hair_lod0.mesh.glb"
+  ],
+  "textures/guardman01.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_guardman01_hair_c.dds"
+  ],
+  "models/guardman02.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_guardman02_hair_lod0.mesh.glb"
+  ],
+  "textures/guardman02.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_guardman02_hair_c.dds"
+  ],
+  "models/guardian-male-ear-left.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/ear/mesh_guardman_ear_left.mesh.glb"
+  ],
+  "models/guardian-male-ear-right.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/ear/mesh_guardman_ear_right.mesh.glb"
+  ],
+  "textures/guardian-male-eye-0.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_guardman_eye_c.dds"
+  ],
+  "textures/guardian-male-eye-1.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_guardman_eye_c.dds"
+  ],
+  "textures/guardian-male-eye-2.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_guardman_eye_c.dds"
+  ],
+  "textures/guardian-male-mouth-0.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_guardman_mouth_c.dds"
+  ],
+  "textures/guardian-male-mouth-1.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_guardman_mouth_c.dds"
+  ],
+  "textures/guardian-male-mouth-2.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_guardman_mouth_c.dds"
+  ],
+  "textures/guardian-male-mouth-3.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_guardman_mouth_c.dds"
+  ],
+  "models/guardian-male-accessory-1.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_guardman01_trinket_lod0.mesh.glb"
+  ],
+  "textures/guardian-male-accessory-1.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_guardman_trinket_c.dds"
+  ],
+  "models/guardian-male-accessory-2.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_guardman02_trinket_lod0.mesh.glb"
+  ],
+  "textures/guardian-male-accessory-2.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_guardman_trinket_c.dds"
+  ],
+  "textures/guardian-female-body.png": [
+    "mesh/character/thirdperson/avatar/dress/outerwear/tex_guardwoman_outerwear_c.dds",
+    "mesh/character/thirdperson/avatar/dress/outerwear/tex_guardwoman_outerwear_m.dds",
+    "mesh/character/thirdperson/avatar/dress/trousers/tex_guardwoman_trousers_c.dds",
+    "mesh/character/thirdperson/avatar/dress/trousers/tex_guardwoman_trousers_m.dds",
+    "mesh/character/thirdperson/avatar/dress/glove/tex_guardwoman_glove_c.dds",
+    "mesh/character/thirdperson/avatar/dress/glove/tex_guardwoman_glove_m.dds",
+    "mesh/character/thirdperson/avatar/dress/shoes/tex_guardwoman_shoes_c.dds",
+    "mesh/character/thirdperson/avatar/dress/shoes/tex_guardwoman_shoes_m.dds"
+  ],
+  "models/guardwoman.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_guardwoman_hair_lod0.mesh.glb"
+  ],
+  "textures/guardwoman.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_guardwoman_hair_c.dds"
+  ],
+  "models/guardwomans.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_guardwomans_hair_lod0.mesh.glb"
+  ],
+  "textures/guardwomans.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_guardwomans_hair_c.dds"
+  ],
+  "models/guardwomanss.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_guardwomanss_hair_lod0.mesh.glb"
+  ],
+  "textures/guardwomanss.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_guardwomanss_hair_c.dds"
+  ],
+  "models/guardwoman02.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_guardwoman02_hair_lod0.mesh.glb"
+  ],
+  "textures/guardwoman02.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_guardwoman02_hair_c.dds"
+  ],
+  "models/guardian-female-ear-left.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/ear/mesh_avatar_ear_left.mesh.glb"
+  ],
+  "models/guardian-female-ear-right.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/ear/mesh_avatar_ear_right.mesh.glb"
+  ],
+  "textures/guardian-female-eye-0.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_guardwoman_eye_c.dds"
+  ],
+  "textures/guardian-female-eye-1.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_guardwoman_eye_c.dds"
+  ],
+  "textures/guardian-female-eye-2.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_guardwoman_eye_c.dds"
+  ],
+  "textures/guardian-female-mouth-0.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_guardwoman_mouth_c.dds"
+  ],
+  "textures/guardian-female-mouth-1.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_guardwoman_mouth_c.dds"
+  ],
+  "textures/guardian-female-mouth-2.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_guardwoman_mouth_c.dds"
+  ],
+  "textures/guardian-female-mouth-3.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_guardwoman_mouth_c.dds"
+  ],
+  "models/guardian-female-accessory-1.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_guardwoman01_trinket_lod0.mesh.glb"
+  ],
+  "textures/guardian-female-accessory-1.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_guardwoman_trinket_c.dds"
+  ],
+  "models/guardian-female-accessory-2.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_guardwoman02_trinket_lod0.mesh.glb"
+  ],
+  "textures/guardian-female-accessory-2.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_guardwoman_trinket_c.dds"
+  ],
+  "ui/bg_normal31.png": [
+    "ui/skinf/bg_normal31.dds"
+  ],
+  "ui/job-gunner.png": [
+    "ui/skinf/skin_common_icon02.tga"
+  ],
+  "textures/machinegun_01-rv.png": [
+    "GameMesh/textures/mesh/weapon/machinegun_01/machinegun_01_d.png",
+    "weapon/machinegun_01.lua"
+  ],
+  "models/machinegun_01-rv.glb": [
+    "GameMesh/mesh/weapon/machinegun_01/rv1_lod0.mesh.glb"
+  ],
+  "textures/machinegun_01-mz.png": [
+    "GameMesh/textures/mesh/weapon/machinegun_01/machinegun_01_d.png",
+    "weapon/machinegun_01.lua"
+  ],
+  "models/machinegun_01-mz.glb": [
+    "GameMesh/mesh/weapon/machinegun_01/mz1_lod0.mesh.glb"
+  ],
+  "ui/machinegun_01.png": [
+    "ui/skinf/lobby/machinegun_01.tga"
+  ],
+  "textures/rpg_01-rv.png": [
+    "GameMesh/textures/mesh/weapon/rpg_01/rpg_01_d.png",
+    "weapon/rpg_01.lua"
+  ],
+  "models/rpg_01-rv.glb": [
+    "GameMesh/mesh/weapon/rpg_01/rv1_lod0.mesh.glb"
+  ],
+  "textures/rpg_01-mz.png": [
+    "GameMesh/textures/mesh/weapon/rpg_01/rpgbullet_01_d.png",
+    "weapon/rpg_01.lua"
+  ],
+  "models/rpg_01-mz.glb": [
+    "GameMesh/mesh/weapon/rpg_01/mz1_lod0.mesh.glb"
+  ],
+  "ui/rpg_01.png": [
+    "ui/skinf/lobby/rpg_01.tga"
+  ],
+  "textures/shield_01-rvl.png": [
+    "GameMesh/textures/mesh/weapon/shield_01/shield_01_d.png",
+    "weapon/shield_01.lua"
+  ],
+  "models/shield_01-rvl.glb": [
+    "GameMesh/mesh/weapon/shield_01/rvl1_lod0.mesh.glb"
+  ],
+  "textures/shield_01-rvr.png": [
+    "GameMesh/textures/mesh/weapon/shield_01/stick_01_d.png",
+    "weapon/shield_01.lua"
+  ],
+  "models/shield_01-rvr.glb": [
+    "GameMesh/mesh/weapon/shield_01/rvr1_lod0.mesh.glb"
+  ],
+  "ui/shield_01.png": [
+    "ui/skinf/lobby/shield_01.tga"
+  ],
+  "textures/gunner-male-body.png": [
+    "mesh/character/thirdperson/avatar/dress/outerwear/tex_heavyman_outerwear_c.dds",
+    "mesh/character/thirdperson/avatar/dress/outerwear/tex_heavyman_outerwear_m.dds",
+    "mesh/character/thirdperson/avatar/dress/trousers/tex_heavyman_trousers_c.dds",
+    "mesh/character/thirdperson/avatar/dress/trousers/tex_heavyman_trousers_m.dds",
+    "mesh/character/thirdperson/avatar/dress/glove/tex_heavyman_glove_c.dds",
+    "mesh/character/thirdperson/avatar/dress/glove/tex_heavyman_glove_m.dds",
+    "mesh/character/thirdperson/avatar/dress/shoes/tex_heavyman_shoes_c.dds",
+    "mesh/character/thirdperson/avatar/dress/shoes/tex_heavyman_shoes_m.dds"
+  ],
+  "models/heavyman.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_heavyman_hair_lod0.mesh.glb"
+  ],
+  "textures/heavyman.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_heavyman_hair_c.dds"
+  ],
+  "models/heavymans.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_heavymans_hair_lod0.mesh.glb"
+  ],
+  "textures/heavymans.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_heavymans_hair_c.dds"
+  ],
+  "models/heavymanss.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_heavymanss_hair_lod0.mesh.glb"
+  ],
+  "textures/heavymanss.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_heavymanss_hair_c.dds"
+  ],
+  "models/heavymansss.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_heavymansss_hair_lod0.mesh.glb"
+  ],
+  "textures/heavymansss.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_heavymansss_hair_c.dds"
+  ],
+  "models/gunner-male-ear-left.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/ear/mesh_avatar_ear_left.mesh.glb"
+  ],
+  "models/gunner-male-ear-right.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/ear/mesh_avatar_ear_right.mesh.glb"
+  ],
+  "textures/gunner-male-eye-0.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_heavyman_eye_c.dds"
+  ],
+  "textures/gunner-male-eye-1.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_heavyman_eye_c.dds"
+  ],
+  "textures/gunner-male-eye-2.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_heavyman_eye_c.dds"
+  ],
+  "textures/gunner-male-mouth-0.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_heavyman_mouth_c.dds"
+  ],
+  "textures/gunner-male-mouth-1.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_heavyman_mouth_c.dds"
+  ],
+  "textures/gunner-male-mouth-2.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_heavyman_mouth_c.dds"
+  ],
+  "textures/gunner-male-mouth-3.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_heavyman_mouth_c.dds"
+  ],
+  "models/gunner-male-accessory-1.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_heavyman01_trinket_lod0.mesh.glb"
+  ],
+  "textures/gunner-male-accessory-1.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_heavyman01_trinket_c.dds"
+  ],
+  "models/gunner-male-accessory-2.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_heavyman02_trinket_lod0.mesh.glb"
+  ],
+  "textures/gunner-male-accessory-2.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_heavyman01_trinket_c.dds"
+  ],
+  "models/gunner-male-accessory-3.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_heavyman03_trinket_lod0.mesh.glb"
+  ],
+  "textures/gunner-male-accessory-3.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_heavyman01_trinket_c.dds"
+  ],
+  "models/gunner-male-accessory-4.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_heavyman04_trinket_lod0.mesh.glb"
+  ],
+  "textures/gunner-male-accessory-4.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_heavyman01_trinket_c.dds"
+  ],
+  "models/gunner-male-accessory-5.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_heavyman05_trinket_lod0.mesh.glb"
+  ],
+  "textures/gunner-male-accessory-5.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_heavyman02_trinket_c.dds"
+  ],
+  "models/gunner-male-accessory-6.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_heavyman06_trinket_lod0.mesh.glb"
+  ],
+  "textures/gunner-male-accessory-6.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_heavyman02_trinket_c.dds"
+  ],
+  "models/gunner-male-accessory-7.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_heavyman07_trinket_lod0.mesh.glb"
+  ],
+  "textures/gunner-male-accessory-7.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_heavyman02_trinket_c.dds"
+  ],
+  "textures/gunner-female-body.png": [
+    "mesh/character/thirdperson/avatar/dress/outerwear/tex_heavywoman_outerwear_c.dds",
+    "mesh/character/thirdperson/avatar/dress/outerwear/tex_heavywoman_outerwear_m.dds",
+    "mesh/character/thirdperson/avatar/dress/trousers/tex_heavywoman_trousers_c.dds",
+    "mesh/character/thirdperson/avatar/dress/trousers/tex_heavywoman_trousers_m.dds",
+    "mesh/character/thirdperson/avatar/dress/glove/tex_heavywoman_glove_c.dds",
+    "mesh/character/thirdperson/avatar/dress/glove/tex_heavywoman_glove_m.dds",
+    "mesh/character/thirdperson/avatar/dress/shoes/tex_heavywoman_shoes_c.dds",
+    "mesh/character/thirdperson/avatar/dress/shoes/tex_heavywoman_shoes_m.dds"
+  ],
+  "models/heavywoman.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_heavywoman_hair_lod0.mesh.glb"
+  ],
+  "textures/heavywoman.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_heavywoman_hair_c.dds"
+  ],
+  "models/heavywomans.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_heavywomans_hair_lod0.mesh.glb"
+  ],
+  "textures/heavywomans.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_heavywomans_hair_c.dds"
+  ],
+  "models/heavywomanss.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_heavywomanss_hair_lod0.mesh.glb"
+  ],
+  "textures/heavywomanss.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_heavywomanss_hair_c.dds"
+  ],
+  "models/heavywomansss.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_heavywomansss_hair_lod0.mesh.glb"
+  ],
+  "textures/heavywomansss.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_heavywomansss_hair_c.dds"
+  ],
+  "models/gunner-female-ear-left.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/ear/mesh_heavywoman_ear_left.mesh.glb"
+  ],
+  "models/gunner-female-ear-right.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/ear/mesh_heavywoman_ear_right.mesh.glb"
+  ],
+  "textures/gunner-female-eye-0.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_heavywoman_eye_c.dds"
+  ],
+  "textures/gunner-female-eye-1.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_heavywoman_eye_c.dds"
+  ],
+  "textures/gunner-female-eye-2.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_heavywoman_eye_c.dds"
+  ],
+  "textures/gunner-female-mouth-0.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_heavywoman_mouth_c.dds"
+  ],
+  "textures/gunner-female-mouth-1.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_heavywoman_mouth_c.dds"
+  ],
+  "textures/gunner-female-mouth-2.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_heavywoman_mouth_c.dds"
+  ],
+  "textures/gunner-female-mouth-3.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_heavywoman_mouth_c.dds"
+  ],
+  "models/gunner-female-accessory-1.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_heavywoman01_trinket_lod0.mesh.glb"
+  ],
+  "textures/gunner-female-accessory-1.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_heavywoman01_trinket_c.dds"
+  ],
+  "models/gunner-female-accessory-2.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_heavywoman02_trinket_lod0.mesh.glb"
+  ],
+  "textures/gunner-female-accessory-2.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_heavywoman01_trinket_c.dds"
+  ],
+  "models/gunner-female-accessory-3.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_heavywoman03_trinket_lod0.mesh.glb"
+  ],
+  "textures/gunner-female-accessory-3.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_heavywoman02_trinket_c.dds"
+  ],
+  "models/gunner-female-accessory-4.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_heavywoman04_trinket_lod0.mesh.glb"
+  ],
+  "textures/gunner-female-accessory-4.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_heavywoman01_trinket_c.dds"
+  ],
+  "models/gunner-female-accessory-5.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_heavywoman05_trinket_lod0.mesh.glb"
+  ],
+  "textures/gunner-female-accessory-5.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_heavywoman01_trinket_c.dds"
+  ],
+  "models/gunner-female-accessory-6.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_heavywoman06_trinket_lod0.mesh.glb"
+  ],
+  "textures/gunner-female-accessory-6.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_heavywoman02_trinket_c.dds"
+  ],
+  "ui/bg_normal.png": [
+    "ui/skinf/bg_normal.dds"
+  ],
+  "ui/job-assassin.png": [
+    "ui/skinf/skin_common_icon03.tga"
+  ],
+  "textures/pistol_01-rv.png": [
+    "GameMesh/textures/mesh/weapon/pistol_01/pistol_01_d.png",
+    "weapon/pistol_01.lua"
+  ],
+  "models/pistol_01-rv.glb": [
+    "GameMesh/mesh/weapon/pistol_01/rv1_lod0.mesh.glb"
+  ],
+  "textures/sniperrifle_01-rv.png": [
+    "GameMesh/textures/mesh/weapon/sniperrifle_01/sniperrifle_01_d.png",
+    "weapon/sniperrifle_01.lua"
+  ],
+  "models/sniperrifle_01-rv.glb": [
+    "GameMesh/mesh/weapon/sniperrifle_01/rv1_lod0.mesh.glb"
+  ],
+  "textures/sniperrifle_01-mz.png": [
+    "GameMesh/textures/mesh/weapon/sniperrifle_01/sniperrifle_01_d.png",
+    "weapon/sniperrifle_01.lua"
+  ],
+  "models/sniperrifle_01-mz.glb": [
+    "GameMesh/mesh/weapon/sniperrifle_01/mz1_lod0.mesh.glb"
+  ],
+  "textures/knives_01-rv.png": [
+    "GameMesh/textures/mesh/weapon/knives_01/knives_01_d.png",
+    "weapon/knives_01.lua"
+  ],
+  "models/knives_01-rv.glb": [
+    "GameMesh/mesh/weapon/knives_01/rv1_lod0.mesh.glb"
+  ],
+  "ui/bg_normal04.png": [
+    "ui/skinf/bg_normal04.dds"
+  ],
+  "ui/job-biochemist.png": [
+    "ui/skinf/skin_common_icon04.tga"
+  ],
+  "textures/sprayer_01-rv.png": [
+    "GameMesh/textures/mesh/weapon/sprayer_01/sprayer_01_d.png",
+    "weapon/sprayer_01.lua"
+  ],
+  "models/sprayer_01-rv.glb": [
+    "GameMesh/mesh/weapon/sprayer_01/rv1_lod0.mesh.glb"
+  ],
+  "ui/sprayer_01.png": [
+    "ui/skinf/lobby/sprayer_01.tga"
+  ],
+  "textures/biochemist-male-body.png": [
+    "mesh/character/thirdperson/avatar/dress/outerwear/tex_shenghuanan00_outerwear_c.dds",
+    "mesh/character/thirdperson/avatar/dress/outerwear/tex_shenghuanan00_outerwear_m.dds",
+    "mesh/character/thirdperson/avatar/dress/trousers/tex_shenghuanan00_trousers_c.dds",
+    "mesh/character/thirdperson/avatar/dress/trousers/tex_shenghuanan00_trousers_m.dds",
+    "mesh/character/thirdperson/avatar/dress/glove/tex_shenghuanan00_glove_c.dds",
+    "mesh/character/thirdperson/avatar/dress/glove/tex_shenghuanan00_glove_m.dds",
+    "mesh/character/thirdperson/avatar/dress/shoes/tex_shenghuanan00_shoes_c.dds",
+    "mesh/character/thirdperson/avatar/dress/shoes/tex_shenghuanan00_shoes_m.dds"
+  ],
+  "models/shenghuanan00.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/helmet/mesh_shenghuanan00_helmet_lod0.mesh.glb"
+  ],
+  "textures/shenghuanan00.png": [
+    "mesh/character/thirdperson/avatar/head/helmet/tex_shenghuanan00_helmet_c.dds"
+  ],
+  "models/shenghuanan01.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/helmet/mesh_shenghuanan01_helmet_lod0.mesh.glb"
+  ],
+  "textures/shenghuanan01.png": [
+    "mesh/character/thirdperson/avatar/head/helmet/tex_shenghuanan01_helmet_c.dds"
+  ],
+  "models/shenghuanan02.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/helmet/mesh_shenghuanan02_helmet_lod0.mesh.glb"
+  ],
+  "textures/shenghuanan02.png": [
+    "mesh/character/thirdperson/avatar/head/helmet/tex_shenghuanan02_helmet_c.dds"
+  ],
+  "models/shenghuanan03.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/helmet/mesh_shenghuanan03_helmet_lod0.mesh.glb"
+  ],
+  "textures/shenghuanan03.png": [
+    "mesh/character/thirdperson/avatar/head/helmet/tex_shenghuanan03_helmet_c.dds"
+  ],
+  "models/biochemist-male-ear-left.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/ear/mesh_guardman_ear_left.mesh.glb"
+  ],
+  "models/biochemist-male-ear-right.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/ear/mesh_guardman_ear_right.mesh.glb"
+  ],
+  "textures/biochemist-male-eye-0.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_guardman_eye_c.dds"
+  ],
+  "textures/biochemist-male-eye-1.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_guardman_eye_c.dds"
+  ],
+  "textures/biochemist-male-eye-2.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_guardman_eye_c.dds"
+  ],
+  "textures/biochemist-male-mouth-0.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_guardman_mouth_c.dds"
+  ],
+  "textures/biochemist-male-mouth-1.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_guardman_mouth_c.dds"
+  ],
+  "textures/biochemist-male-mouth-2.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_guardman_mouth_c.dds"
+  ],
+  "textures/biochemist-male-mouth-3.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_guardman_mouth_c.dds"
+  ],
+  "models/shenghuanan00-coat.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/upperbody/mesh_shenghuanan00_trinket_lod0.mesh.glb"
+  ],
+  "textures/shenghuanan00-coat.png": [
+    "mesh/character/thirdperson/avatar/trinket/upperbody/tex_shenghuanan00_trinket_c.dds"
+  ],
+  "models/shenghuananvip-belt.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_shenghuananvip_trinket01_lod0.mesh.glb"
+  ],
+  "textures/shenghuananvip-belt.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_shenghuananvip_trinket01_c.dds"
+  ],
+  "textures/biochemist-female-body.png": [
+    "mesh/character/thirdperson/avatar/dress/outerwear/tex_shenghuanv03_outerwear_c.dds",
+    "mesh/character/thirdperson/avatar/dress/outerwear/tex_shenghuanv03_outerwear_m.dds",
+    "mesh/character/thirdperson/avatar/dress/trousers/tex_shenghuanan00_trousers_c.dds",
+    "mesh/character/thirdperson/avatar/dress/trousers/tex_shenghuanan00_trousers_m.dds",
+    "mesh/character/thirdperson/avatar/dress/glove/tex_shenghuanv03_glove_c.dds",
+    "mesh/character/thirdperson/avatar/dress/glove/tex_shenghuanv03_glove_m.dds",
+    "mesh/character/thirdperson/avatar/dress/shoes/tex_shenghuanv03_shoes_c.dds",
+    "mesh/character/thirdperson/avatar/dress/shoes/tex_shenghuanv03_shoes_m.dds"
+  ],
+  "models/shenghuanv00.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_shenghuanv00_hair.mesh.glb"
+  ],
+  "textures/shenghuanv00.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_shenghuanv00_hair_c.dds"
+  ],
+  "models/shenghuanv01.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_shenghuanv01_hair_lod0.mesh.glb"
+  ],
+  "textures/shenghuanv01.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_shenghuanv01_hair_c.dds"
+  ],
+  "models/shenghuanv02.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_shenghuanv02_hair.mesh.glb"
+  ],
+  "textures/shenghuanv02.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_shenghuanv02_hair_c.dds"
+  ],
+  "models/shenghuanv03.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/hair/mesh_shenghuanv03_hair.mesh.glb"
+  ],
+  "textures/shenghuanv03.png": [
+    "mesh/character/thirdperson/avatar/head/hair/tex_shenghuanv03_hair_c.dds"
+  ],
+  "models/biochemist-female-ear-left.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/ear/mesh_avatar_ear_left.mesh.glb"
+  ],
+  "models/biochemist-female-ear-right.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/head/ear/mesh_avatar_ear_right.mesh.glb"
+  ],
+  "textures/biochemist-female-eye-0.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_guardwoman_eye_c.dds"
+  ],
+  "textures/biochemist-female-eye-1.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_guardwoman_eye_c.dds"
+  ],
+  "textures/biochemist-female-eye-2.png": [
+    "mesh/character/thirdperson/avatar/head/eye/tex_guardwoman_eye_c.dds"
+  ],
+  "textures/biochemist-female-mouth-0.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_guardwoman_mouth_c.dds"
+  ],
+  "textures/biochemist-female-mouth-1.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_guardwoman_mouth_c.dds"
+  ],
+  "textures/biochemist-female-mouth-2.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_guardwoman_mouth_c.dds"
+  ],
+  "textures/biochemist-female-mouth-3.png": [
+    "mesh/character/thirdperson/avatar/head/mouth/tex_guardwoman_mouth_c.dds"
+  ],
+  "models/shenghuanv00-coat.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/upperbody/mesh_shenghuanv00_trinket_lod0.mesh.glb"
+  ],
+  "textures/shenghuanv00-coat.png": [
+    "mesh/character/thirdperson/avatar/trinket/upperbody/tex_shenghuanv00_trinket_c.dds"
+  ],
+  "models/shenghuanvvip-belt.glb": [
+    "GameMesh/mesh/character/thirdperson/avatar/trinket/lowerbody/mesh_shenghuanvvip_trinket01_lod0.mesh.glb"
+  ],
+  "textures/shenghuanvvip-belt.png": [
+    "mesh/character/thirdperson/avatar/trinket/lowerbody/tex_shenghuanvvip_trinket01_c.dds"
+  ],
+  "simhei.ttf": [
+    "fonts/simhei.ttf"
+  ]
+}

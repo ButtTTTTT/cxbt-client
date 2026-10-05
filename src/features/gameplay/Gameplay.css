@@ -1,0 +1,143 @@
+.battle-root { position: fixed; inset: 0; overflow: hidden; color: #fff; background: #839eaa; font-family: AvatarHei, 'Microsoft YaHei', sans-serif; user-select: none; }
+.battle-canvas { position: absolute; inset: 0; touch-action: none; }
+.battle-canvas canvas { display: block; width: 100%; height: 100%; }
+.battle-loading { position: absolute; inset: 0; display: grid; place-items: center; background: #25353c; font-size: 20px; z-index: 4; }
+.battle-reticle { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; transform: translate(-50%, -50%); pointer-events: none; filter: drop-shadow(0 1px 2px #122630); }
+.battle-reticle i { position: absolute; background: #fff9ca; }
+.battle-reticle i:nth-child(1), .battle-reticle i:nth-child(2) { left: 14px; width: 2px; height: 7px; }
+.battle-reticle i:nth-child(1) { top: 0; }.battle-reticle i:nth-child(2) { bottom: 0; }
+.battle-reticle i:nth-child(3), .battle-reticle i:nth-child(4) { top: 14px; width: 7px; height: 2px; }
+.battle-reticle i:nth-child(3) { left: 0; }.battle-reticle i:nth-child(4) { right: 0; }
+.battle-top { position: absolute; top: 0; left: 50%; transform: translateX(-50%); display: flex; align-items: flex-start; height: 66px; filter: drop-shadow(0 2px 5px #152223a6); }
+.battle-team { display: flex; align-items: center; justify-content: space-around; width: 105px; height: 44px; font-weight: bold; font-size: 15px; background-size: 100% 100%; }
+.battle-team strong { font-size: 26px; }.battle-team.red { background-image: url('/assets/gameplay/ui/skin_ingame_timebg_red.png'); }.battle-team.blue { background-image: url('/assets/gameplay/ui/skin_ingame_timebg_blue.png'); }
+.battle-time { display: grid; place-items: center; width: 148px; height: 62px; background: linear-gradient(#1e353dcc, #1b2b3299); border: 1px solid #a8b8b8aa; border-top: 0; clip-path: polygon(0 0, 100% 0, 91% 100%, 9% 100%); }
+.battle-time small { font-size: 12px; color: #eee1b4; }.battle-time b { font-size: 27px; letter-spacing: 0; }
+.battle-minimap { position: absolute; top: 16px; right: 20px; width: min(18vw, 200px); min-width: 126px; aspect-ratio: 1; border: 2px solid #dce6d6; box-shadow: 0 0 0 3px #263c44, 0 3px 15px #1018188c; border-radius: 50%; overflow: hidden; background: #65716b; }
+.battle-map-image { position: absolute; inset: 0; background-size: cover; background-position: center; }
+.battle-map-image::after { content: ''; position: absolute; inset: 0; background: url('/assets/gameplay/ui/small_map_mask.png') center / 100% 100%; pointer-events: none; }
+.battle-map-marker { position: absolute; z-index: 1; color: #fff87d; font-size: 24px; text-shadow: 0 0 4px #132a39, 1px 2px #10242b; }
+.battle-map-name { position: absolute; z-index: 2; bottom: 10px; left: 15%; right: 15%; text-align: center; font-size: 12px; text-shadow: 0 2px 3px #081c28; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.battle-bottom { position: absolute; left: 0; right: 0; bottom: 16px; height: 115px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 max(18px, 2.8vw); pointer-events: none; }
+.battle-health { position: relative; width: 220px; height: 100px; padding: 39px 0 0 63px; background: url('/assets/gameplay/ui/skin_ingame_bg01_red.png') center / 100% 100%; white-space: nowrap; text-shadow: 0 1px 3px #35120e; }
+.battle-health > img { position: absolute; left: 24px; top: 40px; width: 32px; height: 26px; object-fit: contain; }.battle-health b { font-size: 28px; }.battle-health span { font-size: 17px; }
+.battle-health > div { position: absolute; left: 30px; bottom: 20px; width: 168px; height: 11px; background: #180e12; border: 1px solid #efa0a0; transform: skewX(-17deg); }.battle-health i { display: block; width: 100%; height: 100%; background: linear-gradient(#ff9980, #d71e32); }
+.battle-inventory { display: flex; align-items: end; gap: 5px; margin-bottom: 3px; pointer-events: auto; }
+.battle-inventory button { position: relative; width: 78px; height: 68px; padding: 4px 4px 1px; border: 1px solid #93a5aa; border-radius: 3px; background: linear-gradient(#33484bbd, #142127d9); box-shadow: inset 0 0 8px #fff2; cursor: pointer; }
+.battle-inventory button.active { height: 76px; border-color: #ffdf7e; box-shadow: inset 0 0 8px #ffe6a75c, 0 0 7px #ffde8490; }.battle-inventory button img { width: 100%; height: 100%; object-fit: contain; }
+.battle-inventory button small { position: absolute; top: 3px; left: 5px; color: #e8dfc6; font-size: 12px; }
+.battle-ammo { position: relative; width: 235px; height: 101px; padding: 44px 0 0 65px; background: url('/assets/gameplay/ui/skin_ingame_bg02.png') center / 100% 100%; white-space: nowrap; text-shadow: 0 1px 4px #091b25; }
+.battle-ammo > span { position: absolute; top: 18px; left: 60px; right: 13px; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: #e8ddbb; }.battle-ammo img { position: absolute; top: 42px; left: 22px; width: 36px; height: 36px; object-fit: contain; }.battle-ammo b { font-size: 33px; }.battle-ammo strong { font-size: 18px; color: #dae0db; }
+.battle-touch-controls { display: none; }.battle-menu-button { position: absolute; left: 17px; top: 16px; width: 34px; height: 34px; color: #fff; font-size: 21px; border: 1px solid #ced7d0; border-radius: 3px; background: #233b43aa; cursor: pointer; }
+.battle-pause-shade { position: absolute; inset: 0; display: grid; place-items: center; background: #0c1822ad; z-index: 5; }.battle-pause { width: min(340px, 90vw); display: grid; gap: 14px; padding: 25px; text-align: center; border: 2px solid #d1b76c; background: #23383c; box-shadow: 0 10px 40px #0008; }.battle-pause h2 { margin: 0 0 10px; font-size: 23px; }.battle-pause button { padding: 11px; color: #fff; background: #617a75; border: 1px solid #c1ccc3; cursor: pointer; font-size: 16px; }
+@media (max-width: 650px) { .battle-top { transform: translateX(-50%) scale(.75); transform-origin: top center; }.battle-minimap { top: 64px; right: 12px; }.battle-bottom { bottom: 8px; height: 80px; padding: 0 8px; }.battle-health { width: 115px; height: 65px; padding: 28px 0 0 34px; }.battle-health img { width: 21px; height: 19px; left: 9px; top: 27px; }.battle-health b { font-size: 17px; }.battle-health span { font-size: 10px; }.battle-health > div { left: 10px; bottom: 10px; width: 90px; height: 6px; }.battle-ammo { width: 110px; height: 65px; padding: 28px 0 0 31px; }.battle-ammo > span { top: 11px; left: 28px; font-size: 10px; }.battle-ammo img { width: 24px; height: 24px; left: 5px; top: 29px; }.battle-ammo b { font-size: 20px; }.battle-ammo strong { font-size: 11px; }.battle-inventory { gap: 2px; }.battle-inventory button { width: 34px; height: 42px; }.battle-inventory button.active { height: 49px; }.battle-touch-controls { position: absolute; right: 15px; bottom: 92px; display: flex; gap: 8px; }.battle-touch-controls button { width: 55px; height: 55px; border: 2px solid #e3d9ab; border-radius: 50%; color: white; background: #304849b8; font-size: 13px; } }
+
+.battle-root { cursor: none; }
+.battle-root.paused { cursor: default; }
+.battle-reticle { width: 62px; height: 62px; filter: drop-shadow(0 1px 2px #18212b); }
+.battle-reticle::before { content: ''; position: absolute; inset: 2px; border: 2px solid #f5f5ee; border-radius: 50%; clip-path: polygon(0 0, 42% 0, 42% 18%, 58% 18%, 58% 0, 100% 0, 100% 100%, 58% 100%, 58% 82%, 42% 82%, 42% 100%, 0 100%); }
+.battle-reticle i { background: #fff; }
+.battle-reticle i:nth-child(1) { left: 30px; top: 29px; width: 2px; height: 15px; }
+.battle-reticle i:nth-child(n+2) { display: none; }
+.battle-abilities { position: absolute; top: 14px; left: 17px; display: grid; grid-template-columns: repeat(4, 58px); gap: 10px; filter: drop-shadow(0 2px 3px #08151d); }
+.battle-abilities span { width: 58px; height: 58px; padding: 4px; background: url('/assets/gameplay/ui/skin_ingame_skill_bg.png') center / 100% 100%; }
+.battle-abilities img { width: 100%; height: 100%; object-fit: contain; }
+.battle-abilities small { grid-column: 1 / -1; margin-top: -6px; text-align: center; font-size: 14px; text-shadow: 0 1px 3px #000; }
+.battle-top { top: 7px; width: 445px; height: 109px; justify-content: center; align-items: flex-start; filter: drop-shadow(0 2px 3px #131718); }
+.battle-team { position: absolute; z-index: 2; top: 17px; width: 86px; height: 86px; background-size: contain; background-repeat: no-repeat; background-position: center; }
+.battle-team.red { left: 0; background-image: url('/assets/gameplay/ui/skin_ingame_timebg_redicon.png'); }
+.battle-team.blue { right: 0; background-image: url('/assets/gameplay/ui/skin_ingame_timebg_blueicon.png'); }
+.battle-team strong { font-size: 29px; font-style: italic; font-weight: 900; color: #fff; text-shadow: 1px 2px 2px #221f25; }
+.battle-time { position: relative; display: flex; flex-direction: column; align-items: center; width: 308px; height: 84px; padding-top: 0; clip-path: none; border: 0; background: none; }
+.battle-time::before { content: ''; position: absolute; left: 76px; right: 76px; top: 0; height: 58px; border: 2px solid #afb8b4; border-bottom: 0; border-radius: 25px 25px 0 0; background: #303332d6; z-index: -1; }
+.battle-time b { font-size: 38px; line-height: 46px; font-style: italic; color: #dc67ef; -webkit-text-stroke: 1px #badee3; text-shadow: 0 2px 3px #28233d; }
+.battle-time small { position: relative; z-index: 1; height: 25px; width: 130px; display: flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid #7e8483; border-radius: 15px; color: #e9e9de; background: #2b2d30; box-shadow: 0 2px 3px #0007; }
+.battle-time small em { color: #f0cc73; font-size: 10px; font-style: normal; }
+.battle-progress { position: absolute; top: 72px; left: 19px; right: 19px; height: 13px; display: flex; gap: 3px; border: 2px solid #555e5e; border-radius: 8px; background: #303435; overflow: hidden; }
+.battle-progress i { display: block; width: 50%; height: 100%; background: linear-gradient(#ffd67a, #f87900); }
+.battle-progress i + i { background: linear-gradient(#92e4fb, #20a0f5); }
+.battle-minimap { width: 202px; min-width: 0; border: 2px solid #d5d8bf; box-shadow: 0 0 0 3px #37372c, 0 2px 8px #0009; }
+.battle-bottom { bottom: 11px; height: 112px; padding: 0 8px; align-items: flex-end; }
+.battle-health { flex: none; width: 207px; height: 116px; padding: 0; background: url('/assets/gameplay/ui/skin_ingame_bg01_blue.png') left bottom / 100% 100% no-repeat; }
+.battle-health > img { width: 88px; height: 88px; left: 14px; top: 13px; }
+.battle-health b { position: absolute; left: 115px; top: 66px; font-size: 26px; font-style: italic; line-height: 1; color: #eef7ff; }
+.battle-health > div { display: none; }
+.battle-inventory { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); gap: 3px; margin: 0; align-items: flex-end; }
+.battle-inventory button, .battle-skill { box-sizing: border-box; flex: none; width: 67px; height: 69px; padding: 4px; border: 0; border-radius: 0; background: url('/assets/gameplay/ui/skin_ingame_skill_bg.png') center / 100% 100% no-repeat; box-shadow: none; }
+.battle-inventory button.active { width: 72px; height: 78px; border: 0; box-shadow: 0 0 9px #ffca54; background-image: url('/assets/gameplay/ui/skin_ingame_skill_bg.png'); }
+.battle-inventory button img, .battle-skill img { width: 100%; height: 100%; object-fit: contain; }
+.battle-inventory button small, .battle-skill small { position: absolute; z-index: 1; top: auto; bottom: 3px; left: 5px; font-size: 12px; text-shadow: 0 1px 2px #000; }
+.battle-skill { position: relative; display: block; }
+.battle-ammo { flex: none; width: 207px; height: 116px; padding: 0; background: none; }
+.battle-ammo::before { content: ''; position: absolute; inset: 0; background: url('/assets/gameplay/ui/skin_ingame_bg01_blue.png') center / 100% 100%; transform: scaleX(-1); }
+.battle-ammo img { left: auto; right: 18px; top: 16px; width: 83px; height: 83px; }
+.battle-ammo b { position: absolute; right: 119px; top: 66px; font-size: 29px; font-style: italic; color: #f2f7ff; }
+.battle-ammo strong { display: none; }
+.battle-menu-button { top: 88px; left: 17px; opacity: 0.15; }
+.battle-menu-button:hover, .battle-menu-button:focus-visible { opacity: 1; }
+@media (max-width: 1050px) {
+  .battle-abilities { transform: scale(.72); transform-origin: top left; }
+  .battle-top { transform: translateX(-50%) scale(.78); transform-origin: top center; }
+  .battle-minimap { width: 150px; }
+  .battle-health, .battle-ammo { transform: scale(.72); transform-origin: bottom left; }
+  .battle-ammo { transform-origin: bottom right; }
+  .battle-inventory { transform: translateX(-50%) scale(.76); transform-origin: bottom center; }
+}
+@media (max-width: 650px) {
+  .battle-top { top: 0; transform: translateX(-50%) scale(.57); }
+  .battle-abilities { transform: scale(.52); }
+  .battle-minimap { top: 55px; right: 12px; width: 115px; }
+  .battle-bottom { bottom: 8px; height: 75px; }
+  .battle-health, .battle-ammo { transform: scale(.5); }
+  .battle-inventory { bottom: 0; transform: translateX(-50%) scale(.45); }
+  .battle-menu-button { top: 52px; }
+}
+
+.battle-health .battle-health-meter,
+.battle-ammo .battle-ammo-meter {
+  position: absolute;
+  display: block;
+  top: 24px;
+  bottom: auto;
+  width: 88px;
+  height: 9px;
+  padding: 1px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid #c6dbdd;
+  border-radius: 2px;
+  background: #17272d;
+  transform: skewX(-12deg);
+  box-shadow: 0 1px 3px #09151ca8;
+}
+.battle-health .battle-health-meter {
+  left: 20px;
+  top: 20px;
+  width: 79px;
+  height: 79px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #163a51;
+  transform: none;
+  box-shadow: inset 0 0 8px #051824;
+}
+.battle-health .battle-health-meter i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  opacity: .85;
+  transition: height 150ms ease-out, background-color 150ms ease-out;
+}
+.battle-health > img { z-index: 2; }
+.battle-health b { left: 132px; top: 65px; font-size: 24px; }
+.battle-ammo .battle-ammo-meter { left: 12px; right: auto; }
+.battle-health .battle-health-meter i,
+.battle-ammo .battle-ammo-meter i {
+  display: block;
+  height: 100%;
+  background: var(--meter-color, #49d6ef);
+  transition: width 150ms ease-out, background-color 150ms ease-out;
+}

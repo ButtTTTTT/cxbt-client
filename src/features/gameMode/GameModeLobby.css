@@ -1,0 +1,20 @@
+.game-mode-layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.game-mode-map { position: absolute; left: 165px; top: 195px; width: 1110px; height: 634px; background-size: 100% 100%; pointer-events: auto; }
+.game-mode-title { position: absolute; left: -4px; top: -39px; width: 1118px; height: 40px; background-size: 100% 100%; }
+.game-mode-title-tab { position: absolute; left: 406px; top: -9px; width: 306px; height: 58px; background-size: 100% 100%; display: grid; place-items: center; }
+.game-mode-title h1 { margin: -1px 0 0; color: #6d3b1c; font-size: 18px; font-weight: normal; text-shadow: 0 1px #f9e8bd; }
+.game-mode-theme { position: absolute; border: 0; background-color: transparent; background-image: var(--art); background-repeat: no-repeat; background-size: 100% 100%; transition: filter .12s ease, transform .12s ease; }
+.game-mode-theme:hover { background-image: var(--hover-art); filter: brightness(1.08); }
+.game-mode-theme:active { background-image: var(--down-art); filter: brightness(1.12); }
+.game-mode-theme-05 { left: 313px; top: 0; width: 410px; height: 484px; background-image: var(--art); }
+.game-mode-theme span { position: absolute; color: #dc5f22; font-size: 20px; font-weight: bold; letter-spacing: 1px; text-shadow: 0 1px 0 #ffe4a6, 1px 1px 2px #70431f; white-space: nowrap; }
+.game-mode-theme-01 span { left: 105px; top: 202px; }
+.game-mode-theme-02 span { left: 256px; top: 327px; }
+.game-mode-theme-03 span { left: 119px; top: 283px; }
+.game-mode-theme-04 span { left: 22px; top: 58px; }
+.game-mode-quick { position: absolute; left: 1040px; top: -35px; width: 130px; height: 140px; background-image: var(--art); background-repeat: no-repeat; background-size: 100% 100%; color: #ffe537; font-size: 18px; font-weight: bold; text-shadow: 1px 1px 2px #142b27; }
+.game-mode-quick:hover { background-image: var(--hover-art); filter: brightness(1.08); }
+.game-mode-quick:active { background-image: var(--down-art); }
+.game-mode-quick span { display: block; margin-top: -8px; }
+.lobby-screen:has(.game-mode-layer) .lobby-footer { z-index: 4; }
+.lobby-screen:has(.game-mode-layer) .lobby-status { z-index: 5; }

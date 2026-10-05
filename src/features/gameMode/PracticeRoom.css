@@ -1,0 +1,39 @@
+.practice-room-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.practice-room-root { position: absolute; left: 149px; top: 150px; width: 1142px; height: 694px; pointer-events: none; }
+.practice-room-content { position: absolute; left: 7px; top: 45px; width: 1128px; height: 645px; background-size: 100% 100%; pointer-events: auto; }
+.practice-room-title-bar { position: absolute; left: 12px; top: 32px; width: 1120px; height: 33px; background-size: 100% 100%; pointer-events: none; }
+.practice-room-title-tab { position: absolute; left: 374px; top: -21px; width: 354px; height: 67px; background-size: 100% 100%; display: grid; place-items: center; }
+.practice-room-title { margin: -2px 0 0; color: #6d3b1c; font-size: 20px; font-weight: normal; text-shadow: 0 1px #f9e8bd; }
+.practice-room-topbar { position: absolute; left: 6px; top: 5px; width: 1116px; height: 40px; background-size: 100% 100%; }
+.practice-advance { position: absolute; left: 8px; top: 46px; width: 247px; height: 590px; background-size: 100% 100%; color: #fff7dc; }
+.practice-advance p { position: absolute; left: 11px; top: 450px; width: 226px; height: 110px; margin: 0; color: #5b422f; font-size: 16px; line-height: 1.55; text-shadow: 0 1px #fae8c4; }
+.practice-mode-panel { position: absolute; left: 258px; top: 46px; width: 863px; height: 118px; background-size: 100% 100%; color: #fff4d4; }
+.practice-mode-panel h2 { position: absolute; left: 11px; top: 5px; margin: 0; font-size: 16px; font-weight: normal; }
+.practice-mode-frame { position: absolute; left: 6px; top: 34px; width: 850px; height: 77px; background-size: 100% 100%; overflow: hidden; display: flex; align-items: center; gap: 9px; padding-left: 14px; }
+.practice-mode-button { position: relative; width: 74px; height: 74px; flex: 0 0 74px; border: 0; color: #f8edcb; background: transparent; }
+.practice-mode-mark { position: absolute; left: 8px; top: 5px; width: 58px; height: 58px; display: grid; place-items: center; border: 3px solid #7e5634; border-radius: 50%; background: radial-gradient(circle at 35% 28%, #fff2a6 0 10%, #e0ac4b 38%, #7d4729 100%); box-shadow: inset 0 0 0 2px #f5d080, 0 1px 2px #24130c; }
+.practice-mode-mark img { width: 37px; height: 37px; object-fit: contain; image-rendering: auto; }
+.practice-mode-button.selected .practice-mode-mark { filter: brightness(1.18); box-shadow: inset 0 0 0 2px #fff0a2, 0 0 0 2px #fff1a0; }
+.practice-mode-label { position: absolute; left: 0; right: 0; bottom: -1px; color: #fae8bd; font-size: 13px; text-shadow: 1px 1px #4e2e19; }
+.practice-list-panel { position: absolute; left: 258px; top: 167px; width: 863px; height: 469px; background-size: 100% 100%; color: #ffeecb; }
+.practice-list-frame { position: absolute; left: 5px; top: 7px; width: 853px; height: 395px; background-size: 100% 100%; }
+.practice-room-table { position: absolute; left: 10px; top: 15px; width: 841px; height: 373px; overflow: hidden; color: #4e3422; font-size: 14px; }
+.practice-room-header, .practice-room-row { display: grid; width: 813px; }
+.practice-room-header { height: 29px; color: #f5e9c9; text-align: center; line-height: 29px; text-shadow: 1px 1px #2f251a; }
+.practice-room-header span { background-image: url("/assets/lobby/ui/practiceHeader_normal.png"); background-size: 100% 100%; border-right: 1px solid #21442e; }
+.practice-room-row { height: 41px; margin-top: 2px; line-height: 41px; text-align: center; color: #6f5133; }
+.practice-room-row span { background-image: url("/assets/lobby/ui/practiceRow_normal.png"); background-size: 100% 100%; border-right: 1px solid #ac8c5d; overflow: hidden; white-space: nowrap; }
+.practice-room-row:hover span { background-image: url("/assets/lobby/ui/practiceRow_hover.png"); }
+.practice-actions { position: absolute; left: 10px; top: 405px; width: 843px; height: 60px; display: flex; align-items: center; }
+.practice-action { position: absolute; width: 128px; height: 56px; display: flex; align-items: center; justify-content: center; gap: 4px; background-image: var(--art); background-size: 100% 100%; color: #f9e4bc; font-size: 15px; text-shadow: 1px 1px #3a2115; }
+.practice-action:hover { background-image: var(--hover-art); filter: brightness(1.1); }
+.practice-action:active { background-image: var(--down-art); }
+.practice-action img { width: 38px; height: 38px; object-fit: contain; flex: 0 0 auto; }
+.practice-action:nth-child(1) { left: 0; }
+.practice-action:nth-child(2) { left: 370px; }
+.practice-action:nth-child(2) img { width: 24px; height: 24px; }
+.practice-action:nth-child(3) { left: 522px; }
+.practice-enter { left: 662px; width: 184px; height: 60px; background-size: 100% 100%; }
+.practice-enter img { width: 42px; height: 42px; }
+.lobby-screen:has(.practice-room-layer) .lobby-footer { z-index: 5; }
+.lobby-screen:has(.practice-room-layer) .lobby-status { z-index: 6; }
