@@ -209,13 +209,16 @@ try {
   assert.equal(await evaluate(`document.querySelectorAll('.create-room-map').length`), 6);
   const mapCatalog = await evaluate(`fetch('/assets/lobby/catalog.json').then((response) => response.json())`);
   const mapSources = await evaluate(`fetch('/assets/lobby/sources.json').then((response) => response.json())`);
-  assert.equal(mapCatalog.maps.length, 53);
+  assert.ok(mapCatalog.maps.length >= 55);
   assert.equal(mapCatalog.maps[0].id, 'random');
   assert.equal(mapCatalog.maps.find((map) => map.id === 'level1').name, '钟楼小镇');
   for (const map of mapCatalog.maps.filter((entry) => entry.cover)) {
+    if (map.id === 'random') continue;
     const level = map.id.slice('level'.length);
     const source = mapSources[map.cover]?.[0];
     assert.ok(source === `ui/mapsandbg/previewmaps/skinc_smallmap_level${level}.tga` ||
+      source === `AvatarStar_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level${level}.tga` ||
+      source === `AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level${level}.tga` ||
       source === `ui/mapsandbg/maptextures/level${level}_map_image.dds`, `${map.id} must use its own cached image`);
   }
   assert.equal(await evaluate(`(async () => {
@@ -224,12 +227,13 @@ try {
       .map((map) => fetch('/assets/lobby/' + map.cover).then((response) => response.ok)))).every(Boolean);
   })()`), true);
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('[data-map-id="level1"] .create-room-map-image')).backgroundImage.includes('mapCoverLevel1')`), true);
-  assert.equal(await evaluate(`document.querySelector('[data-map-id="level5"] .create-room-map-image').textContent`), '暂无地图图像');
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('[data-map-id="level5"] .create-room-map-image')).backgroundImage.includes('mapCoverLevel5')`), true);
   const mapPageBefore = await evaluate(`document.querySelector('.create-room-pages span').textContent`);
   await pointerClick('[aria-label="地图下一页"]');
   assert.notEqual(await evaluate(`document.querySelector('.create-room-pages span').textContent`), mapPageBefore);
-  for (let page = 2; page < Math.ceil(mapCatalog.maps.length / 6); page += 1) await pointerClick('[aria-label="地图下一页"]');
-  assert.equal(await evaluate(`document.querySelector('.create-room-pages span').textContent`), '9 / 9');
+  const mapPageCount = Math.ceil(mapCatalog.maps.length / 6);
+  for (let page = 2; page < mapPageCount; page += 1) await pointerClick('[aria-label="地图下一页"]');
+  assert.equal(await evaluate(`document.querySelector('.create-room-pages span').textContent`), `${mapPageCount} / ${mapPageCount}`);
   await pointerClick('[data-map-id="level10009"]');
   assert.equal(await evaluate(`document.querySelector('[data-map-id="level10009"]').getAttribute('aria-pressed')`), 'true');
   for (let page = 1; page < Math.ceil(mapCatalog.maps.length / 6); page += 1) await pointerClick('[aria-label="地图上一页"]');

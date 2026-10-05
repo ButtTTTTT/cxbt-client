@@ -293,230 +293,332 @@
   "ui/statsTitle.png": [
     "ui/skinf/skin_info_bg07.tga"
   ],
+  "ui/mapCoverRandom.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level_random.tga"
+  ],
+  "ui/roomMapRandom.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level_random.tga"
+  ],
   "ui/mapCoverLevel1.png": [
-    "ui/mapsandbg/maptextures/level1_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level1.tga"
   ],
   "ui/roomMapLevel1.png": [
     "ui/mapsandbg/maptextures/level1_map_image.dds"
   ],
   "ui/mapCoverLevel2.png": [
-    "ui/mapsandbg/maptextures/level2_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level2.tga"
   ],
   "ui/roomMapLevel2.png": [
     "ui/mapsandbg/maptextures/level2_map_image.dds"
   ],
   "ui/mapCoverLevel3.png": [
-    "ui/mapsandbg/maptextures/level3_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level3.tga"
   ],
   "ui/roomMapLevel3.png": [
     "ui/mapsandbg/maptextures/level3_map_image.dds"
   ],
   "ui/mapCoverLevel4.png": [
-    "ui/mapsandbg/previewmaps/skinc_smallmap_level4.tga"
+    "AvatarStar_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level4.tga"
   ],
   "ui/roomMapLevel4.png": [
     "ui/mapsandbg/previewmaps/skinc_smallmap_level4.tga"
   ],
+  "ui/mapCoverLevel5.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level5.tga"
+  ],
+  "ui/roomMapLevel5.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level5.tga"
+  ],
   "ui/mapCoverLevel6.png": [
-    "ui/mapsandbg/maptextures/level6_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level6.tga"
   ],
   "ui/roomMapLevel6.png": [
     "ui/mapsandbg/maptextures/level6_map_image.dds"
   ],
+  "ui/mapCoverLevel7.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level7.tga"
+  ],
+  "ui/roomMapLevel7.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level7.tga"
+  ],
   "ui/mapCoverLevel8.png": [
-    "ui/mapsandbg/maptextures/level8_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level8.tga"
   ],
   "ui/roomMapLevel8.png": [
     "ui/mapsandbg/maptextures/level8_map_image.dds"
   ],
   "ui/mapCoverLevel9.png": [
-    "ui/mapsandbg/maptextures/level9_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level9.tga"
   ],
   "ui/roomMapLevel9.png": [
     "ui/mapsandbg/maptextures/level9_map_image.dds"
   ],
+  "ui/mapCoverLevel10.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level10.tga"
+  ],
+  "ui/roomMapLevel10.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level10.tga"
+  ],
+  "ui/mapCoverLevel11.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level11.tga"
+  ],
+  "ui/roomMapLevel11.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level11.tga"
+  ],
+  "ui/mapCoverLevel12.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level12.tga"
+  ],
+  "ui/roomMapLevel12.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level12.tga"
+  ],
   "ui/mapCoverLevel13.png": [
-    "ui/mapsandbg/maptextures/level13_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level13.tga"
   ],
   "ui/roomMapLevel13.png": [
     "ui/mapsandbg/maptextures/level13_map_image.dds"
   ],
   "ui/mapCoverLevel14.png": [
-    "ui/mapsandbg/maptextures/level14_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level14.tga"
   ],
   "ui/roomMapLevel14.png": [
     "ui/mapsandbg/maptextures/level14_map_image.dds"
   ],
   "ui/mapCoverLevel15.png": [
-    "ui/mapsandbg/maptextures/level15_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level15.tga"
   ],
   "ui/roomMapLevel15.png": [
     "ui/mapsandbg/maptextures/level15_map_image.dds"
   ],
   "ui/mapCoverLevel16.png": [
-    "ui/mapsandbg/maptextures/level16_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level16.tga"
   ],
   "ui/roomMapLevel16.png": [
     "ui/mapsandbg/maptextures/level16_map_image.dds"
   ],
   "ui/mapCoverLevel17.png": [
-    "ui/mapsandbg/maptextures/level17_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level17.tga"
   ],
   "ui/roomMapLevel17.png": [
     "ui/mapsandbg/maptextures/level17_map_image.dds"
   ],
   "ui/mapCoverLevel18.png": [
-    "ui/mapsandbg/maptextures/level18_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level18.tga"
   ],
   "ui/roomMapLevel18.png": [
     "ui/mapsandbg/maptextures/level18_map_image.dds"
   ],
   "ui/mapCoverLevel19.png": [
-    "ui/mapsandbg/maptextures/level19_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level19.tga"
   ],
   "ui/roomMapLevel19.png": [
     "ui/mapsandbg/maptextures/level19_map_image.dds"
   ],
   "ui/mapCoverLevel20.png": [
-    "ui/mapsandbg/maptextures/level20_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level20.tga"
   ],
   "ui/roomMapLevel20.png": [
     "ui/mapsandbg/maptextures/level20_map_image.dds"
   ],
+  "ui/mapCoverLevel21.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level21.tga"
+  ],
+  "ui/roomMapLevel21.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level21.tga"
+  ],
+  "ui/mapCoverLevel22.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level22.tga"
+  ],
+  "ui/roomMapLevel22.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level22.tga"
+  ],
   "ui/mapCoverLevel23.png": [
-    "ui/mapsandbg/maptextures/level23_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level23.tga"
   ],
   "ui/roomMapLevel23.png": [
     "ui/mapsandbg/maptextures/level23_map_image.dds"
   ],
   "ui/mapCoverLevel24.png": [
-    "ui/mapsandbg/maptextures/level24_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level24.tga"
   ],
   "ui/roomMapLevel24.png": [
     "ui/mapsandbg/maptextures/level24_map_image.dds"
   ],
   "ui/mapCoverLevel25.png": [
-    "ui/mapsandbg/maptextures/level25_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level25.tga"
   ],
   "ui/roomMapLevel25.png": [
     "ui/mapsandbg/maptextures/level25_map_image.dds"
   ],
   "ui/mapCoverLevel26.png": [
-    "ui/mapsandbg/maptextures/level26_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level26.tga"
   ],
   "ui/roomMapLevel26.png": [
     "ui/mapsandbg/maptextures/level26_map_image.dds"
   ],
   "ui/mapCoverLevel27.png": [
-    "ui/mapsandbg/maptextures/level27_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level27.tga"
   ],
   "ui/roomMapLevel27.png": [
     "ui/mapsandbg/maptextures/level27_map_image.dds"
   ],
+  "ui/mapCoverLevel28.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level28.tga"
+  ],
+  "ui/roomMapLevel28.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level28.tga"
+  ],
+  "ui/mapCoverLevel29.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level29.tga"
+  ],
+  "ui/roomMapLevel29.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level29.tga"
+  ],
+  "ui/mapCoverLevel30.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level30.tga"
+  ],
+  "ui/roomMapLevel30.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level30.tga"
+  ],
   "ui/mapCoverLevel31.png": [
-    "ui/mapsandbg/maptextures/level31_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level31.tga"
   ],
   "ui/roomMapLevel31.png": [
     "ui/mapsandbg/maptextures/level31_map_image.dds"
   ],
   "ui/mapCoverLevel32.png": [
-    "ui/mapsandbg/maptextures/level32_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level32.tga"
   ],
   "ui/roomMapLevel32.png": [
     "ui/mapsandbg/maptextures/level32_map_image.dds"
   ],
   "ui/mapCoverLevel33.png": [
-    "ui/mapsandbg/maptextures/level33_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level33.tga"
   ],
   "ui/roomMapLevel33.png": [
     "ui/mapsandbg/maptextures/level33_map_image.dds"
   ],
   "ui/mapCoverLevel34.png": [
-    "ui/mapsandbg/maptextures/level34_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level34.tga"
   ],
   "ui/roomMapLevel34.png": [
     "ui/mapsandbg/maptextures/level34_map_image.dds"
   ],
   "ui/mapCoverLevel35.png": [
-    "ui/mapsandbg/maptextures/level35_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level35.tga"
   ],
   "ui/roomMapLevel35.png": [
     "ui/mapsandbg/maptextures/level35_map_image.dds"
   ],
+  "ui/mapCoverLevel36.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level36.tga"
+  ],
+  "ui/roomMapLevel36.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level36.tga"
+  ],
+  "ui/mapCoverLevel37.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level37.tga"
+  ],
+  "ui/roomMapLevel37.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level37.tga"
+  ],
   "ui/mapCoverLevel38.png": [
-    "ui/mapsandbg/maptextures/level38_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level38.tga"
   ],
   "ui/roomMapLevel38.png": [
     "ui/mapsandbg/maptextures/level38_map_image.dds"
   ],
   "ui/mapCoverLevel39.png": [
-    "ui/mapsandbg/maptextures/level39_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level39.tga"
   ],
   "ui/roomMapLevel39.png": [
     "ui/mapsandbg/maptextures/level39_map_image.dds"
   ],
   "ui/mapCoverLevel40.png": [
-    "ui/mapsandbg/maptextures/level40_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level40.tga"
   ],
   "ui/roomMapLevel40.png": [
     "ui/mapsandbg/maptextures/level40_map_image.dds"
   ],
-  "ui/mapCoverLevel43.png": [
-    "ui/mapsandbg/maptextures/level43_map_image.dds"
+  "ui/mapCoverLevel41.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level41.tga"
+  ],
+  "ui/roomMapLevel41.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level41.tga"
+  ],
+  "ui/mapCoverLevel42.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level42.tga"
+  ],
+  "ui/roomMapLevel42.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level42.tga"
   ],
   "ui/roomMapLevel43.png": [
     "ui/mapsandbg/maptextures/level43_map_image.dds"
   ],
-  "ui/mapCoverLevel44.png": [
-    "ui/mapsandbg/maptextures/level44_map_image.dds"
+  "ui/mapCoverLevel43.png": [
+    "ui/mapsandbg/maptextures/level43_map_image.dds"
   ],
   "ui/roomMapLevel44.png": [
     "ui/mapsandbg/maptextures/level44_map_image.dds"
   ],
+  "ui/mapCoverLevel44.png": [
+    "ui/mapsandbg/maptextures/level44_map_image.dds"
+  ],
   "ui/mapCoverLevel45.png": [
-    "ui/mapsandbg/maptextures/level45_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level45.tga"
   ],
   "ui/roomMapLevel45.png": [
     "ui/mapsandbg/maptextures/level45_map_image.dds"
   ],
   "ui/mapCoverLevel98.png": [
-    "ui/mapsandbg/previewmaps/skinc_smallmap_level98.tga"
+    "AvatarStar_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level98.tga"
   ],
   "ui/roomMapLevel98.png": [
     "ui/mapsandbg/previewmaps/skinc_smallmap_level98.tga"
   ],
   "ui/mapCoverLevel99.png": [
-    "ui/mapsandbg/previewmaps/skinc_smallmap_level99.tga"
+    "AvatarStar_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level99.tga"
   ],
   "ui/roomMapLevel99.png": [
     "ui/mapsandbg/previewmaps/skinc_smallmap_level99.tga"
   ],
+  "ui/mapCoverLevel1004.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level1004.tga"
+  ],
+  "ui/roomMapLevel1004.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level1004.tga"
+  ],
+  "ui/mapCoverLevel1005.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level1005.tga"
+  ],
+  "ui/roomMapLevel1005.png": [
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level1005.tga"
+  ],
   "ui/mapCoverLevel10001.png": [
-    "ui/mapsandbg/maptextures/level10001_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level10001.tga"
   ],
   "ui/roomMapLevel10001.png": [
     "ui/mapsandbg/maptextures/level10001_map_image.dds"
   ],
   "ui/mapCoverLevel10002.png": [
-    "ui/mapsandbg/maptextures/level10002_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level10002.tga"
   ],
   "ui/roomMapLevel10002.png": [
     "ui/mapsandbg/maptextures/level10002_map_image.dds"
   ],
   "ui/mapCoverLevel10003.png": [
-    "ui/mapsandbg/maptextures/level10003_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level10003.tga"
   ],
   "ui/roomMapLevel10003.png": [
     "ui/mapsandbg/maptextures/level10003_map_image.dds"
   ],
-  "ui/mapCoverLevel10008.png": [
-    "ui/mapsandbg/maptextures/level10008_map_image.dds"
-  ],
   "ui/roomMapLevel10008.png": [
     "ui/mapsandbg/maptextures/level10008_map_image.dds"
   ],
+  "ui/mapCoverLevel10008.png": [
+    "ui/mapsandbg/maptextures/level10008_map_image.dds"
+  ],
   "ui/mapCoverLevel10009.png": [
-    "ui/mapsandbg/maptextures/level10009_map_image.dds"
+    "AvatarStar_zh_cn_cache/ui/mapsandbg/previewmaps/skinc_smallmap_level10009.tga"
   ],
   "ui/roomMapLevel10009.png": [
     "ui/mapsandbg/maptextures/level10009_map_image.dds"

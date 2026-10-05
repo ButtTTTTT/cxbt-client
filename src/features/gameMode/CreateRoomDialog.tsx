@@ -32,6 +32,7 @@ type MapChoice = {
   mapId: string;
   name: string;
   cover: string | null;
+  coverCard: boolean;
   mode: Mode;
 };
 
@@ -70,6 +71,7 @@ function buildMaps(mode: Mode, assets: LobbyAssets): MapChoice[] {
     mapId: map.id,
     name: map.name,
     cover: map.cover,
+    coverCard: Boolean(map.coverCard),
     mode,
   }));
 }
@@ -162,8 +164,8 @@ export default function CreateRoomDialog({ assets, onClose, onCreate, initialRoo
                 style={mapChoice.cover ? { backgroundImage: `url("${lobbyUrl(mapChoice.cover)}")` } : undefined}>
                 {mapChoice.cover ? null : '暂无地图图像'}
               </span>
-              <span className="create-room-map-mode"><img src={lobbyUrl(assets.ui[mapChoice.mode.icon])} alt="" /><b>{mapChoice.mode.label}</b></span>
-              <span className="create-room-map-name">{mapChoice.name}{mapChoice.name === '随机地图' && <small> RANDOM</small>}</span>
+              {(!mapChoice.cover || !mapChoice.coverCard) && <span className="create-room-map-mode"><img src={lobbyUrl(assets.ui[mapChoice.mode.icon])} alt="" /><b>{mapChoice.mode.label}</b></span>}
+              {(!mapChoice.cover || !mapChoice.coverCard) && <span className="create-room-map-name">{mapChoice.name}{mapChoice.name === '随机地图' && <small> RANDOM</small>}</span>}
             </button>)}
           </div>
           <div className="create-room-pages" aria-label="地图分页">

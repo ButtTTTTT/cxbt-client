@@ -13,7 +13,7 @@ export type InventoryItem = {
 };
 export type LobbyAssets = {
   ui: Record<string, string>;
-  maps: { id: string; name: string; cover: string | null; roomImage: string | null }[];
+  maps: { id: string; name: string; cover: string | null; roomImage: string | null; coverCard?: boolean }[];
   items: InventoryItem[];
   weapons: Record<string, CreationWeapon>;
   counts: Record<InventoryCategory, number>;

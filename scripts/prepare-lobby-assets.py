@@ -17,6 +17,7 @@ spec = importlib.util.spec_from_file_location("creation", Path(__file__).with_na
 creation = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(creation)
 ROOT, CACHE, GAME_MESH = creation.ROOT, creation.CACHE, creation.GAME_MESH
+MAP_CACHE = ROOT / "AvatarStar_zh_cn_cache"
 OUTPUT = ROOT / "cxbt-client/public/assets/lobby"
 creation.OUTPUT = OUTPUT
 UI = CACHE / "ui/skinf"
@@ -54,6 +55,16 @@ def map_image(name, path, size):
     return creation.save_image(canvas, "ui/" + name, [path.relative_to(CACHE).as_posix()])
 
 
+def map_cover(name, path, size):
+    """Convert the localized preview card used by the original room dialog."""
+    image = Image.open(path).convert("RGBA").resize(size, Image.Resampling.LANCZOS)
+    destination = OUTPUT / "ui" / (name + ".png")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    image.save(destination)
+    creation.provenance[destination.relative_to(OUTPUT).as_posix()] = [path.relative_to(ROOT).as_posix()]
+    return "ui/" + destination.name
+
+
 def map_catalogue():
     icons = (CACHE / "scripts/sys/iconsD.lua").read_text()
     previews = icons.split("PreviewMaps =", 1)[1].split("PreviewMapsDisable =", 1)[0]
@@ -69,20 +80,41 @@ def map_catalogue():
             minimaps[int(match[1])] = path
     level_ids.update(names)
     level_ids.update(minimaps)
-    maps = [{"id": "random", "name": "随机地图", "cover": None, "roomImage": None}]
+    preview_paths = {}
+    for root in (MAP_CACHE / "ui/mapsandbg/previewmaps", CACHE / "ui/mapsandbg/previewmaps"):
+        if not root.exists():
+            continue
+        for path in root.glob("skinc_smallmap_level*.tga"):
+            match = re.fullmatch(r"skinc_smallmap_level(\d+|_random)(?:_elite)?", path.stem)
+            if not match or "_disabled" in path.stem or "_elite" in path.stem:
+                continue
+            key = "random" if match[1] == "_random" else int(match[1])
+            preview_paths.setdefault(key, path)
+    level_ids.update(value for value in preview_paths if value != "random")
+    random_cover = map_cover("mapCoverRandom", preview_paths["random"], (182, 103)) if "random" in preview_paths else None
+    random_room = map_cover("roomMapRandom", preview_paths["random"], (306, 172)) if "random" in preview_paths else None
+    maps = [{"id": "random", "name": "随机地图", "cover": random_cover, "roomImage": random_room,
+             "coverCard": random_cover is not None}]
     for level_id in sorted(level_ids):
         key = f"level{level_id}"
         source = f"ui/mapsandbg/previewmaps/skinc_smallmap_{key}.tga"
         cover = None
         room_image = None
-        if (CACHE / source).exists():
+        preview = preview_paths.get(level_id)
+        if preview:
+            cover = map_cover(f"mapCover{key.title()}", preview, (182, 103))
+        elif (CACHE / source).exists():
             cover = art(f"mapCover{key.title()}", source, (182, 103))
+        if (CACHE / source).exists():
             room_image = art(f"roomMap{key.title()}", source, (306, 172))
         elif level_id in minimaps:
-            path = minimaps[level_id]
-            cover = map_image(f"mapCover{key.title()}", path, (182, 103))
-            room_image = map_image(f"roomMap{key.title()}", path, (306, 172))
-        maps.append({"id": key, "name": names.get(level_id, f"地图 {level_id}"), "cover": cover, "roomImage": room_image})
+            room_image = map_image(f"roomMap{key.title()}", minimaps[level_id], (306, 172))
+        elif preview:
+            room_image = map_cover(f"roomMap{key.title()}", preview, (306, 172))
+        if cover is None and level_id in minimaps:
+            cover = map_image(f"mapCover{key.title()}", minimaps[level_id], (182, 103))
+        maps.append({"id": key, "name": names.get(level_id, f"地图 {level_id}"), "cover": cover, "roomImage": room_image,
+                     "coverCard": preview is not None})
     return maps
 
 
