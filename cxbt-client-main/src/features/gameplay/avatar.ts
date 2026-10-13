@@ -15,7 +15,13 @@ export type BattleAvatar = {
   setWeapon: (index: number) => void;
   jump: () => void;
   roll: () => void;
-  attack: () => void;
+  /** Plays one hit of the weapon combo; melee weapons carry up to three hits. */
+  attack: (step?: number) => void;
+  spurt: () => void;
+  /** Fades the avatar while the stealth skill is active. */
+  setGhost: (on: boolean) => void;
+  /** Freezes or resumes the animation mixer (影像调整 · 播放角色动作). */
+  setMotion: (on: boolean) => void;
   reload: () => void;
   dispose: () => void;
 };
@@ -80,7 +86,7 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
   };
 
   const eyes = await Promise.all(preset.eyes.map(loadTexture));
-  const rightEyes = eyes.map((texture) => {
+  const rightEyes = preset.rightEyes ? await Promise.all(preset.rightEyes.map(loadTexture)) : eyes.map((texture) => {
     const mirror = texture.clone();
     mirror.repeat.x = -1;
     mirror.offset.x = 1;
@@ -90,12 +96,14 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
   });
   const mouths = await Promise.all(preset.mouths.map(loadTexture));
   await Promise.all([
-    addPart(assets.models.head01, material(null, assets.skinColor)),
+    preset.headTexture ? loadTexture(preset.headTexture).then((map) => addPart(assets.models.head01, material(map)))
+      : addPart(assets.models.head01, material(null, preset.skinColor ?? assets.skinColor)),
     addPart(assets.models.l_eye, material(eyes[appearance.eyes] ?? eyes[0], '#ffffff', true)),
     addPart(assets.models.r_eye, material(rightEyes[appearance.eyes] ?? rightEyes[0], '#ffffff', true)),
     addPart(assets.models.mouth, material(mouths[appearance.mouth] ?? mouths[0], '#ffffff', true)),
-    loadTexture(assets.models.noseTexture).then((map) => addPart(assets.models.nose, material(map, '#ffffff', true))),
-    ...preset.ears.map((path, index) => addPart(path, material(null, assets.skinColor),
+    ...(preset.noseTexture === null ? [] : [loadTexture(preset.noseTexture ?? assets.models.noseTexture)
+      .then((map) => addPart(assets.models.nose, material(map, '#ffffff', true)))]),
+    ...preset.ears.map((path, index) => addPart(path, material(null, preset.skinColor ?? assets.skinColor),
       [index === 0 ? 0.235 : -0.235, 1.04, 0.035])),
     ...preset.fixedParts.map(async (part) => addPart(part.model, material(await loadTexture(part.texture)))),
     ...preset.hair.map(async (part, index) => {
@@ -124,15 +132,20 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
   };
   const entries = await Promise.all(weapons.map(async (weapon) => {
     const set = weapon.animation.match(/thirdperson-male-(.+)-stdidle/)?.[1] ?? weapon.id;
-    const [idle, run, jump, roll, shoot, reload] = await Promise.all([
+    // Melee sets ship stdshoot1/2/3 as the -attack/-attack2/-attack3 combo clips.
+    const attackSources = [weapon.actions?.attack ?? `gameplay:${set}-attack.json`,
+      `gameplay:${set}-attack2.json`, `gameplay:${set}-attack3.json`];
+    const [idle, run, jump, roll, spurt, reload] = await Promise.all([
       fetchClip(weapon.animation, `${weapon.id}-idle`),
       fetchClip(`gameplay:${set}-run.json`, `${weapon.id}-run`),
       fetchClip(`gameplay:${set}-jump.json`, `${weapon.id}-jump`).catch(() => null),
       fetchClip(`gameplay:${set}-roll.json`, `${weapon.id}-roll`).catch(() => null),
-      weapon.actions?.attack ? fetchClip(weapon.actions.attack, `${weapon.id}-shoot`)
-        : fetchClip(`gameplay:${set}-attack.json`, `${weapon.id}-shoot`).catch(() => null),
+      fetchClip(`gameplay:${set}-spurt.json`, `${weapon.id}-spurt`).catch(() => null),
       weapon.actions?.reload ? fetchClip(weapon.actions.reload, `${weapon.id}-reload`) : Promise.resolve(null),
     ]);
+    const attacks = (await Promise.all(attackSources.map((path, index) =>
+      fetchClip(path, `${weapon.id}-attack${index + 1}`).catch(() => null))))
+      .filter((clip) => Boolean(clip));
     const parts = await Promise.all(weapon.parts.map(async (part) => {
       const model = await loadModel(part.model);
       const map = part.texture ? await loadTexture(part.texture) : null;
@@ -147,8 +160,9 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
       bone.add(model);
       return model;
     }));
-    return { idle, run, jump, roll, shoot, reload, parts };
+    return { idle, run, jump, roll, reload, spurt, attacks, parts };
   }));
+  const ghostState = new Map<any, { transparent: boolean; opacity: number; depthWrite: boolean }>();
   const mixer = new THREE.AnimationMixer(root);
   let selected = 0;
   let moving = false;
@@ -182,7 +196,27 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
       transient = 0;
       base();
     },
-    attack() { play(entries[selected].shoot ?? entries[selected].idle, true); },
+    attack(step = 0) {
+      const clips = entries[selected].attacks;
+      play(clips.length ? clips[step % clips.length] : entries[selected].idle, true);
+    },
+    spurt() { const clip = entries[selected].spurt; if (clip) play(clip, true); },
+    setMotion(on) { mixer.timeScale = on ? 1 : 0; },
+    setGhost(on) {
+      root.traverse((object: any) => {
+        if (!(object instanceof THREE.Mesh) || !object.material) return;
+        const material = object.material;
+        let base = ghostState.get(material);
+        if (!base) {
+          base = { transparent: material.transparent, opacity: material.opacity, depthWrite: material.depthWrite };
+          ghostState.set(material, base);
+        }
+        material.transparent = on || base.transparent;
+        material.opacity = on ? 0.32 : base.opacity;
+        material.depthWrite = on ? false : base.depthWrite;
+        material.needsUpdate = true;
+      });
+    },
     reload() { if (entries[selected].reload) play(entries[selected].reload, true); },
     jump() { if (entries[selected].jump) play(entries[selected].jump, true); },
     roll() { if (entries[selected].roll) play(entries[selected].roll, true); },

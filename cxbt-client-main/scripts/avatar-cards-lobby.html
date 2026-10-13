@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><link rel="icon" href="data:,"></head>
+<body style="margin:0"><div id="root"></div><script type="module">
+  import React from 'react';
+  import { createRoot } from 'react-dom/client';
+  import Lobby from '/src/features/lobby/Lobby.tsx';
+  import { createBattleAvatar } from '/src/features/gameplay/avatar.ts';
+  import { initialAppearance } from '/src/features/characterCreation/assets.ts';
+  const root = createRoot(document.getElementById('root'));
+  const character = { version: 1, name: 'avatar-card-test', userId: 1, jobId: 'assassin',
+    appearance: { gender: 0, hair: 0, eyes: 0, mouth: 0, accessory: 0 } };
+  window.showLobby = () => root.render(React.createElement(Lobby, { character, onExit: () => {} }));
+  window.checkBattleCard = async id => {
+    const [assets, catalog] = await Promise.all([
+      fetch('/assets/creation/config.json').then(response => response.json()),
+      fetch('/assets/avatar-cards/catalog.json').then(response => response.json()),
+    ]);
+    const card = catalog.cards.find(entry => entry.id === id);
+    const avatar = await createBattleAvatar(assets, card.preset, initialAppearance(card.preset), assets.jobs.assassin.weapons);
+    avatar.update(1 / 60);
+    avatar.setMoving(true);
+    avatar.update(1 / 60);
+    avatar.setWeapon(1);
+    avatar.attack();
+    avatar.update(1 / 60);
+    const meshCount = avatar.root.getObjectsByProperty('isMesh', true).length;
+    avatar.dispose();
+    return { id, meshCount };
+  };
+  window.showLobby();
+</script></body></html>

@@ -1,0 +1,70 @@
+@font-face { font-family: AvatarHei; src: url('/assets/creation/simhei.ttf') format('truetype'); font-display: swap; }
+.profession-viewport { position: fixed; inset: 0; display: grid; place-items: center; overflow: hidden; background: #001722; color: #fff; }
+.profession-screen { position: absolute; left: 50%; top: 50%; width: 1200px; height: 900px; margin: -450px 0 0 -600px; transform-origin: center; overflow: hidden; background-size: 100% 100%; font: 16px/1.1 AvatarHei, 'Microsoft YaHei', sans-serif; font-synthesis: weight; }
+.profession-screen button, .profession-screen input { font: inherit; }
+.profession-screen button { padding: 0; border: 0; background-color: transparent; background-repeat: no-repeat; background-size: 100% 100%; color: inherit; cursor: pointer; }
+.profession-screen button:focus-visible, .profession-screen input:focus-visible { outline: 2px solid #fff3a6; outline-offset: 2px; }
+.profession-screen > audio { display: none; }
+.profession-frame { position: absolute; left: -200px; top: 0; width: 1600px; height: 900px; z-index: 3; pointer-events: none; }
+.profession-title { position: absolute; left: 497px; top: 10px; width: 206px; height: 49px; z-index: 4; margin: 0; background-size: 100% 100%; font-size: 0; }
+.profession-presentation { position: absolute; inset: 0; pointer-events: none; }
+.profession-banner { position: absolute; left: 0; top: 144px; width: 1170px; height: 62px; animation: profession-banner-in 708.333ms linear both; transform-origin: center; }
+.profession-portrait { position: absolute; left: 334px; top: 169px; width: 581px; height: 574px; animation: profession-portrait-in 583.333ms linear 416.667ms both; }
+.profession-intro { position: absolute; left: 0; top: 242px; width: 390px; height: 456px; animation: profession-intro-in 416.667ms linear 916.667ms both; }
+.profession-job-pill { position: absolute; left: 43px; top: 0; width: 303px; height: 67px; background-size: 100% 100%; }
+.profession-job-pill img { position: absolute; left: 16px; top: 14px; width: 31px; height: 31px; }
+.profession-job-pill span { position: absolute; left: 151px; top: 20px; right: 0; height: 17px; text-align: left; }
+.profession-description { position: absolute; left: 0; top: 73px; width: 390px; height: 210px; background-size: 100% 100%; display: flex; align-items: center; }
+.profession-description p { margin: 0; padding: 25px 40px; white-space: pre-line; line-height: 18px; }
+.profession-stats { position: absolute; left: 87px; top: 300px; }
+.profession-stat { position: relative; width: 216px; height: 31px; margin-bottom: 5px; background-size: 100% 100%; }
+.profession-stat > span { position: absolute; left: 0; top: 5px; width: 76px; height: 16px; text-align: right; }
+.profession-stat > div { position: absolute; left: 91px; top: 5px; display: flex; gap: 3px; }
+.profession-stat img { width: 18px; height: 18px; }
+.profession-choices { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.profession-choice { position: absolute; left: 963px; width: 180px; height: 175px; opacity: .5; pointer-events: auto; transition: opacity 120ms linear; }
+.profession-choice.selected, .profession-choice:hover, .profession-choice:focus-visible { opacity: 1; }
+.profession-choice img { display: block; width: 180px; height: 175px; }
+.profession-action { position: absolute; z-index: 5; width: 124px; height: 56px; display: flex; align-items: center; background-image: var(--art); text-shadow: 1px 1px #563a21; }
+.profession-action:hover { background-image: var(--hover-art); }
+.profession-action:active { background-image: var(--down-art); }
+.profession-action img { width: 48px; height: 48px; }
+.profession-action span { padding-left: 18px; }
+.profession-back { left: 24px; top: 817px; }
+.profession-settings { left: 1052px; top: 817px; }
+.profession-create { left: 473px; top: 804px; width: 255px; height: 66px; justify-content: center; }
+.profession-resume { position: absolute; z-index: 6; right: 35px; top: 25px; width: 130px; height: 36px; color: #ffe1a6 !important; border: 1px solid #b09463 !important; border-radius: 4px; background: #3d281be0 !important; }
+.profession-sparkles { position: absolute; inset: 0; pointer-events: none; }
+.profession-sparkles img { position: absolute; height: auto; mix-blend-mode: screen; animation: profession-sparkle 4s ease-in-out infinite; }
+.profession-screen .lobby-art-button { background-image: var(--art); }
+.profession-screen .lobby-art-button:hover { background-image: var(--hover-art, var(--art)); }
+.profession-screen .lobby-art-button:active { background-image: var(--down-art, var(--art)); }
+@keyframes profession-banner-in {
+  0% { opacity: 0; transform: scaleY(1); }
+  23.529% { transform: scaleY(0); }
+  47.059% { transform: scaleY(1); }
+  70.588% { transform: scaleY(0); }
+  100% { opacity: 1; transform: scaleY(1); }
+}
+@keyframes profession-portrait-in { from { opacity: 0; transform: translateX(-364px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes profession-intro-in {
+  0% { opacity: 0; transform: translateY(-142px); }
+  10% { transform: translateY(-128px); }
+  20% { transform: translateY(-107px); }
+  30% { transform: translateY(-79px); }
+  40% { transform: translateY(-44px); }
+  50% { transform: translateY(-2px); }
+  60% { transform: translateY(47px); }
+  70% { transform: translateY(103px); }
+  80% { transform: translateY(26px); }
+  90% { transform: translateY(13px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes profession-sparkle { 0%, 100% { opacity: calc(var(--sparkle-opacity) * .35); } 50% { opacity: var(--sparkle-opacity); } }
+.profession-still .profession-banner, .profession-still .profession-portrait, .profession-still .profession-intro { animation: none; }
+.profession-still .profession-sparkles img { animation: none; opacity: var(--sparkle-opacity); }
+@media (prefers-reduced-motion: reduce) {
+  .profession-banner, .profession-portrait, .profession-intro { animation: none; }
+  .profession-sparkles img { animation: none; opacity: var(--sparkle-opacity); }
+  .profession-choice { transition: none; }
+}

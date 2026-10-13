@@ -1,0 +1,36 @@
+.battle-hud { position: absolute; inset: 0; pointer-events: none; }
+.battle-number { display: inline-flex; height: 30px; }
+.battle-number i { display: block; width: 23px; height: 30px; background: url('/assets/gameplay/ui/skin_ingame_b01_number0_9.png') 0 0 / 230px 30px no-repeat; }
+.battle-top { position: absolute; top: 18px; left: 50%; width: 270px; height: 82px; transform: translateX(-50%) scale(var(--battle-hud-scale)); transform-origin: top center; }
+.battle-score-rail { position: absolute; top: 22px; left: 38px; right: 38px; height: 31px; border: 2px solid #bfc1bc; border-radius: 6px; background: #303332; box-shadow: 0 0 0 2px #282c2c, inset 0 1px 2px #ffffff7a; }
+.battle-team { position: absolute; top: 0; width: 76px; height: 76px; display: grid; place-items: center; border: 3px solid #c7c9c4; border-radius: 50%; background-position: center bottom; background-size: 76px 103px; background-repeat: no-repeat; box-shadow: 0 0 0 2px #242c2d, inset 0 0 0 2px #2c3131, 0 2px 3px #132025; box-sizing: border-box; }
+.battle-team.red { left: 0; background-image: url('/assets/gameplay/ui/skin_ingame_timebg_redicon.png'); }
+.battle-team.blue { right: 0; background-image: url('/assets/gameplay/ui/skin_ingame_timebg_blueicon.png'); }
+.battle-team .battle-number { transform: scale(.92); filter: drop-shadow(1px 2px 1px #442c2c); }
+.battle-team.red .battle-number { filter: sepia(1) saturate(5) drop-shadow(1px 2px 1px #622b22); }
+.battle-mode-icon { position: absolute; top: 4px; left: 106px; width: 58px; height: 45px; object-fit: contain; }
+.battle-time { position: absolute; left: 84px; top: 47px; width: 102px; height: 22px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 2px solid #c1c3bd; border-radius: 13px; background: #25272a; box-shadow: 0 0 0 2px #282c2c; box-sizing: border-box; font-size: 10px; }
+.battle-time em { color: #f6d84f; font-style: normal; font-size: 10px; }
+.battle-time span { color: #fff; font-size: 10px; }
+.battle-bottom { position: absolute; inset: auto 0 8px; height: 116px; }
+.battle-health, .battle-ammo { position: absolute; bottom: 0; width: 193px; height: 115px; transform: scale(var(--battle-hud-scale)); background-position: center; background-size: 100% 100%; background-repeat: no-repeat; }
+.battle-health { left: 8px; transform-origin: bottom left; background-image: url('/assets/gameplay/ui/skin_ingame_bg01_red.png'); }
+.battle-ammo { right: 8px; transform-origin: bottom right; background-image: url('/assets/gameplay/ui/skin_ingame_bg01_red02.png'); }
+.battle-health-meter, .battle-ammo-meter { position: absolute; top: 14px; width: 89px; height: 89px; border-radius: 50%; overflow: hidden; }
+.battle-health-meter { left: 14px; background: #431008; }
+.battle-health-meter i { position: absolute; bottom: 0; left: 0; width: 100%; background: #e52c06 url('/assets/gameplay/ui/skin_ingame_heart_row.png') center bottom / 89px 89px no-repeat; transition: height 150ms ease-out; }
+.battle-health > img { position: absolute; left: 14px; top: 14px; width: 89px; height: 89px; }
+.battle-health > .battle-number { position: absolute; right: 7px; top: 70px; transform: scale(.8); transform-origin: right center; filter: drop-shadow(1px 2px 1px #521c11); }
+.battle-ammo-meter { right: 14px; background: #ba8b6a; }
+.battle-ammo-meter i { display: block; width: 100%; height: 100%; background: #ba8b6a url('/assets/gameplay/ui/skin_ingame_danyao_row.png') center / 89px 89px no-repeat; }
+.battle-ammo-gloss, .battle-ammo-icon { position: absolute; right: 14px; top: 14px; width: 89px; height: 89px; }
+.battle-ammo > .battle-number { position: absolute; left: 16px; top: 70px; transform: scale(.9); transform-origin: left center; filter: drop-shadow(1px 2px 1px #521c11); }
+.battle-ammo-infinite { position: absolute; left: 24px; top: 62px; font-size: 36px; font-weight: bold; }
+.battle-inventory { position: absolute; left: 50%; bottom: 0; height: 76px; display: flex; align-items: flex-end; gap: 2px; transform: translateX(-50%) scale(var(--battle-hud-scale)); transform-origin: bottom center; pointer-events: auto; }
+.battle-slot { position: relative; flex: 0 0 56px; width: 56px; height: 56px; padding: 3px; box-sizing: border-box; border: 0; background: url('/assets/gameplay/ui/skin_ingame_skill_bg.png') center / 100% 100% no-repeat; }
+button.battle-slot { cursor: pointer; }
+.battle-slot.active { align-self: flex-start; background-image: url('/assets/gameplay/ui/skin_ingame_skill_bg_light.png'); }
+.battle-slot:focus-visible { outline: 2px solid #ffe88b; outline-offset: 1px; }
+.battle-slot img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.battle-slot small { position: absolute; z-index: 1; left: 3px; bottom: 2px; color: #fff; font-size: 11px; line-height: 13px; text-shadow: 0 1px 2px #000; }
+.battle-slot.empty { background-color: #34525b66; }

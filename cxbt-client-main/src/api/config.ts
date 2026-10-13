@@ -6,8 +6,8 @@ const isHttps = protocol === 'https:';
 
 export const API_BASE = 
   import.meta.env.VITE_API_BASE || 
-  `${protocol}//${hostname}:8080/api`;
+  `${protocol}//${hostname}:8081/api`;
 
 export const WS_BASE = 
   import.meta.env.VITE_WS_BASE || 
-  `${isHttps ? 'wss:' : 'ws:'}//${hostname}:8080/ws`;
+  `${isHttps ? 'wss:' : 'ws:'}//${hostname}:8081/ws`;
