@@ -10,6 +10,7 @@
     "smoke:creation": "node scripts/smoke-creation.mjs",
     "smoke:avatars": "node scripts/smoke-avatar-cards.mjs",
     "smoke:skills": "node scripts/smoke-skills.mjs",
+    "smoke:battle": "node scripts/smoke-battle.mjs",
     "validate:cache": "node scripts/validate-cache.mjs",
     "preview": "vite preview"
   },

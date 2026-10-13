@@ -11,6 +11,10 @@ import { createBattleAudio } from './audio';
 import BattleHud from './BattleHud';
 import { BATTLE_QUICK_KEYS } from './hud';
 import { createProjectileSystem, weaponKind } from './projectiles';
+import { createSkillEffects } from './skillEffects';
+import { loadSkills, passiveModifiers, resolveLoadout, type BattleSlot, type LoadedSkill } from './skills';
+import SettingsMenu from '../lobby/SettingsMenu';
+import type { Skill } from '../lobby/skills';
 import './Gameplay.css';
 import { WebRTCClient } from '../../network/WebRTCClient';
 
@@ -24,16 +28,17 @@ type MapDefinition = {
   fog: number[] | null;
   ambience?: string | null;
 };
-type BattleControl = { switchWeapon: (index: number) => void; fire: () => void; reload: () => void };
+type BattleControl = { switchWeapon: (index: number) => void; fire: () => void; reload: () => void;
+  castSkill: (slot: number) => boolean };
+type HotbarState = { cooldowns: number[]; shield: number; stealthed: boolean; speed: number; maxHealthScale: number };
 
 const BASE = `${import.meta.env.BASE_URL}assets/gameplay/`;
-const img = (name: string) => `${BASE}ui/${name}.png`;
+const LOBBY = `${import.meta.env.BASE_URL}assets/lobby/`;
 const AMMO: Record<string, number> = { pistol: 12, sniperrifle: 5, shotgun: 8, rpg: 1,
   bow: 1, crossbow: 1, machinegun: 80, smg: 30, sprayer: 60, grenadelauncher: 6, grenade: 1 };
 const DEFAULT_AMMO = 30;
 const MAX_HEALTH = 3201;
 const ROUND_LENGTH = 3 * 60;
-const SKILL_ICONS = ['ballistic', 'bandage_heal', 'assimilation', 'bloodpoison'];
 
 function magazine(weapon: CreationWeapon) {
   if (weaponKind(weapon.id) === 'melee') return 0;
@@ -45,14 +50,20 @@ function formatTime(seconds: number) {
   return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
 }
 
-function BattleScene({ map, character, creation, assets, avatarPreset, weapons, active, onReady, onPosition,
-  onShot, onHit, onReload, onWeaponChange, onDamage, paused, otherPlayers, roomPlayers, logDebug }: {
+function BattleScene({ map, character, creation, assets, avatarPreset, weapons, slots, loads, health, motion,
+  active, onReady, onPosition, onShot, onHit, onReload, onWeaponChange, onDamage, onHeal, onHotbar,
+  onPause, paused, otherPlayers, roomPlayers, logDebug }: {
   map: MapDefinition;
   character: SavedCharacter;
   creation: CreationAssets;
   assets: LobbyAssets;
   avatarPreset?: CreationPreset;
   weapons: CreationWeapon[];
+  /** Mirrors the lobby quickbar so hotkeys and the HUD stay in sync. */
+  slots: BattleSlot[];
+  loads: LoadedSkill[];
+  health: RefObject<number>;
+  motion: RefObject<boolean>;
   active: RefObject<BattleControl | null>;
   paused: RefObject<boolean>;
   onReady: () => void;
@@ -62,6 +73,10 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
   onReload: () => void;
   onWeaponChange: (index: number) => void;
   onDamage: (amount: number) => void;
+  onHeal: (amount: number) => void;
+  onHotbar: (state: HotbarState) => void;
+  /** Opens the same settings UI the lobby uses when the mouse leaves the round. */
+  onPause: () => void;
   otherPlayers: React.RefObject<Record<string, { buffer: {x: number, z: number, yaw: number, time: number}[] }>>;
   roomPlayers: any;
   logDebug: (msg: string) => void;
@@ -74,6 +89,10 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
   const readyRef = useRef(onReady);
   const weaponChangeRef = useRef(onWeaponChange);
   const damageRef = useRef(onDamage);
+  const healRef = useRef(onHeal);
+  const hotbarRef = useRef(onHotbar);
+  const logRef = useRef(logDebug);
+  const pauseRef = useRef(onPause);
   shotRef.current = onShot;
   hitRef.current = onHit;
   reloadRef.current = onReload;
@@ -81,6 +100,10 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
   readyRef.current = onReady;
   weaponChangeRef.current = onWeaponChange;
   damageRef.current = onDamage;
+  healRef.current = onHeal;
+  hotbarRef.current = onHotbar;
+  logRef.current = logDebug;
+  pauseRef.current = onPause;
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -119,6 +142,13 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
     let pointerY = 0;
     let selected = 0;
     let lastShot = 0;
+    let comboStep = 0;
+    let comboTime = 0;
+    let holding = false;
+    let lockTimer = 0;
+    let lockAttempts = 0;
+    let lastHotbar = 0;
+    let regenTimer = 0;
     let shotFlash = 0;
     let ready = false;
     let grounded = false;
@@ -137,11 +167,52 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
     const clock = new THREE.Clock();
     const flash = new THREE.PointLight(0xffcf79, 0, 7);
     scene.add(flash);
+    const passives = passiveModifiers(loads);
+    const enemyList = () => {
+      const list: { userId: string; position: any }[] = [];
+      for (const [userId, entry] of otherPlayerAvatars) if (entry?.root) list.push({ userId, position: entry.root.position });
+      return list;
+    };
     const projectiles = createProjectileSystem(scene, () => collisionMeshes.length ? collisionMeshes : mapVisible,
       (point, radius) => {
         const distance = point.distanceTo(position.clone().add(new THREE.Vector3(0, 1, 0)));
-        if (distance < radius) damageRef.current(Math.ceil(650 * (1 - distance / radius)));
+        if (distance < radius) takeDamage(Math.ceil(650 * (1 - distance / radius)));
+        for (const enemy of enemyList()) {
+          const gap = enemy.position.distanceTo(point);
+          if (gap > radius) continue;
+          const blast = passives.gasDamage > 0 ? passives.gasDamage * 3 : Math.ceil(320 * (1 - gap / radius));
+          hitRef.current(enemy.userId, blast);
+        }
       });
+    const transfer = { stored: 0 };
+    const takeDamage = (amount: number) => {
+      const reduced = amount * (1 - passives.damageReduction / 100);
+      if (passives.storeEnergy > 0) {
+        transfer.stored += reduced * passives.storeEnergy / 100;
+        if (transfer.stored >= 100 && enemyList().some((enemy) => enemy.position.distanceTo(position) <= 3)) {
+          transfer.stored = 0;
+          for (const enemy of enemyList()) {
+            if (enemy.position.distanceTo(position) <= passives.releaseRadius) hitRef.current(enemy.userId, passives.releaseDamage);
+          }
+        }
+      }
+      const left = skillEffects.absorb(reduced);
+      if (left > 0) damageRef.current(left);
+    };
+    const skillEffects = createSkillEffects({
+      scene,
+      position: () => position,
+      aim: () => camera.getWorldDirection(new THREE.Vector3()),
+      spawnProjectile: (kind, origin, aim) => projectiles.spawn(kind, origin, aim),
+      playSound: (name, volume) => audio.play(name, volume),
+      getMaxHealth: () => MAX_HEALTH * skillEffects.snapshot().maxHealthScale,
+      heal: (amount) => healRef.current(amount),
+      hurt: (amount) => damageRef.current(amount),
+      enemies: enemyList,
+      hitEnemy: (userId, damage) => hitRef.current(userId, damage),
+      setGhost: (on) => avatar?.setGhost(on),
+      log: (message) => logRef.current(message),
+    });
 
     const floorAt = (x: number, z: number, fromY: number) => {
       raycaster.set(new THREE.Vector3(x, fromY, z), down);
@@ -162,15 +233,33 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
     const fire = () => {
       const family = weapons[selected]?.id.split('_')[0] ?? '';
       const kind = weaponKind(weapons[selected]?.id ?? '');
-      const delay = kind === 'melee' ? 430 : kind === 'grenade' ? 800 : 140;
-      if (!ready || !avatar || paused.current || performance.now() - lastShot < delay) return;
+      const base = kind === 'melee' ? 430 : kind === 'grenade' ? 800 : 140;
+      const delay = base * (family === 'machinegun' ? Math.max(0.35, 1 - passives.fireRate / 100) : 1);
+      const now = performance.now();
+      if (!ready || !avatar || paused.current || now - lastShot < delay) return;
       if (kind !== 'melee' && !shotRef.current()) return;
-      lastShot = performance.now();
-      avatar.attack();
+      skillEffects.breakStealth();
+      if (comboTime > 0 && now - comboTime > 1200) comboStep = 0;
+      lastShot = now;
+      comboTime = now;
+      avatar.attack(kind === 'melee' ? comboStep : 0);
+      comboStep = kind === 'melee' ? comboStep + 1 : 0;
       audio.play(`fire-${['pistol', 'sniperrifle', 'shotgun', 'smg', 'machinegun', 'knives',
         'bow', 'crossbow', 'grenadelauncher', 'grenade', 'shield', 'rpg'].includes(family)
         ? family : kind === 'melee' ? 'knives' : 'pistol'}`, 0.55);
-      if (kind === 'melee') return;
+      if (kind === 'melee') {
+        const aim = camera.getWorldDirection(new THREE.Vector3());
+        const point = position.clone().add(new THREE.Vector3(0, 1, 0));
+        for (const enemy of enemyList()) {
+          const offset = enemy.position.clone().sub(point);
+          const distance = offset.length();
+          if (distance > 2.6 || (distance > 0.01 && offset.normalize().dot(aim) < 0.3)) continue;
+          let damage = 130;
+          if (passives.poisonChance > 0 && Math.random() * 100 < passives.poisonChance) damage += passives.dotDamage * 6;
+          hitRef.current(enemy.userId, Math.round(damage));
+        }
+        return;
+      }
       const aim = camera.getWorldDirection(new THREE.Vector3());
       const muzzle = position.clone().add(new THREE.Vector3(Math.sin(yaw) * 0.75, 1.3, Math.cos(yaw) * 0.75));
       projectiles.spawn(kind, muzzle, aim);
@@ -184,8 +273,12 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
         const hits = raycaster.intersectObjects(collisionMeshes, true);
         const firstHit = hits.find((h: any) => h.distance > 0.08);
         if (firstHit && firstHit.object.userData?.isPlayer) {
-          const damage = family === 'sniperrifle' ? 85 : family === 'shotgun' ? 35 : 18;
-          hitRef.current(firstHit.object.userData.userId, damage);
+          let damage = family === 'sniperrifle' ? 85 : family === 'shotgun' ? 35 : 18;
+          if (family === 'sniperrifle' && Math.random() * 100 < passives.critChance) damage *= 1 + passives.critDamage / 100;
+          if (passives.weakChance > 0 && Math.random() * 100 < passives.weakChance) damage *= 1.2;
+          if (family === 'sprayer' && Math.random() * 100 < passives.plagueChance) damage += passives.plagueDamage * 6;
+          if (family === 'crossbow' && passives.lifesteal > 0) healRef.current(damage * passives.lifesteal / 100);
+          hitRef.current(firstHit.object.userData.userId, Math.round(damage));
         }
       }
     };
@@ -193,6 +286,7 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
       switchWeapon(index) {
         if (selected === index) return;
         selected = index;
+        comboStep = 0;
         avatar?.setWeapon(index);
         const family = weapons[index]?.id.split('_')[0] ?? '';
         audio.play(['pistol', 'sniperrifle', 'shotgun', 'smg', 'machinegun', 'knives',
@@ -201,6 +295,13 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
         weaponChangeRef.current(index);
       },
       fire,
+      castSkill(slot) {
+        const entry = slots[slot];
+        if (!entry || entry.kind !== 'skill' || paused.current || entry.load.level <= 0) return false;
+        if (skillEffects.cast(slot, entry.load) === null) return false;
+        if (entry.load.skill.id !== 'latent') skillEffects.breakStealth();
+        return true;
+      },
       reload() {
         if (weaponKind(weapons[selected]?.id ?? '') === 'melee') return;
         avatar?.reload();
@@ -213,6 +314,7 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
       if (paused.current) return;
       keys.add(event.code);
       audio.start();
+      if (!document.pointerLockElement) lockPointer();
       if (event.code === 'Space' && !event.repeat && ready && grounded && !paused.current) {
         grounded = false;
         verticalSpeed = 7.5;
@@ -232,11 +334,13 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
       if (event.code === 'KeyR' && !event.repeat) active.current?.reload();
       if (!event.repeat) {
         const index = BATTLE_QUICK_KEYS.indexOf(event.key);
-        if (index >= 0 && index < weapons.length) active.current?.switchWeapon(index);
+        const entry = index >= 0 ? slots[index] : undefined;
+        if (entry?.kind === 'weapon') active.current?.switchWeapon(entry.weaponIndex);
+        else if (entry?.kind === 'skill') active.current?.castSkill(index);
       }
     };
     const onKeyUp = (event: KeyboardEvent) => keys.delete(event.code);
-    const onBlur = () => keys.clear();
+    const onBlur = () => { keys.clear(); holding = false; };
     const onMove = (event: PointerEvent) => {
       const locked = document.pointerLockElement === renderer.domElement || document.pointerLockElement === document.body;
       if (!locked && !dragging) return;
@@ -249,19 +353,23 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
     };
     const onDown = (event: PointerEvent) => {
       if (paused.current) return;
+      // Pointer lock retargets mouse events, so clicks on the HUD keep their own meaning.
+      if (event.target instanceof Element && event.target.closest('button, input, .settings-menu, .battle-inventory')) return;
       audio.start();
       if (event.button === 2) {
-        if (!document.pointerLockElement) void renderer.domElement.requestPointerLock();
+        if (!document.pointerLockElement) lockPointer();
         dragging = true;
         pointerX = event.clientX;
         pointerY = event.clientY;
         if (!document.pointerLockElement) mount.setPointerCapture(event.pointerId);
       } else if (event.button === 0) {
-        if (!document.pointerLockElement) void renderer.domElement.requestPointerLock();
-        else fire();
+        if (!document.pointerLockElement) lockPointer();
+        holding = true;
+        fire();
       }
     };
     const onUp = (event: PointerEvent) => {
+      if (event.button === 0) holding = false;
       if (event.button === 2) dragging = false;
     };
     const onWheel = (event: WheelEvent) => {
@@ -272,17 +380,29 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
     const onContext = (event: MouseEvent) => event.preventDefault();
     const onLockChange = () => {
       dragging = false;
-      if (!document.pointerLockElement) keys.clear();
+      if (document.pointerLockElement) { lockAttempts = 0; return; }
+      keys.clear();
+      holding = false;
+      // Escape releases the mouse, so offer the settings menu instead of firing blindly.
+      if (ready && !paused.current) pauseRef.current();
+    };
+    /** Chrome briefly refuses pointer lock right after Esc, so retry a few times. */
+    const onLockError = () => {
+      if (cancelled || paused.current || lockAttempts >= 3) return;
+      lockAttempts += 1;
+      window.clearTimeout(lockTimer);
+      lockTimer = window.setTimeout(lockPointer, 1200);
     };
     addEventListener('keydown', onKeyDown);
     addEventListener('keyup', onKeyUp);
     addEventListener('blur', onBlur);
     document.addEventListener('pointermove', onMove);
-    mount.addEventListener('pointerdown', onDown);
-    mount.addEventListener('pointerup', onUp);
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('pointerup', onUp);
     mount.addEventListener('wheel', onWheel, { passive: false });
     mount.addEventListener('contextmenu', onContext);
     document.addEventListener('pointerlockchange', onLockChange);
+    document.addEventListener('pointerlockerror', onLockError);
     const resize = () => {
       const width = mount.clientWidth;
       const height = mount.clientHeight;
@@ -294,6 +414,12 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
     const observer = new ResizeObserver(resize);
     observer.observe(mount);
 
+    /** Re-acquires the mouse for the round; the request needs a recent user gesture. */
+    const lockPointer = () => {
+      if (cancelled || paused.current || document.pointerLockElement) return;
+      const request = document.body.requestPointerLock() as unknown as Promise<void> | undefined;
+      if (request && typeof request.catch === 'function') void request.catch(() => undefined);
+    };
     const load = async () => {
       const loader = new GLTFLoader();
       const [mapGltf, collisionGltf, player] = await Promise.all([
@@ -333,6 +459,8 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
       player.root.position.copy(position);
       ready = true;
       readyRef.current();
+      // Grab the mouse as soon as the round loads; keys and clicks re-lock as a fallback.
+      lockPointer();
     };
     void load().catch((error: unknown) => {
       if (!cancelled) mount.dataset.error = error instanceof Error ? error.message : '战场加载失败';
@@ -454,6 +582,15 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
         if (audioPaused) audio.pause();
         else audio.start();
       }
+      if (holding && ready && !paused.current) fire();
+      skillEffects.update(delta);
+      if (passives.regenPerTick > 0) {
+        regenTimer -= delta;
+        if (regenTimer <= 0) {
+          regenTimer = 2;
+          if (health.current < MAX_HEALTH * 0.5) healRef.current(passives.regenPerTick);
+        }
+      }
       if (avatar) {
         direction.set(0, 0, 0);
         if (keys.has('KeyW') || keys.has('ArrowUp')) direction.z += 1;
@@ -465,7 +602,7 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
         if (moving && !paused.current) {
           if (rollTime > 0) direction.copy(rollDirection);
           else direction.normalize().applyAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
-          candidate.copy(position).addScaledVector(direction, delta * (rollTime > 0 ? 8.5 : 4.5));
+          candidate.copy(position).addScaledVector(direction, delta * skillEffects.speed(rollTime > 0 ? 8.5 : 4.5));
           const bounds = map.bounds;
           if (bounds?.length && (candidate.x < bounds[0] - bounds[2] / 2 || candidate.x > bounds[0] + bounds[2] / 2 ||
             candidate.z < bounds[1] - bounds[3] / 2 || candidate.z > bounds[1] + bounds[3] / 2)) {
@@ -512,9 +649,21 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
           positionRef.current(position.x, position.z, yaw);
         }
       }
+      avatar?.setMotion(motion.current);
+      const hotbarNow = performance.now();
+      if (hotbarNow - lastHotbar > 150) {
+        lastHotbar = hotbarNow;
+        const snapshot = skillEffects.snapshot();
+        const bySlot = skillEffects.bySlot();
+        hotbarRef.current({ cooldowns: BATTLE_QUICK_KEYS.map((_, index) => bySlot.get(index) ?? 0),
+          shield: snapshot.shield, stealthed: snapshot.stealth > 0, speed: snapshot.speed,
+          maxHealthScale: snapshot.maxHealthScale });
+      }
       if (shotFlash > 0) { shotFlash -= delta; if (shotFlash <= 0) flash.intensity = 0; }
       projectiles.update(delta);
       mount.dataset.projectileCount = String(projectiles.count());
+      mount.dataset.attackStep = String(comboStep);
+      mount.dataset.hotbar = String(slots.filter((slot) => slot.kind !== 'empty').length);
       renderer.render(scene, camera);
     };
     animate();
@@ -526,14 +675,17 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
       removeEventListener('keyup', onKeyUp);
       removeEventListener('blur', onBlur);
       document.removeEventListener('pointermove', onMove);
-      mount.removeEventListener('pointerdown', onDown);
-      mount.removeEventListener('pointerup', onUp);
+      window.clearTimeout(lockTimer);
       mount.removeEventListener('wheel', onWheel);
       mount.removeEventListener('contextmenu', onContext);
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('pointerup', onUp);
       document.removeEventListener('pointerlockchange', onLockChange);
+      document.removeEventListener('pointerlockerror', onLockError);
       active.current = null;
       if (document.pointerLockElement) document.exitPointerLock();
       audio.dispose();
+      skillEffects.dispose();
       projectiles.dispose();
       avatar?.dispose();
       visual?.traverse((object: any) => {
@@ -557,14 +709,23 @@ function BattleScene({ map, character, creation, assets, avatarPreset, weapons, 
   return <div className="battle-canvas" ref={mountRef} data-gameplay-canvas />;
 }
 
-export default function Gameplay({ room, character, creation, assets, avatarPreset, weaponIds, onExit }: {
+export default function Gameplay({ room, character, creation, assets, avatarPreset, quickbar, skills, levels,
+  volume, effectsVolume, onVolume, onEffectsVolume, onExit, onQuit = onExit }: {
   room: RoomConfig & { id: string; players?: Record<string, any> };
   character: SavedCharacter;
   creation: CreationAssets;
   assets: LobbyAssets;
   avatarPreset?: CreationPreset;
-  weaponIds: string[];
+  /** Slot-for-slot copy of the lobby quickbar: the battle hotbar only carries these. */
+  quickbar: (string | null)[];
+  skills: Skill[];
+  levels: number[];
+  volume: number;
+  effectsVolume: number;
+  onVolume: (value: number) => void;
+  onEffectsVolume: (value: number) => void;
   onExit: () => void;
+  onQuit?: () => void;
 }) {
   const [mapDefinitions, setMapDefinitions] = useState<Record<string, MapDefinition>>();
   const [error, setError] = useState('');
@@ -590,6 +751,13 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   const [reserves, setReserves] = useState<number[]>([]);
   const [health, setHealth] = useState(MAX_HEALTH);
   const [position, setPosition] = useState({ x: 0, z: 0, yaw: 0 });
+  const [selectedSlot, setSelectedSlot] = useState(0);
+  const [hotbar, setHotbar] = useState<HotbarState>({ cooldowns: [], shield: 0, stealthed: false, speed: 0, maxHealthScale: 1 });
+  const [motion, setMotion] = useState(true);
+  const motionRef = useRef(true);
+  const healthRef = useRef(MAX_HEALTH);
+  motionRef.current = motion;
+  healthRef.current = health;
   const control = useRef<BattleControl | null>(null);
   const selectedRef = useRef(0);
   const pausedRef = useRef(false);
@@ -598,13 +766,13 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   pausedRef.current = paused;
   ammoRef.current = ammo;
   reservesRef.current = reserves;
-  const weapons = useMemo(() => {
-    const listed = weaponIds.map((id) => assets.weapons[id]).filter((weapon): weapon is CreationWeapon => Boolean(weapon));
-    return listed.length ? listed : creation.jobs[character.jobId].weapons;
-  }, [weaponIds, assets, creation, character.jobId]);
+  const loads = useMemo(() => loadSkills(skills, levels), [skills, levels]);
+  const { slots, weapons } = useMemo(() => resolveLoadout(quickbar, assets.weapons, loads), [quickbar, assets, loads]);
   const current = weapons[selected] ?? weapons[0];
   const currentKind = weaponKind(current?.id ?? '');
   const currentMagazine = current ? magazine(current) : 0;
+  /** 过激反应 raises the health ceiling for its duration. */
+  const maxHealth = Math.round(MAX_HEALTH * (hotbar.maxHealthScale || 1));
   const chosenMap = mapDefinitions?.[room.mapId] ?? mapDefinitions?.level1;
   const mapArt = chosenMap?.minimap;
 
@@ -681,16 +849,27 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   }, [ready, paused, remaining]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); setPaused((value) => !value); }
+      if (event.key === 'Escape') { event.preventDefault(); setPaused(true); }
     };
     addEventListener('keydown', onKey);
     return () => removeEventListener('keydown', onKey);
   }, []);
-  const switchWeapon = (index: number) => {
-    if (index < 0 || index >= weapons.length) return;
-    selectedRef.current = index;
-    setSelected(index);
-    control.current?.switchWeapon(index);
+  const slotForWeapon = (index: number) => slots.findIndex((slot) => slot.kind === 'weapon' && slot.weaponIndex === index);
+  const castSkill = (slot: number) => {
+    if (pausedRef.current) return;
+    if (control.current?.castSkill(slot)) setSelectedSlot(slot);
+  };
+  const selectSlot = (slot: number) => {
+    const entry = slots[slot];
+    if (!entry) return;
+    if (entry.kind === 'weapon') {
+      selectedRef.current = entry.weaponIndex;
+      setSelected(entry.weaponIndex);
+      setSelectedSlot(slot);
+      control.current?.switchWeapon(entry.weaponIndex);
+    } else if (entry.kind === 'skill') {
+      castSkill(slot);
+    }
   };
   const fire = () => {
     if (pausedRef.current) return;
@@ -730,28 +909,35 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   const markerY = bounds?.length ? 50 - (position.z - bounds[1]) / bounds[3] * 100 : 50;
 
   return <main className={`battle-root${paused ? ' paused' : ''}`} data-gameplay-ready={ready}>
-    {chosenMap && <BattleScene map={chosenMap} character={character} creation={creation} assets={assets} avatarPreset={avatarPreset} weapons={weapons}
+    {chosenMap && <BattleScene map={chosenMap} character={character} creation={creation} assets={assets} avatarPreset={avatarPreset}
+      weapons={weapons} slots={slots} loads={loads} health={healthRef} motion={motionRef}
       active={control} paused={pausedRef} onReady={() => setReady(true)} onPosition={reportPosition}
       otherPlayers={otherPlayersRef}
+      onPause={() => setPaused(true)}
       roomPlayers={room.players}
       logDebug={logDebug}
-      onShot={onShot} 
+      onShot={onShot}
+      onHotbar={setHotbar}
       onHit={(targetId, damage) => {
         if (wsRef.current) {
           wsRef.current.sendJSON({ type: 'hit', targetId: targetId, damage });
         }
       }}
-      onReload={onReload} onWeaponChange={(index) => { selectedRef.current = index; setSelected(index); }}
+      onReload={onReload} onWeaponChange={(index) => { selectedRef.current = index; setSelected(index); setSelectedSlot(slotForWeapon(index)); }}
+      onHeal={(amount) => setHealth((value) => Math.min(maxHealth, value + amount))}
       onDamage={(amount) => setHealth((value) => Math.max(0, value - amount))} />}
     {!ready && <div className="battle-loading" role="status">{error || `${room.mapName} · 战场加载中…`}</div>}
     <div className="battle-reticle" aria-hidden="true"><i /><i /><i /><i /></div>
     <div className="battle-abilities" aria-label="技能状态">
-      {SKILL_ICONS.map((icon) => <span key={icon}><img src={img(icon)} alt="" /></span>)}
+      {slots.map((slot, index) => slot.kind === 'skill' && <span key={slot.key}
+        className={(hotbar.cooldowns[index] ?? 0) > 0 ? 'cooling' : undefined} title={`${slot.key} · ${slot.load.skill.name}`}>
+        <img src={`${LOBBY}${slot.load.skill.icon}`} alt={slot.load.skill.name} />
+      </span>)}
       <small>{formatTime(remaining)}</small>
     </div>
-    <BattleHud scoreRed={scoreRed} scoreBlue={scoreBlue} time={formatTime(remaining)} health={health} maxHealth={MAX_HEALTH}
-      ammo={ammo[selected] ?? currentMagazine} magazine={currentMagazine} melee={currentKind === 'melee'}
-      weapons={weapons} skillIcons={SKILL_ICONS} selected={selected} onSwitchWeapon={switchWeapon} />
+    <BattleHud scoreRed={scoreRed} scoreBlue={scoreBlue} time={formatTime(remaining)} health={health} maxHealth={maxHealth}
+      shield={hotbar.shield} ammo={ammo[selected] ?? currentMagazine} magazine={currentMagazine} melee={currentKind === 'melee'}
+      slots={slots} cooldowns={hotbar.cooldowns} selectedSlot={selectedSlot} onSelect={selectSlot} />
     <aside className="battle-minimap" aria-label="小地图">
       <div className="battle-map-image" style={mapArt ? { backgroundImage: `url(${BASE}${mapArt})` } : undefined}>
         <span className="battle-map-marker" style={{ left: `${THREE.MathUtils.clamp(markerX, 5, 95)}%`, top: `${THREE.MathUtils.clamp(markerY, 5, 95)}%`, transform: `translate(-50%, -50%) rotate(${-position.yaw}rad)` }}>▲</span>
@@ -760,12 +946,11 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
     </aside>
     <div className="battle-touch-controls"><button onClick={fire}>开火</button><button onClick={() => control.current?.reload()}>换弹</button></div>
     <button className="battle-menu-button" aria-label="打开菜单" title="菜单" onClick={() => setPaused(true)}>☰</button>
-    {paused && <div className="battle-pause-shade"><section className="battle-pause" role="dialog" aria-modal="true" aria-label="游戏菜单">
-      <h2>游戏菜单</h2><p>房间号: {room.id.replace('room-', '')} · {room.mapName}</p><button onClick={() => {
-        setPaused(false);
-        void document.querySelector<HTMLCanvasElement>('[data-gameplay-canvas] canvas')?.requestPointerLock();
-      }}>继续游戏</button><button onClick={onExit}>退出战场</button>
-      {import.meta.env.DEV && <details><summary>联机诊断日志</summary>{debugLog.map((log, index) => <p key={index}>{log}</p>)}</details>}
-    </section></div>}
+    {paused && <>
+      <SettingsMenu assets={assets} volume={volume} effectsVolume={effectsVolume} motion={motion}
+        onVolume={onVolume} onEffectsVolume={onEffectsVolume} onMotion={setMotion}
+        onClose={() => { setPaused(false); void document.body.requestPointerLock(); }} onExit={onExit} onQuit={onQuit} />
+      {import.meta.env.DEV && <div className="battle-debug">{debugLog.map((log, index) => <p key={index}>{log}</p>)}</div>}
+    </>}
   </main>;
 }

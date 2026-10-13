@@ -37,3 +37,10 @@
   .battle-touch-controls { position: absolute; right: 15px; bottom: 92px; display: flex; gap: 8px; }
   .battle-touch-controls button { width: 55px; height: 55px; border: 2px solid #e3d9ab; border-radius: 50%; color: white; background: #304849b8; font-size: 13px; }
 }
+.battle-slot-cooldown { position: absolute; left: 3px; right: 3px; bottom: 3px; border-radius: 4px; background: #0b1a2280; pointer-events: none; }
+.battle-slot-timer { position: absolute; inset: 0; display: grid; place-items: center; font-size: 17px; font-weight: normal; color: #fff; text-shadow: 0 1px 3px #000; pointer-events: none; }
+.battle-slot.battle-skill.active { background-image: url('/assets/gameplay/ui/skin_ingame_skill_bg_light.png'); }
+.battle-shield { position: absolute; left: 108px; top: 22px; width: 74px; text-align: center; color: #9fd8ff; font-size: 15px; text-shadow: 0 1px 3px #062033; }
+.battle-abilities span.cooling img { opacity: .35; }
+.battle-debug { position: absolute; left: 12px; bottom: 132px; z-index: 6; max-width: 46vw; font-size: 11px; color: #cfe6f2; pointer-events: none; }
+.battle-debug p { margin: 2px 0; }

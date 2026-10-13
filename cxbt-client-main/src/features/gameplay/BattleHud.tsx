@@ -1,9 +1,11 @@
-import { useEffect, useState, type CSSProperties } from 'react';
-import type { CreationWeapon } from '../characterCreation/assets';
+﻿import { useEffect, useState, type CSSProperties } from 'react';
 import { BATTLE_QUICK_KEYS } from './hud';
+import type { BattleSlot } from './skills';
 import './BattleHud.css';
 
 const BASE = `${import.meta.env.BASE_URL}assets/gameplay/ui/`;
+const CREATION = `${import.meta.env.BASE_URL}assets/creation/`;
+const LOBBY = `${import.meta.env.BASE_URL}assets/lobby/`;
 
 function HudNumber({ value, className = '' }: { value: number | string; className?: string }) {
   return <span className={`battle-number ${className}`} aria-hidden="true">
@@ -11,20 +13,22 @@ function HudNumber({ value, className = '' }: { value: number | string; classNam
   </span>;
 }
 
-export default function BattleHud({ scoreRed, scoreBlue, time, health, maxHealth, ammo, magazine, melee,
-  weapons, skillIcons, selected, onSwitchWeapon }: {
+export default function BattleHud({ scoreRed, scoreBlue, time, health, maxHealth, shield, ammo, magazine, melee,
+  slots, cooldowns, selectedSlot, onSelect }: {
   scoreRed: number;
   scoreBlue: number;
   time: string;
   health: number;
   maxHealth: number;
+  shield: number;
   ammo: number;
   magazine: number;
   melee: boolean;
-  weapons: CreationWeapon[];
-  skillIcons: string[];
-  selected: number;
-  onSwitchWeapon: (index: number) => void;
+  /** Lobby quickbar mirrored slot for slot: weapons, active skills and empty slots. */
+  slots: BattleSlot[];
+  cooldowns: number[];
+  selectedSlot: number;
+  onSelect: (slot: number) => void;
 }) {
   const [scale, setScale] = useState(() => Math.min(1, innerWidth / 1160));
   useEffect(() => {
@@ -43,25 +47,34 @@ export default function BattleHud({ scoreRed, scoreBlue, time, health, maxHealth
       <div className="battle-team blue"><HudNumber value={String(scoreBlue).padStart(2, '0')} /></div>
     </div>
     <div className="battle-bottom">
-      <div className="battle-health" aria-label={`生命值 ${health} / ${maxHealth}`}>
+      <div className="battle-health" aria-label={`生命值 ${health} / ${maxHealth}${shield > 0 ? `，护盾 ${shield}` : ''}`}>
         <span className="battle-health-meter" role="progressbar" aria-label="生命值" aria-valuemin={0} aria-valuemax={maxHealth} aria-valuenow={health}>
           <i style={{ height: `${healthRatio * 100}%` }} />
         </span>
         <img src={`${BASE}skin_ingame_heart02.png`} alt="" />
+        {shield > 0 && <span className="battle-shield" aria-hidden="true">{Math.ceil(shield)}</span>}
         <HudNumber value={health} />
       </div>
       <div className="battle-inventory" aria-label="物品栏">
         {BATTLE_QUICK_KEYS.map((key, index) => {
-          const weapon = weapons[index];
-          const skill = index >= weapons.length ? skillIcons[index - weapons.length] : undefined;
-          const icon = weapon?.icon ? `${import.meta.env.BASE_URL}assets/creation/${weapon.icon}` : skill ? `${BASE}${skill}.png` : undefined;
-          const content = <><small>{key}</small>{icon && <img src={icon} alt="" />}</>;
-          return weapon ? <button key={key} className={`battle-slot${index === selected ? ' active' : ''}`}
-            aria-label={`切换到${weapon.label}`} aria-pressed={index === selected} title={`${key} · ${weapon.label}`} onClick={() => onSwitchWeapon(index)}>
-            {content}
-          </button> : <span key={key} className={`battle-slot${skill ? ' battle-skill' : ' empty'}`} aria-label={`${key} ${skill ? '技能' : '空格'}`}>
-            {content}
-          </span>;
+          const slot = slots[index];
+          if (!slot || slot.kind === 'empty') {
+            return <span key={key} className="battle-slot empty" aria-label={`${key} 空格`}><small>{key}</small></span>;
+          }
+          const skill = slot.kind === 'skill';
+          const icon = skill ? `${LOBBY}${slot.load.skill.icon}` : `${CREATION}${slot.weapon.icon}`;
+          const label = skill ? slot.load.skill.name : slot.weapon.label;
+          const cooldown = skill ? cooldowns[index] ?? 0 : 0;
+          const total = skill ? slot.load.cooldown : 1;
+          const active = index === selectedSlot;
+          return <button key={key} type="button" className={`battle-slot${active ? ' active' : ''}${skill ? ' battle-skill' : ''}`}
+            aria-label={`${key} · ${label}${skill ? '（技能）' : ''}`} aria-pressed={active} title={`${key} · ${label}`}
+            onClick={() => onSelect(index)}>
+            <small>{key}</small>
+            <img src={icon} alt="" />
+            {cooldown > 0 && <i className="battle-slot-cooldown" style={{ height: `${Math.min(100, cooldown / total * 100)}%` }} />}
+            {cooldown > 0 && <b className="battle-slot-timer">{Math.ceil(cooldown)}</b>}
+          </button>;
         })}
       </div>
       <div className="battle-ammo" aria-label={melee ? '近战武器' : `弹药 ${ammo} / ${magazine}`}>

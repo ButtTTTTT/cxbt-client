@@ -77,6 +77,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
   // the current class's own skills before falling back to the inventory item.
   const jobSkills = useMemo(() => new Map((skillAssets?.jobs[character.jobId]?.skills ?? [])
     .map((skill) => [skill.id, skill])), [skillAssets, character.jobId]);
+  const jobSkillList = useMemo(() => skillAssets?.jobs[character.jobId]?.skills ?? [], [skillAssets, character.jobId]);
   const audioRef = useRef<HTMLAudioElement>(null);
   const weaponAudioRef = useRef<HTMLAudioElement | null>(null);
   const dialogRef = useRef<HTMLElement>(null);
@@ -213,7 +214,9 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
   if (!assets || !creation) return <main className="lobby-viewport"><p role="status">{error || '正在进入大厅…'}</p></main>;
   if (battleRoom) return <Gameplay room={battleRoom} character={character} creation={creation} assets={assets}
     avatarPreset={avatarCard?.preset}
-    weaponIds={battleWeapons} onExit={() => setBattleRoom(undefined)} />;
+    quickbar={quickbar} skills={jobSkillList} levels={allocation.levels}
+    volume={volume} effectsVolume={effectsVolume} onVolume={setVolume} onEffectsVolume={setEffectsVolume}
+    onExit={() => setBattleRoom(undefined)} onQuit={onQuit} />;
   const art = (key: string): CSSProperties => ({ backgroundImage: `url("${lobbyUrl(assets.ui[key])}")` });
   const buttonArt = (key: string): CSSProperties => ({ '--art': `url("${lobbyUrl(assets.ui[`${key}_normal`])}")`,
     '--hover-art': `url("${lobbyUrl(assets.ui[`${key}_hover`])}")`, '--down-art': `url("${lobbyUrl(assets.ui[`${key}_down`])}")` } as CSSProperties);
