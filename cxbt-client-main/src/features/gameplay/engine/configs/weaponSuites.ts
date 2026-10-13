@@ -1,8 +1,15 @@
 // 武器与动作预设套件通用配置
 
+export interface WeaponPartConfig {
+  model: string;
+  texture?: string | null;
+  bone: string;
+}
+
 export interface WeaponActionSet {
   id: string;
   name: string;
+  parts?: WeaponPartConfig[];
   actions: {
     idle: string;
     run: string;
@@ -17,6 +24,10 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
   {
     id: 'smg_01',
     name: '冲锋枪套件 (SMG)',
+    parts: [
+      { model: '/assets/creation/models/smg_01-rv.glb', texture: '/assets/creation/textures/smg_01-rv.png', bone: 'handweapon_r' },
+      { model: '/assets/creation/models/smg_01-mz.glb', texture: '/assets/creation/textures/smg_01-mz.png', bone: 'handweapon_r' }
+    ],
     actions: {
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/smg_01-run.json',
@@ -27,6 +38,9 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
   {
     id: 'pistol_01',
     name: '手枪套件 (Pistol)',
+    parts: [
+      { model: '/assets/creation/models/pistol_01-rv.glb', texture: '/assets/creation/textures/pistol_01-rv.png', bone: 'handweapon_r' }
+    ],
     actions: {
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/pistol_01-run.json',
@@ -37,6 +51,10 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
   {
     id: 'shotgun_01',
     name: '霰弹枪套件 (Shotgun)',
+    parts: [
+      { model: '/assets/creation/models/shotgun_01-rv.glb', texture: '/assets/creation/textures/shotgun_01-rv.png', bone: 'handweapon_r' },
+      { model: '/assets/creation/models/shotgun_01-bh.glb', texture: '/assets/creation/textures/shotgun_01-bh.png', bone: 'handweapon_r' }
+    ],
     actions: {
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/shotgun_01-run.json',
@@ -47,6 +65,10 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
   {
     id: 'sniperrifle_01',
     name: '狙击步枪套件 (Sniper)',
+    parts: [
+      { model: '/assets/creation/models/sniperrifle_01-rv.glb', texture: '/assets/creation/textures/sniperrifle_01-rv.png', bone: 'handweapon_r' },
+      { model: '/assets/creation/models/sniperrifle_01-mz.glb', texture: '/assets/creation/textures/sniperrifle_01-mz.png', bone: 'handweapon_r' }
+    ],
     actions: {
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/sniperrifle_01-run.json',
@@ -57,6 +79,10 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
   {
     id: 'machinegun_01',
     name: '重机枪套件 (Machinegun)',
+    parts: [
+      { model: '/assets/creation/models/machinegun_01-rv.glb', texture: '/assets/creation/textures/machinegun_01-rv.png', bone: 'handweapon_r' },
+      { model: '/assets/creation/models/machinegun_01-mz.glb', texture: '/assets/creation/textures/machinegun_01-mz.png', bone: 'handweapon_r' }
+    ],
     actions: {
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/machinegun_01-run.json',
@@ -67,6 +93,9 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
   {
     id: 'knives_01',
     name: '近战军刀套件 (Knives - 含攻击)',
+    parts: [
+      { model: '/assets/creation/models/knives_01-rv.glb', texture: '/assets/creation/textures/knives_01-rv.png', bone: 'handweapon_r' }
+    ],
     actions: {
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/knives_01-run.json',
@@ -78,6 +107,10 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
   {
     id: 'shield_01',
     name: '战术盾牌套件 (Shield - 含攻击)',
+    parts: [
+      { model: '/assets/creation/models/shield_01-rvl.glb', texture: '/assets/creation/textures/shield_01-rvl.png', bone: 'handweapon_l' },
+      { model: '/assets/creation/models/shield_01-rvr.glb', texture: '/assets/creation/textures/shield_01-rvr.png', bone: 'handweapon_r' }
+    ],
     actions: {
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/shield_01-run.json',
@@ -89,6 +122,10 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
   {
     id: 'bow_01',
     name: '复合弓套件 (Bow)',
+    parts: [
+      { model: '/assets/creation/models/bow_01-rv.glb', texture: '/assets/creation/textures/bow_01-rv.png', bone: 'handweapon_r' },
+      { model: '/assets/creation/models/bow_01-mz.glb', texture: '/assets/creation/textures/bow_01-mz.png', bone: 'handweapon_r' }
+    ],
     actions: {
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/bow_01-run.json',
@@ -99,11 +136,28 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
   {
     id: 'rpg_01',
     name: '火箭筒套件 (RPG)',
+    parts: [
+      { model: '/assets/creation/models/rpg_01-rv.glb', texture: '/assets/creation/textures/rpg_01-rv.png', bone: 'handweapon_r' },
+      { model: '/assets/creation/models/rpg_01-mz.glb', texture: '/assets/creation/textures/rpg_01-mz.png', bone: 'handweapon_r' }
+    ],
     actions: {
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/rpg_01-run.json',
       jump: '/assets/gameplay/animations/rpg_01-jump.json',
       roll: '/assets/gameplay/animations/rpg_01-roll.json'
+    }
+  },
+  {
+    id: 'sprayer_01',
+    name: '生化喷射器套件 (Sprayer)',
+    parts: [
+      { model: '/assets/creation/models/sprayer_01-rv.glb', texture: '/assets/creation/textures/sprayer_01-rv.png', bone: 'handweapon_r' }
+    ],
+    actions: {
+      idle: '/assets/creation/idle.json',
+      run: '/assets/gameplay/animations/smg_01-run.json',
+      jump: '/assets/gameplay/animations/smg_01-jump.json',
+      roll: '/assets/gameplay/animations/smg_01-roll.json'
     }
   },
   {

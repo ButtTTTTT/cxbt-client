@@ -142,6 +142,18 @@ export class MapCollider {
     return this.toEnvironment();
   }
 
+  /**
+   * 重置当前碰撞环境（清空旧地图网格与边界，保留空气墙材质以便复用）
+   */
+  public reset() {
+    this.replacedMaterials.forEach(m => m.dispose());
+    this.replacedMaterials.clear();
+    this.mapVisible = [];
+    this.collisionMeshes = [];
+    this.floorMeshes = [];
+    this.bounds = null;
+  }
+
   public dispose() {
     this.replacedMaterials.forEach(m => m.dispose());
     this.replacedMaterials.clear();

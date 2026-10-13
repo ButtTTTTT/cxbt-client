@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { CollisionEnvironment, EntityEvents } from './types';
+import type { WeaponPartConfig } from './configs/weaponSuites';
+
+import { buildFullAvatar, type BuildAvatarOptions } from './avatarBuilder';
 
 /**
  * 玩家实体引擎核心类 (与 React 完全解耦的纯粹 3D 逻辑实体)
@@ -38,11 +41,11 @@ export class PlayerEntity {
   private rollSpeed: number = 8.5;
   private gravity: number = -18.0;
   private jumpVelocity: number = 0;
-  private isGrounded: boolean = true;
-  private isJumping: boolean = false;
+  public isGrounded: boolean = true;
+  public isJumping: boolean = false;
 
   // 动作状态计时器
-  private isRolling: boolean = false;
+  public isRolling: boolean = false;
   private rollTimer: number = 0;
   private rollDuration: number = 0.8;
   private rollDirection = new THREE.Vector3();
@@ -65,7 +68,7 @@ export class PlayerEntity {
   // 控制指令缓存
   private targetDirection = new THREE.Vector3();
   private targetCameraYaw: number = 0;
-  private isMoving: boolean = false;
+  public isMoving: boolean = false;
 
   // 环境碰撞与地图适配接口
   private collisionEnv: CollisionEnvironment | null = null;
@@ -90,6 +93,15 @@ export class PlayerEntity {
   // =========================================
   // 1. 资源组装 (Avatar Builder)
   // =========================================
+  /**
+   * 一键加载高精度全套角色模型 (含面部五官、发型、服装贴图、骨架重映射)
+   */
+  public async loadFullAvatar(options: BuildAvatarOptions = {}) {
+    const built = await buildFullAvatar(options);
+    this.attachAvatarRoot(built.root, built.skeleton);
+    return built;
+  }
+
   public async loadAvatar(headPath: string, bodyPath: string) {
     const loader = new GLTFLoader();
     try {
@@ -99,55 +111,77 @@ export class PlayerEntity {
       ]);
 
       const headScene = headGltf.scene;
-      this.modelGroup.add(headScene);
-
-      // 提取身体模型中的蒙皮网格 (SkinnedMesh) 并重绑到主骨架
       const bodyScene = bodyGltf.scene;
-      this.mainSkeleton = null;
 
-      headScene.traverse((child: any) => {
-        if (child.isSkinnedMesh && !this.mainSkeleton) {
-          this.mainSkeleton = child.skeleton;
+      // 1. 寻找骨骼数量最多、挂点最完整的骨骼系统作为主骨架 (通常是 bodyScene)
+      let primarySkeleton: any = null;
+
+      const checkMesh = (child: any) => {
+        if (child.isSkinnedMesh && child.skeleton) {
+          if (!primarySkeleton || child.skeleton.bones.length > primarySkeleton.bones.length) {
+            primarySkeleton = child.skeleton;
+          }
         }
-      });
+      };
 
+      bodyScene.traverse((child: any) => checkMesh(child));
+      headScene.traverse((child: any) => checkMesh(child));
+
+      this.mainSkeleton = primarySkeleton;
       this.boneIndices.clear();
+
       if (this.mainSkeleton) {
         this.mainSkeleton.bones.forEach((bone: any, index: number) => {
           this.boneIndices.set(bone.name, index);
         });
       }
 
-      const bodyMeshes: any[] = [];
-      bodyScene.traverse((child: any) => {
-        if (child.isSkinnedMesh) bodyMeshes.push(child);
-      });
-
-      bodyMeshes.forEach(mesh => {
-        if (this.mainSkeleton) {
-          // 重新映射顶点绑定的骨骼索引 (极其关键，否则模型会变形拉伸)
-          const indices = mesh.geometry.attributes.skinIndex;
-          const oldSkeleton = mesh.skeleton;
-          if (oldSkeleton) {
-            for (let i = 0; i < indices.array.length; i++) {
-              const boneName = oldSkeleton.bones[indices.array[i]].name;
-              const targetIdx = this.boneIndices.get(boneName);
-              if (targetIdx !== undefined) {
-                indices.array[i] = targetIdx;
+      // 2. 将两部分的网格归集并重映射蒙皮骨骼
+      const rebindMeshes = (scene: any) => {
+        const meshes: any[] = [];
+        scene.traverse((child: any) => {
+          if (child.isMesh) meshes.push(child);
+        });
+        for (const child of meshes) {
+          if (child.isSkinnedMesh) {
+            if (this.mainSkeleton && child.skeleton !== this.mainSkeleton) {
+              const indices = child.geometry.attributes.skinIndex;
+              const oldSkeleton = child.skeleton;
+              if (oldSkeleton) {
+                for (let i = 0; i < indices.array.length; i++) {
+                  const boneName = oldSkeleton.bones[indices.array[i]]?.name;
+                  const targetIdx = boneName ? this.boneIndices.get(boneName) : undefined;
+                  if (targetIdx !== undefined) {
+                    indices.array[i] = targetIdx;
+                  }
+                }
+                indices.needsUpdate = true;
               }
+              child.bind(this.mainSkeleton, new THREE.Matrix4());
+              if (oldSkeleton) oldSkeleton.dispose();
             }
-            indices.needsUpdate = true;
           }
-          mesh.bind(this.mainSkeleton, new THREE.Matrix4());
+          child.frustumCulled = false;
+          child.castShadow = true;
+          child.receiveShadow = true;
         }
-        headScene.add(mesh);
-      });
+        return meshes;
+      };
+
+      const headMeshes = rebindMeshes(headScene);
+      rebindMeshes(bodyScene);
+
+      // 将身体主体加入 modelGroup，头部网格通过独立组挂接，避免多余 Armature/骨骼节点进入层级
+      this.modelGroup.add(bodyScene);
+      const headGroup = new THREE.Group();
+      headMeshes.forEach(m => headGroup.add(m));
+      this.modelGroup.add(headGroup);
 
       // 初始化动画混合器
       this.mixer = new THREE.AnimationMixer(this.modelGroup);
       this.isReady = true;
 
-      return headScene;
+      return this.modelGroup;
     } catch (err) {
       console.error('[PlayerEntity] Avatar Loading Error:', err);
       throw err;
@@ -198,19 +232,59 @@ export class PlayerEntity {
   // =========================================
   // 2. 武器模型挂接 (Weapon Mounting)
   // =========================================
+  /**
+   * 智能定位武器挂接的目标骨骼 (支持别名与左右手智能回退)
+   */
+  public getAttachmentBone(boneName: string): any {
+    if (!this.mainSkeleton) return null;
+
+    // 1. 精确匹配
+    const exactIdx = this.boneIndices.get(boneName);
+    if (exactIdx !== undefined && this.mainSkeleton.bones[exactIdx]) {
+      return this.mainSkeleton.bones[exactIdx];
+    }
+
+    // 2. 常见别名回退
+    const isLeft = boneName.toLowerCase().includes('l');
+    const candidates = isLeft
+      ? ['handweapon_l', 'hand_l', 'Bip01 L Hand', 'Bip01_L_Hand', 'mixamorig:LeftHand', 'LeftHand', 'L_Hand']
+      : ['handweapon_r', 'hand_r', 'Bip01 R Hand', 'Bip01_R_Hand', 'mixamorig:RightHand', 'RightHand', 'R_Hand'];
+
+    for (const name of candidates) {
+      const idx = this.boneIndices.get(name);
+      if (idx !== undefined && this.mainSkeleton.bones[idx]) {
+        return this.mainSkeleton.bones[idx];
+      }
+    }
+
+    // 3. 模糊字符串匹配
+    for (const bone of this.mainSkeleton.bones) {
+      const lower = bone.name.toLowerCase();
+      if (isLeft && (lower.includes('handweapon_l') || (lower.includes('hand') && lower.includes('l')))) {
+        return bone;
+      }
+      if (!isLeft && (lower.includes('handweapon_r') || (lower.includes('hand') && lower.includes('r')))) {
+        return bone;
+      }
+    }
+
+    // 4. 极端回退：如果存在任何骨骼，返回右手或末端骨骼
+    console.warn(`[PlayerEntity] 未能精确定位骨骼挂点: ${boneName}，使用降级骨骼挂接`);
+    return this.mainSkeleton.bones[this.mainSkeleton.bones.length - 1] ?? null;
+  }
+
   public async attachWeaponModel(slot: number, modelPath: string, boneName: string, texturePath?: string): Promise<any> {
     if (!this.mainSkeleton) {
       console.warn('[PlayerEntity] Cannot attach weapon before avatar skeleton is ready.');
       return null;
     }
 
-    const boneIndex = this.boneIndices.get(boneName);
-    if (boneIndex === undefined) {
+    const targetBone = this.getAttachmentBone(boneName);
+    if (!targetBone) {
       console.warn(`[PlayerEntity] Bone not found for weapon attachment: ${boneName}`);
       return null;
     }
 
-    const targetBone = this.mainSkeleton.bones[boneIndex];
     const loader = new GLTFLoader();
     const gltf = await loader.loadAsync(modelPath);
     const weaponModel = gltf.scene;
@@ -219,17 +293,77 @@ export class PlayerEntity {
       const texLoader = new THREE.TextureLoader();
       const texture = await texLoader.loadAsync(texturePath);
       texture.colorSpace = THREE.SRGBColorSpace;
+      texture.flipY = false;
+      const partMaterial = new THREE.MeshPhongMaterial({
+        map: texture,
+        color: '#ffffff',
+        shininess: 12,
+        specular: '#191319'
+      });
       weaponModel.traverse((child: any) => {
         if (child.isMesh) {
-          child.material = new THREE.MeshPhongMaterial({ map: texture });
+          child.material = partMaterial;
         }
       });
     }
+
+    weaponModel.traverse((child: any) => {
+      if (child.isMesh) {
+        child.frustumCulled = false;
+        child.castShadow = true;
+      }
+    });
 
     weaponModel.visible = slot === this.activeWeaponSlot;
     targetBone.add(weaponModel);
     this.weaponParts.push({ slot, group: weaponModel });
     return weaponModel;
+  }
+
+  /**
+   * 清除指定或全部槽位的武器 3D 模型
+   */
+  public clearWeapons(slot?: number) {
+    const remaining: { slot: number; group: any }[] = [];
+    for (const part of this.weaponParts) {
+      if (slot === undefined || part.slot === slot) {
+        if (part.group.parent) {
+          part.group.parent.remove(part.group);
+        }
+        part.group.traverse((child: any) => {
+          if (child.isMesh) {
+            child.geometry?.dispose();
+            if (Array.isArray(child.material)) {
+              child.material.forEach((m: any) => m.dispose());
+            } else {
+              child.material?.dispose();
+            }
+          }
+        });
+      } else {
+        remaining.push(part);
+      }
+    }
+    this.weaponParts = remaining;
+  }
+
+  /**
+   * 一键装配武器套件的多部件模型 (如枪体、枪口、盾牌双持等)
+   */
+  public async equipWeaponParts(parts: WeaponPartConfig[], slot: number = 0): Promise<any[]> {
+    this.clearWeapons(slot);
+    if (!parts || parts.length === 0) return [];
+
+    const loadedObjects: any[] = [];
+    for (const part of parts) {
+      try {
+        const obj = await this.attachWeaponModel(slot, part.model, part.bone, part.texture ?? undefined);
+        if (obj) loadedObjects.push(obj);
+      } catch (err) {
+        console.warn(`[PlayerEntity] 武器部件装配失败 (${part.model}):`, err);
+      }
+    }
+    return loadedObjects;
   }
 
   public switchWeaponSlot(slot: number) {
@@ -671,6 +805,7 @@ export class PlayerEntity {
   // 7. 资源清理 (Disposal)
   // =========================================
   public dispose() {
+    this.clearWeapons();
     if (this.mixer) {
       this.mixer.stopAllAction();
     }
