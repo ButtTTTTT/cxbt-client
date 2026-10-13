@@ -8833,5 +8833,134 @@
   ],
   "ui/practiceModeFrame.png": [
     "AvatarStar_cache/ui/skinf/skin_playgame_bg13.tga"
+  ],
+  "ui/skillPanel.png": [
+    "AvatarStar_cache/ui/skinf/skin_jineng_ditu_01.tga"
+  ],
+  "ui/skillRow.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_background23_02.tga"
+  ],
+  "ui/skillBar.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_skill01.tga"
+  ],
+  "ui/skillBarLearned.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_skill02.tga"
+  ],
+  "ui/skillBarPending.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_skill03.tga"
+  ],
+  "ui/skillPoints.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_pagebar_BG.tga"
+  ],
+  "ui/skillPartition.png": [
+    "AvatarStar_cache/ui/skinf/skin_jineng_hengxian_01.tga"
+  ],
+  "ui/bossSkillCard.png": [
+    "AvatarStar_cache/ui/skinf/skin_pet_bg03.tga"
+  ],
+  "ui/bossSkillCardInner.png": [
+    "AvatarStar_cache/ui/skinf/skin_pet_bg05.tga"
+  ],
+  "ui/skillTab_normal.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button5_nomal.tga"
+  ],
+  "ui/skillAdd_normal.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_skill_plus_normal.tga"
+  ],
+  "ui/skillRemove_normal.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_skill_minus_normal.tga"
+  ],
+  "ui/bossSkillButton_normal.png": [
+    "AvatarStar_cache/ui/skinf/skin_hecheng_buy_normal.tga"
+  ],
+  "ui/skillTab_hover.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button5_hower.tga"
+  ],
+  "ui/skillAdd_hover.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_skill_plus_hover.tga"
+  ],
+  "ui/skillRemove_hover.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_skill_minus_hover.tga"
+  ],
+  "ui/bossSkillButton_hover.png": [
+    "AvatarStar_cache/ui/skinf/skin_hecheng_buy_hover.tga"
+  ],
+  "ui/skillTab_down.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button5_down.tga"
+  ],
+  "ui/skillAdd_down.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_skill_plus_down.tga"
+  ],
+  "ui/skillRemove_down.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_skill_minus_down.tga"
+  ],
+  "ui/bossSkillButton_down.png": [
+    "AvatarStar_cache/ui/skinf/skin_hecheng_buy_down.tga"
+  ],
+  "ui/skillAdd_disabled.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_skill_plus_disabled.tga"
+  ],
+  "ui/skillRemove_disabled.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_skill_minus_disabled.tga"
+  ],
+  "ui/bossSkillButton_disabled.png": [
+    "AvatarStar_cache/ui/skinf/skin_hecheng_buy_disabled.tga"
+  ],
+  "icons/cure_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/cure_disabled.tga"
+  ],
+  "icons/shock_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/shock_disabled.tga"
+  ],
+  "icons/vitals_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/vitals_disabled.tga"
+  ],
+  "icons/rain_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/rain_disabled.tga"
+  ],
+  "icons/energy_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/energy_disabled.tga"
+  ],
+  "icons/shield_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/shield_disabled.tga"
+  ],
+  "icons/gallop_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/gallop_disabled.tga"
+  ],
+  "icons/tenacity_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/tenacity_disabled.tga"
+  ],
+  "icons/transfer_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/transfer_disabled.tga"
+  ],
+  "icons/conduction_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/conduction_disabled.tga"
+  ],
+  "icons/suckblood_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/suckblood_disabled.tga"
+  ],
+  "icons/plague_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/plague_disabled.tga"
+  ],
+  "icons/gasbomb_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/gasbomb_disabled.tga"
+  ],
+  "icons/overreaction_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/overreaction_disabled.tga"
+  ],
+  "icons/latent_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/latent_disabled.tga"
+  ],
+  "icons/piercing_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/piercing_disabled.tga"
+  ],
+  "icons/poison_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/poison_disabled.tga"
+  ],
+  "icons/spurt_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/spurt_disabled.tga"
+  ],
+  "icons/snare_disabled.png": [
+    "AvatarStar_cache/ui/skinf/lobby/snare_disabled.tga"
   ]
 }

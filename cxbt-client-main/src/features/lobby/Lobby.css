@@ -35,6 +35,7 @@
 .lobby-art-button { background-image: var(--art); }
 .lobby-art-button:hover { background-image: var(--hover-art, var(--art)); }
 .lobby-art-button:active, .lobby-art-button.active { background-image: var(--down-art, var(--art)); }
+.lobby-art-button:disabled { background-image: var(--disabled-art, var(--art)); }
 .lobby-main-tabs { position: absolute; top: 161px; left: 176px; display: flex; gap: 4px; }
 .lobby-main-tabs button { width: 206px; height: 42px; padding-top: 1px; }
 .lobby-main-tabs button.active { color: #785c36; }
@@ -118,3 +119,36 @@
 .lobby-modal .lobby-dialog-close { display: block; width: 85px; height: 40px; margin: 22px auto 0; color: #fae5c7; }
 .resume-lobby { position: absolute; right: 35px; top: 35px; z-index: 12; background: #3c271b; color: #f4db9a; border: 1px solid #c09752; border-radius: 4px; padding: 9px 20px; cursor: pointer; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* 技能面板：personalInfo.lua 的 right_main_3 / profession_skill，592x508 放在背包同样的位置。 */
+.lobby-skills { position: absolute; top: 16px; left: 525px; width: 592px; height: 508px; background-size: 100% 100%; }
+.lobby-skill-tabs { position: absolute; left: 0; top: 0; display: flex; }
+.lobby-skill-tabs button { position: relative; width: 127px; height: 31px; font-size: 16px; color: #fff; text-shadow: 1px 1px 2px #5b3412, -1px 1px 2px #5b3412, 0 0 4px #5b3412; }
+.lobby-skill-tabs button.active { color: #52362c; text-shadow: 0 1px 0 #ffdd90; }
+.lobby-skill-rows { position: absolute; inset: 0; }
+.lobby-skill-row { position: absolute; left: 10px; width: 568px; height: 83px; background-size: 100% 100%; }
+.lobby-skill-row:nth-child(1) { top: 37px; }
+.lobby-skill-row:nth-child(2) { top: 121px; }
+.lobby-skill-row:nth-child(3) { top: 205px; }
+.lobby-skill-row:nth-child(4) { top: 289px; }
+.lobby-skill-row:nth-child(5) { top: 373px; }
+.lobby-skill-icon { position: absolute; left: 7px; top: 2px; width: 70px; height: 70px; }
+.lobby-skill-row > img[draggable='true'] { cursor: grab; }
+.lobby-skill-name { position: absolute; left: 110px; top: 9px; width: 300px; height: 21px; font-size: 16px; line-height: 21px; color: #fff; text-shadow: 1px 1px 0 #4b2d15, -1px 1px 0 #4b2d15, 1px -1px 0 #4b2d15, -1px -1px 0 #4b2d15; }
+.lobby-skill-bar { position: absolute; left: 111px; top: 33px; width: 364px; height: 31px; overflow: hidden; background-repeat: no-repeat; background-size: 364px 31px; }
+.lobby-skill-bar > span { position: absolute; left: 0; top: 0; height: 31px; background-repeat: no-repeat; background-size: 364px 31px; }
+.lobby-skill-remove { position: absolute; left: 495px; top: 8px; width: 32px; height: 60px; }
+.lobby-skill-add { position: absolute; left: 527px; top: 8px; width: 32px; height: 60px; }
+.lobby-skill-reset { position: absolute; left: 10px; top: 459px; width: 71px; height: 43px; color: #f8e6cd; }
+.lobby-skill-finish { position: absolute; left: 494px; top: 459px; width: 84px; height: 43px; color: #f8e6cd; }
+.lobby-skill-points { position: absolute; left: 87px; top: 463px; width: 400px; height: 38px; background-size: 100% 100%; }
+.lobby-skill-points > span { position: absolute; left: 14px; top: 8px; font-size: 16px; }
+.lobby-skill-points > b { position: absolute; left: 170px; top: 8px; width: 100px; text-align: center; font-weight: normal; font-size: 16px; color: #ffe600; }
+.lobby-boss-skills { position: absolute; left: 0; top: 31px; width: 592px; height: 477px; }
+.lobby-boss-skill { position: absolute; width: 282px; height: 132px; background-size: 100% 100%; }
+.lobby-boss-skill-icon { position: absolute; left: 12px; top: 29px; width: 76px; height: 76px; border-radius: 4px; background: #3d2717cc; box-shadow: inset 0 0 0 2px #ffffff1f; }
+.lobby-boss-skill-body { position: absolute; left: 94px; top: 9px; width: 176px; height: 114px; background-size: 100% 100%; }
+.lobby-boss-skill-name { position: absolute; left: 0; top: 12px; width: 176px; height: 19px; font-size: 16px; line-height: 19px; text-align: center; color: #fffc08; }
+.lobby-boss-skill-line { position: absolute; left: 10px; top: 40px; width: 153px; height: 2px; background-size: 100% 100%; }
+.lobby-boss-skill-source { position: absolute; left: 8px; top: 45px; width: 160px; height: 19px; font-size: 13px; line-height: 19px; text-align: center; color: #ead3b1; }
+.lobby-boss-skill-get { position: absolute; left: 26px; top: 75px; width: 122px; height: 35px; color: #fae5c7; }

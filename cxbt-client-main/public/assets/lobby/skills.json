@@ -1,0 +1,323 @@
+{
+  "maxLevel": 5,
+  "barWidths": [
+    0,
+    74,
+    146,
+    218,
+    290,
+    364
+  ],
+  "jobs": {
+    "guardian": {
+      "name": "护卫兵",
+      "skills": [
+        {
+          "id": "cure",
+          "name": "战场急救",
+          "kind": "active",
+          "icon": "icons/cure.png",
+          "disabledIcon": "icons/cure_disabled.png",
+          "tip": "Battlefield_Heal",
+          "description": "立刻治疗自己和周围队友。",
+          "levels": [
+            "治疗量：600点生命值。\n有效半径：8米。\n冷却时间：22秒。",
+            "治疗量：700点生命值。\n有效半径：8米。\n冷却时间：21秒。",
+            "治疗量：800点生命值。\n有效半径：8米。\n冷却时间：20秒。",
+            "治疗量：900点生命值。\n有效半径：8米。\n冷却时间：18秒。",
+            "治疗量：1000点生命值。\n有效半径：8米。\n冷却时间：16秒。"
+          ]
+        },
+        {
+          "id": "shock",
+          "name": "冲击波",
+          "kind": "active",
+          "icon": "icons/shock.png",
+          "disabledIcon": "icons/shock_disabled.png",
+          "tip": "Shockwave",
+          "description": "瞬间释放能量，将附近的敌人击退。",
+          "levels": [
+            "能量：12。\n有效半径：6米。\n冷却时间：18秒。",
+            "能量：13。\n有效半径：6米。\n冷却时间：17秒。",
+            "能量：14。\n有效半径：6米。\n冷却时间：15秒。",
+            "能量：16。\n有效半径：6米。\n冷却时间：13秒。",
+            "能量：18。\n有效半径：6米。\n冷却时间：10秒。"
+          ]
+        },
+        {
+          "id": "vitals",
+          "name": "要害射击",
+          "kind": "passive",
+          "icon": "icons/vitals.png",
+          "disabledIcon": "icons/vitals_disabled.png",
+          "tip": "Achilles_Heel",
+          "description": "因对人体结构的了解，护卫兵使用\"步枪\"有一定几率命中敌人要害，使敌人立刻陷入\"虚弱\"状态。\"虚弱\"会让敌人承受更多的伤害。\n（将\"步枪\"类武器拖入快捷栏，才能使用该技能。）",
+          "levels": [
+            "虚弱几率：8%。\n持续时间：3秒。",
+            "虚弱几率：10%。\n持续时间：3秒。",
+            "虚弱几率：12%。\n持续时间：3秒。",
+            "虚弱几率：15%。\n持续时间：3秒。",
+            "虚弱几率：20%。\n持续时间：3秒。"
+          ]
+        },
+        {
+          "id": "rain",
+          "name": "箭雨",
+          "kind": "active",
+          "icon": "icons/rain.png",
+          "disabledIcon": "icons/rain_disabled.png",
+          "tip": "Arrow_Shower",
+          "description": "迅速射出若干箭矢。\n（将\"弓\"类武器拖入快捷栏，才能使用该技能。）",
+          "levels": [
+            "箭矢数：2。\n冷却时间：12秒。",
+            "箭矢数：3。\n冷却时间：12秒。",
+            "箭矢数：4。\n冷却时间：12秒。",
+            "箭矢数：5。\n冷却时间：12秒。",
+            "箭矢数：6。\n冷却时间：12秒。"
+          ]
+        },
+        {
+          "id": "energy",
+          "name": "生命胶囊",
+          "kind": "active",
+          "icon": "icons/energy.png",
+          "disabledIcon": "icons/energy_disabled.png",
+          "tip": "Healing_Beacon",
+          "description": "抛射出一台\"活力振荡器\"，散发出治疗脉冲，持续治疗周围队友。\"活力振荡器\"只会受到枪弹的伤害，对其它伤害免疫。",
+          "levels": [
+            "治疗总量：3000点生命值。\n单次治疗量：每2秒150点生命值。\n冷却时间：20秒。\n有效半径：5米。",
+            "治疗总量：4000点生命值。\n单次治疗量：每2秒200点生命值。\n冷却时间：20秒。\n有效半径：5米。",
+            "治疗总量：5000点生命值。\n单次治疗量：每2秒250点生命值。\n冷却时间：20秒。\n有效半径：5米。",
+            "治疗总量：6000点生命值。\n单次治疗量：每2秒300点生命值。\n冷却时间：20秒。\n有效半径：5米。",
+            "治疗总量：8000点生命值。\n单次治疗量：每2秒350点生命值。\n冷却时间：20秒。\n有效半径：5米。"
+          ]
+        }
+      ]
+    },
+    "gunner": {
+      "name": "重装兵",
+      "skills": [
+        {
+          "id": "shield",
+          "name": "能量盾",
+          "kind": "active",
+          "icon": "icons/shield.png",
+          "disabledIcon": "icons/shield_disabled.png",
+          "tip": "Shield",
+          "description": "同时让自己和周围队友身上笼罩着能量场，免受一定伤害。",
+          "levels": [
+            "防御量：600点生命值。\n持续时间：10秒。\n冷却时间：23秒。",
+            "防御量：700点生命值。\n持续时间：10秒。\n冷却时间：22秒。",
+            "防御量：800点生命值。\n持续时间：10秒。\n冷却时间：21秒。",
+            "防御量：1000点生命值。\n持续时间：10秒。\n冷却时间：20秒。",
+            "防御量：1200点生命值。\n持续时间：10秒。\n冷却时间：18秒。"
+          ]
+        },
+        {
+          "id": "gallop",
+          "name": "加速鼓舞",
+          "kind": "active",
+          "icon": "icons/gallop.png",
+          "disabledIcon": "icons/gallop_disabled.png",
+          "tip": "Haste",
+          "description": "使自己和周围队友奔跑速度提升。",
+          "levels": [
+            "速度提高到：每秒5米\n持续时间：3秒。\n有效范围：8米\n冷却时间：15秒。",
+            "速度提高到：每秒5米\n持续时间：4秒。\n有效范围：8米\n冷却时间：15秒。",
+            "速度提高到：每秒5米\n持续时间：5秒。\n有效范围：8米\n冷却时间：15秒。",
+            "速度提高到：每秒5米\n持续时间：6秒。\n有效范围：8米\n冷却时间：15秒。",
+            "速度提高到：每秒5米\n持续时间：7秒。\n有效范围：8米\n冷却时间：15秒。"
+          ]
+        },
+        {
+          "id": "tenacity",
+          "name": "霸体",
+          "kind": "passive",
+          "icon": "icons/tenacity.png",
+          "disabledIcon": "icons/tenacity_disabled.png",
+          "tip": "Perseverance",
+          "description": "降低\"重装兵\"所承受的伤害。当\"重装兵\"的生命值低于50%时，会\"唤醒\"自己的意志力，持续恢复生命值，直到生命值大于等于50%。",
+          "levels": [
+            "伤害减免：3%\n\"唤醒\"治疗量：每2秒40点生命值",
+            "伤害减免：4%\n\"唤醒\"治疗量：每2秒60点生命值",
+            "伤害减免：5%\n\"唤醒\"治疗量：每2秒80点生命值",
+            "伤害减免：7%点\n\"唤醒\"治疗量：每2秒100点生命值",
+            "伤害减免：9%\n\"唤醒\"治疗量：每2秒120点生命值"
+          ]
+        },
+        {
+          "id": "heropower",
+          "name": "火力提升",
+          "kind": "passive",
+          "icon": "icons/heropower.png",
+          "disabledIcon": null,
+          "tip": "Blitzkrieg",
+          "description": "提升机关枪射速，射速提升使震动频率提高，因此会降低机关枪的精准度。\n（将\"机关枪\"类武器拖入快捷栏，才能使用该技能。）",
+          "levels": [
+            "射速提高：10%。\n精准度下降：2%。",
+            "射速提高：13%。\n精准度下降：3%。",
+            "射速提高：16%。\n精准度下降：4%。",
+            "射速提高：20%。\n精准度下降：5%。",
+            "射速提高：25%。\n精准度下降：6%。"
+          ]
+        },
+        {
+          "id": "transfer",
+          "name": "伤害转移",
+          "kind": "passive",
+          "icon": "icons/transfer.png",
+          "disabledIcon": "icons/transfer_disabled.png",
+          "tip": "Damage_Converter",
+          "description": "将受到的伤害（还包括\"防护罩\"吸收的伤害和盾牌抵挡的伤害）转化成能量储存起来。能量存满后，如果敌人接近你，会自动将所有能量释放到周围敌人身上，造成一定伤害。",
+          "levels": [
+            "单次储存能量：3%。\n释放伤害：350。\n触发半径：3米。\n伤害半径：8米。",
+            "单次储存能量：3%。\n释放伤害：420。\n触发半径：3米。\n伤害半径：8米。",
+            "单次储存能量：4%。\n释放伤害：500。\n触发半径：3米。\n伤害半径：8米。",
+            "单次储存能量：4%。\n释放伤害：590。\n触发半径：3米。\n伤害半径：8米。",
+            "单次储存能量：5%。\n释放伤害：700。\n触发半径：3米。\n伤害半径：8米。"
+          ]
+        }
+      ]
+    },
+    "biochemist": {
+      "name": "生化专家",
+      "skills": [
+        {
+          "id": "conduction",
+          "name": "生命传导",
+          "kind": "active",
+          "icon": "icons/conduction.png",
+          "disabledIcon": "icons/conduction_disabled.png",
+          "tip": null,
+          "description": null,
+          "levels": []
+        },
+        {
+          "id": "suckblood",
+          "name": "生命抽取",
+          "kind": "passive",
+          "icon": "icons/suckblood.png",
+          "disabledIcon": "icons/suckblood_disabled.png",
+          "tip": null,
+          "description": null,
+          "levels": []
+        },
+        {
+          "id": "plague",
+          "name": "瘟疫传播",
+          "kind": "passive",
+          "icon": "icons/plague.png",
+          "disabledIcon": "icons/plague_disabled.png",
+          "tip": null,
+          "description": null,
+          "levels": []
+        },
+        {
+          "id": "gasbomb",
+          "name": "毒气弹",
+          "kind": "passive",
+          "icon": "icons/gasbomb.png",
+          "disabledIcon": "icons/gasbomb_disabled.png",
+          "tip": null,
+          "description": null,
+          "levels": []
+        },
+        {
+          "id": "overreaction",
+          "name": "过激反应",
+          "kind": "active",
+          "icon": "icons/overreaction.png",
+          "disabledIcon": "icons/overreaction_disabled.png",
+          "tip": null,
+          "description": null,
+          "levels": []
+        }
+      ]
+    },
+    "assassin": {
+      "name": "突击兵",
+      "skills": [
+        {
+          "id": "latent",
+          "name": "隐形",
+          "kind": "active",
+          "icon": "icons/latent.png",
+          "disabledIcon": "icons/latent_disabled.png",
+          "tip": "Stealth",
+          "description": "隐形一段时间，与敌人距离太近会被察觉，施展技能或使用武器会脱离隐身状态。",
+          "levels": [
+            "被察觉距离：11米。\n冷却时间：23秒。\n持续时间：20秒。",
+            "被察觉距离：10米。\n冷却时间：21秒。\n持续时间：20秒。",
+            "被察觉距离：9米。\n冷却时间：18秒。\n持续时间：20秒。",
+            "被察觉距离：8米。\n冷却时间：15秒。\n持续时间：20秒。",
+            "被察觉距离：6米。\n冷却时间：13秒。\n持续时间：20秒。"
+          ]
+        },
+        {
+          "id": "piercing",
+          "name": "致命一击",
+          "kind": "passive",
+          "icon": "icons/piercing.png",
+          "disabledIcon": "icons/piercing_disabled.png",
+          "tip": "Fatal_Shot",
+          "description": "用\"狙击枪\"瞄准敌人的弱点给出致命一击，提高\"暴击率\"和\"暴击伤害\"。\n（将\"狙击枪\"类武器拖入快捷栏，才能使用该技能。）",
+          "levels": [
+            "暴击率提高：3%。\n暴击伤害提高：20%。",
+            "暴击率提高：5%。\n暴击伤害提高：26%。",
+            "暴击率提高：8%。\n暴击伤害提高：32%。",
+            "暴击率提高：11%。\n暴击伤害提高：40%。",
+            "暴击率提高：15%。\n暴击伤害提高：50%。"
+          ]
+        },
+        {
+          "id": "poison",
+          "name": "毒刃",
+          "kind": "passive",
+          "icon": "icons/poison.png",
+          "disabledIcon": "icons/poison_disabled.png",
+          "tip": "Poison_Pierce",
+          "description": "在兵刃上涂毒，有一定几率使敌人中毒后造成持续伤害（持续12秒）。学习\"毒刃\"技能也会增加一定的抗毒能力。\n（将\"刀\"类武器拖入快捷栏，才能使用该技能。）",
+          "levels": [
+            "中毒率：10%。\n伤害量：每2秒80点伤害。\n抵抗毒伤：10%。",
+            "中毒率：15%。\n伤害量：每2秒110点伤害。\n抵抗毒伤：15%。",
+            "中毒率：20%。\n伤害量：每2秒150点伤害。\n抵抗毒伤：20%。",
+            "中毒率：25%。\n伤害量：每2秒200点伤害。\n抵抗毒伤：25%。",
+            "中毒率：30%。\n伤害量：每2秒260点伤害。\n抵抗毒伤：30%。"
+          ]
+        },
+        {
+          "id": "spurt",
+          "name": "冲刺",
+          "kind": "active",
+          "icon": "icons/spurt.png",
+          "disabledIcon": "icons/spurt_disabled.png",
+          "tip": "Deadly_Sprint",
+          "description": "瞬间举刀前冲，冲刺路线上所有敌人都会受到伤害。之后仍然保持高速奔跑，并逐渐回复正常。如果学习\"毒刃\"技能，冲刺会100%使目标中毒。\n（将\"刀\"类武器拖入快捷栏，才能使用该技能。）",
+          "levels": [
+            "高速奔跑持续时间：1秒。\n冷却时间：22秒。",
+            "高速奔跑持续时间：2秒。\n冷却时间：21秒。",
+            "高速奔跑持续时间：2秒。\n冷却时间：20秒。",
+            "高速奔跑持续时间：3秒。\n冷却时间：19秒。",
+            "高速奔跑持续时间：3秒。\n冷却时间：17秒。"
+          ]
+        },
+        {
+          "id": "snare",
+          "name": "地雷",
+          "kind": "active",
+          "icon": "icons/snare.png",
+          "disabledIcon": "icons/snare_disabled.png",
+          "tip": "Trap",
+          "description": "抛出爆炸装置，当敌人靠近时触发。对一定范围内的所有敌人造成伤害。",
+          "levels": [
+            "伤害：450。\n冷却时间：25秒。\n触发半径：3米。\n伤害半径：8米。",
+            "伤害：500。\n冷却时间：23秒。\n触发半径：3米。\n伤害半径：8米。",
+            "伤害：560。\n冷却时间：21秒。\n触发半径：3米。\n伤害半径：8米。",
+            "伤害：630。\n冷却时间：18秒。\n触发半径：3米。\n伤害半径：8米。",
+            "伤害：700。\n冷却时间：15秒。\n触发半径：3米。\n伤害半径：8米。"
+          ]
+        }
+      ]
+    }
+  }
+}
