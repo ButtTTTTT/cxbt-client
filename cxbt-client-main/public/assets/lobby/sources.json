@@ -8722,5 +8722,41 @@
   ],
   "icons/zombiesmell.png": [
     "ui/skinf/lobby/zombiesmell.tga"
+  ],
+  "ui/skin_playgame_mode3_normal.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_playgame_mode3_normal.tga"
+  ],
+  "ui/skin_playgame_mode3_hover.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_playgame_mode3_hover.tga"
+  ],
+  "ui/skin_playgame_mode2_normal.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_playgame_mode2_normal.tga"
+  ],
+  "ui/skin_playgame_mode2_hover.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_playgame_mode2_hover.tga"
+  ],
+  "ui/skin_playgame_mode5_normal.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_playgame_mode5_normal.tga"
+  ],
+  "ui/skin_playgame_mode5_hover.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_playgame_mode5_hover.tga"
+  ],
+  "ui/skin_playgame_mode4_normal.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_playgame_mode4_normal.tga"
+  ],
+  "ui/skin_playgame_mode4_hover.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_playgame_mode4_hover.tga"
+  ],
+  "ui/skin_playgame_mode8_normal.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_playgame_mode8_normal.tga"
+  ],
+  "ui/skin_playgame_mode8_hover.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_playgame_mode8_hover.tga"
+  ],
+  "ui/skin_playgame_mode10_normal.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_playgame_mode10_normal.tga"
+  ],
+  "ui/skin_playgame_mode10_hover.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_playgame_mode10_hover.tga"
   ]
 }

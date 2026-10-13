@@ -13,6 +13,7 @@ import './Lobby.css';
 const PAGE_SIZE = 24;
 const NO_WEAPONS: CreationWeapon[] = [];
 const MUSIC_BASE = `${import.meta.env.BASE_URL}assets/lobby/`;
+const WEAPON_AUDIO_BASE = `${import.meta.env.BASE_URL}assets/gameplay/audio/`;
 const TABS: { id: InventoryCategory; label: string; icon: string }[] = [
   { id: 'equipment', label: '装备', icon: 'tabEquipment' },
   { id: 'items', label: '道具', icon: 'tabItems' },
@@ -63,6 +64,7 @@ export default function Lobby({ character, onExit }: { character: SavedCharacter
   const [quickbar, setQuickbar] = useState<(string | null)[]>([]);
   const [status, setStatus] = useState('');
   const audioRef = useRef<HTMLAudioElement>(null);
+  const weaponAudioRef = useRef<HTMLAudioElement | null>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const musicTrack = gameModeLobby || practiceRoom ? 'music-fortress' : 'music-lobby';
 
@@ -84,7 +86,11 @@ export default function Lobby({ character, onExit }: { character: SavedCharacter
     addEventListener('resize', resize);
     return () => removeEventListener('resize', resize);
   }, []);
-  useEffect(() => { if (audioRef.current) audioRef.current.volume = volume; }, [volume, assets]);
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = volume;
+    if (weaponAudioRef.current) weaponAudioRef.current.volume = volume;
+  }, [volume, assets]);
+  useEffect(() => () => { weaponAudioRef.current?.pause(); }, [battleRoom]);
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || battleRoom) return;
@@ -130,6 +136,15 @@ export default function Lobby({ character, onExit }: { character: SavedCharacter
     setAnimation(undefined);
     setMotion(true);
     if (item.weapon) {
+      if (item.weapon !== weaponId) {
+        const family = item.weapon.split('_')[0];
+        const audio = weaponAudioRef.current ?? new Audio();
+        weaponAudioRef.current = audio;
+        audio.pause();
+        audio.src = `${WEAPON_AUDIO_BASE}${family === 'stick' ? 'knives' : family}.wav`;
+        audio.volume = volume;
+        void audio.play().catch(() => undefined);
+      }
       setWeaponId(item.weapon);
       setStatus(`${item.name} · 持握预览`);
     } else if (item.attachment) {

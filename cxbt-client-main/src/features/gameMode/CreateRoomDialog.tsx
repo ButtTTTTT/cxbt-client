@@ -38,13 +38,13 @@ type MapChoice = {
   mode: Mode;
 };
 
-const VISIBLE_MODES: Mode[] = [
-  { id: 'team', label: '团队', icon: 'practiceModeTeam' },
-  { id: 'occupy', label: '占点', icon: 'practiceModeOccupy' },
-  { id: 'flag', label: '夺旗', icon: 'practiceModeFlag' },
-  { id: 'treasure', label: '夺宝', icon: 'practiceModeTreasure' },
-  { id: 'kill', label: '歼灭', icon: 'practiceModeKill' },
-  { id: 'blast', label: '爆破', icon: 'practiceModeBlast' },
+const VISIBLE_MODES: (Mode & { skin: string })[] = [
+  { id: 'team', label: '团队', icon: 'practiceModeTeam', skin: 'skin_playgame_mode3' },
+  { id: 'occupy', label: '占点', icon: 'practiceModeOccupy', skin: 'skin_playgame_mode5' },
+  { id: 'flag', label: '夺旗', icon: 'practiceModeFlag', skin: 'skin_playgame_mode2' },
+  { id: 'treasure', label: '夺宝', icon: 'practiceModeTreasure', skin: 'skin_playgame_mode4' },
+  { id: 'kill', label: '歼灭', icon: 'practiceModeKill', skin: 'skin_playgame_mode8' },
+  { id: 'blast', label: '爆破', icon: 'practiceModeBlast', skin: 'skin_playgame_mode10' },
 ];
 
 const ALL_MODES: Mode[] = [
@@ -148,9 +148,9 @@ export default function CreateRoomDialog({ assets, onClose, onCreate, initialRoo
         </label>
         <div className="create-room-mode-panel" style={art(assets, 'createRoomModePanel')}>
           {VISIBLE_MODES.map((entry) => <button key={entry.id} className={`create-room-mode${modeId === entry.id ? ' selected' : ''}`}
-            style={art(assets, 'createRoomModeBlank')}
+            style={buttonArt(assets, entry.skin)}
             aria-label={entry.label} aria-pressed={modeId === entry.id} onClick={() => chooseMode(entry)}>
-            <img src={lobbyUrl(assets.ui[entry.icon])} alt="" /><span>{entry.label}</span>
+            <span className="sr-only">{entry.label}</span>
           </button>)}
         </div>
       </div>
