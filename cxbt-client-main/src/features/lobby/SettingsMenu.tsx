@@ -9,7 +9,7 @@ const KEYS = [['移动', 'W / A / S / D'], ['跳跃', '空格'], ['翻滚', 'Ctr
 
 export default function SettingsMenu({ assets, volume, effectsVolume, motion, onVolume, onEffectsVolume,
   onMotion, onClose, onExit, onQuit }: {
-  assets: LobbyAssets;
+  assets: Pick<LobbyAssets, 'ui'>;
   volume: number;
   effectsVolume: number;
   motion: boolean;
