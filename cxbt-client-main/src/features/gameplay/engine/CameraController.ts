@@ -83,6 +83,10 @@ export class CameraController {
     );
   }
 
+  public onMouseMove(movementX: number, movementY: number) {
+    this.handlePointerMove(movementX, movementY);
+  }
+
   /**
    * 滚轮视距调节
    */

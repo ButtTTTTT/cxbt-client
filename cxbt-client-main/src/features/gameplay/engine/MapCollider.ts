@@ -138,6 +138,10 @@ export class MapCollider {
     };
   }
 
+  public toCollisionEnvironment(): CollisionEnvironment {
+    return this.toEnvironment();
+  }
+
   public dispose() {
     this.replacedMaterials.forEach(m => m.dispose());
     this.replacedMaterials.clear();

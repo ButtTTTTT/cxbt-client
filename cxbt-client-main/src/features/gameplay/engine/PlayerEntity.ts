@@ -154,6 +154,47 @@ export class PlayerEntity {
     }
   }
 
+  /**
+   * 挂接已完成组装的自定义三维角色根节点 (如由 createBattleAvatar 或外部构建的模型)
+   */
+  public attachAvatarRoot(root: any, skeleton?: any) {
+    this.modelGroup.add(root);
+    this.mainSkeleton = skeleton || null;
+    if (!this.mainSkeleton) {
+      root.traverse((child: any) => {
+        if (child.isSkinnedMesh && !this.mainSkeleton) {
+          this.mainSkeleton = child.skeleton;
+        }
+      });
+    }
+
+    this.boneIndices.clear();
+    if (this.mainSkeleton) {
+      this.mainSkeleton.bones.forEach((bone: any, index: number) => {
+        this.boneIndices.set(bone.name, index);
+      });
+    }
+
+    this.mixer = new THREE.AnimationMixer(this.modelGroup);
+    this.isReady = true;
+    return root;
+  }
+
+  /**
+   * 直接设置实体坐标与朝向 (供远端联机对手插值同步)
+   */
+  public setTransform(x: number, y: number, z: number, yaw: number) {
+    this.modelGroup.position.set(x, y, z);
+    this.modelGroup.rotation.y = yaw;
+  }
+
+  /**
+   * 结算伤害别名方法
+   */
+  public applyDamage(amount: number): boolean {
+    return this.takeDamage(amount);
+  }
+
   // =========================================
   // 2. 武器模型挂接 (Weapon Mounting)
   // =========================================

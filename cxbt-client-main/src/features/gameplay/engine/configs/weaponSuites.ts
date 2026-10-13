@@ -1,0 +1,139 @@
+// 武器与动作预设套件通用配置
+
+export interface WeaponActionSet {
+  id: string;
+  name: string;
+  actions: {
+    idle: string;
+    run: string;
+    jump: string;
+    roll?: string;
+    attack?: string;
+    reload?: string;
+  };
+}
+
+export const WEAPON_SUITES: WeaponActionSet[] = [
+  {
+    id: 'smg_01',
+    name: '冲锋枪套件 (SMG)',
+    actions: {
+      idle: '/assets/creation/idle.json',
+      run: '/assets/gameplay/animations/smg_01-run.json',
+      jump: '/assets/gameplay/animations/smg_01-jump.json',
+      roll: '/assets/gameplay/animations/smg_01-roll.json'
+    }
+  },
+  {
+    id: 'pistol_01',
+    name: '手枪套件 (Pistol)',
+    actions: {
+      idle: '/assets/creation/idle.json',
+      run: '/assets/gameplay/animations/pistol_01-run.json',
+      jump: '/assets/gameplay/animations/pistol_01-jump.json',
+      roll: '/assets/gameplay/animations/pistol_01-roll.json'
+    }
+  },
+  {
+    id: 'shotgun_01',
+    name: '霰弹枪套件 (Shotgun)',
+    actions: {
+      idle: '/assets/creation/idle.json',
+      run: '/assets/gameplay/animations/shotgun_01-run.json',
+      jump: '/assets/gameplay/animations/shotgun_01-jump.json',
+      roll: '/assets/gameplay/animations/shotgun_01-roll.json'
+    }
+  },
+  {
+    id: 'sniperrifle_01',
+    name: '狙击步枪套件 (Sniper)',
+    actions: {
+      idle: '/assets/creation/idle.json',
+      run: '/assets/gameplay/animations/sniperrifle_01-run.json',
+      jump: '/assets/gameplay/animations/sniperrifle_01-jump.json',
+      roll: '/assets/gameplay/animations/sniperrifle_01-roll.json'
+    }
+  },
+  {
+    id: 'machinegun_01',
+    name: '重机枪套件 (Machinegun)',
+    actions: {
+      idle: '/assets/creation/idle.json',
+      run: '/assets/gameplay/animations/machinegun_01-run.json',
+      jump: '/assets/gameplay/animations/machinegun_01-jump.json',
+      roll: '/assets/gameplay/animations/machinegun_01-roll.json'
+    }
+  },
+  {
+    id: 'knives_01',
+    name: '近战军刀套件 (Knives - 含攻击)',
+    actions: {
+      idle: '/assets/creation/idle.json',
+      run: '/assets/gameplay/animations/knives_01-run.json',
+      jump: '/assets/gameplay/animations/knives_01-jump.json',
+      roll: '/assets/gameplay/animations/knives_01-roll.json',
+      attack: '/assets/gameplay/animations/knives_01-attack.json'
+    }
+  },
+  {
+    id: 'shield_01',
+    name: '战术盾牌套件 (Shield - 含攻击)',
+    actions: {
+      idle: '/assets/creation/idle.json',
+      run: '/assets/gameplay/animations/shield_01-run.json',
+      jump: '/assets/gameplay/animations/shield_01-jump.json',
+      roll: '/assets/gameplay/animations/shield_01-roll.json',
+      attack: '/assets/gameplay/animations/shield_01-attack.json'
+    }
+  },
+  {
+    id: 'bow_01',
+    name: '复合弓套件 (Bow)',
+    actions: {
+      idle: '/assets/creation/idle.json',
+      run: '/assets/gameplay/animations/bow_01-run.json',
+      jump: '/assets/gameplay/animations/bow_01-jump.json',
+      roll: '/assets/gameplay/animations/bow_01-roll.json'
+    }
+  },
+  {
+    id: 'rpg_01',
+    name: '火箭筒套件 (RPG)',
+    actions: {
+      idle: '/assets/creation/idle.json',
+      run: '/assets/gameplay/animations/rpg_01-run.json',
+      jump: '/assets/gameplay/animations/rpg_01-jump.json',
+      roll: '/assets/gameplay/animations/rpg_01-roll.json'
+    }
+  },
+  {
+    id: 'grenade_01',
+    name: '战术手雷套件 (Grenade)',
+    actions: {
+      idle: '/assets/creation/idle.json',
+      run: '/assets/gameplay/animations/grenade_01-run.json',
+      jump: '/assets/gameplay/animations/grenade_01-jump.json',
+      roll: '/assets/gameplay/animations/grenade_01-roll.json'
+    }
+  }
+];
+
+export const ACTION_LABELS: Record<string, string> = {
+  idle: '待机 (Idle)',
+  run: '奔跑 (Run)',
+  jump: '跳跃 (Jump)',
+  roll: '战术翻滚 (Roll)',
+  attack: '近战攻击 (Attack)',
+  reload: '快速换弹 (Reload)',
+  hit: '受击硬直 (Hit)',
+  death: '阵亡倒地 (Death)'
+};
+
+/**
+ * 根据武器 ID 自动匹配对应的武器跑跳动作套件
+ */
+export function getWeaponActionSuite(weaponId: string): WeaponActionSet {
+  if (!weaponId) return WEAPON_SUITES[0];
+  const family = weaponId.split('_')[0].toLowerCase();
+  return WEAPON_SUITES.find((s) => s.id.toLowerCase().startsWith(family)) || WEAPON_SUITES[0];
+}

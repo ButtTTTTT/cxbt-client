@@ -7,3 +7,4 @@ export * from './PlayerEntity';
 export * from './CameraController';
 export * from './MapCollider';
 export * from './WeaponSystem';
+export * from './configs/weaponSuites';

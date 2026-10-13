@@ -9,6 +9,7 @@ import type { RoomConfig } from '../gameMode/CreateRoomDialog';
 import { createBattleAvatar, type BattleAvatar } from './avatar';
 import { createBattleAudio } from './audio';
 import { createProjectileSystem, weaponKind } from './projectiles';
+import { PlayerEntity, CameraController, MapCollider, getWeaponActionSuite } from './engine';
 import './Gameplay.css';
 import { WebRTCClient } from '../../network/WebRTCClient';
 
@@ -84,33 +85,11 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
     if (!mount) return;
     let cancelled = false;
     let frame = 0;
-    let avatar: BattleAvatar | null = null;
+    let playerAvatar: BattleAvatar | null = null;
+    let localPlayer: PlayerEntity | null = null;
+    let cameraController: CameraController | null = null;
     let visual: any = null;
     let collision: any = null;
-    let mapVisible: any[] = [];
-    let collisionMeshes: any[] = [];
-    let floorMeshes: any[] = [];
-    const replacedMaterials = new Set<any>();
-    const airWallMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
-    const audio = createBattleAudio(map.ambience);
-    audio.start();
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#d9e9e9');
-    if (map.fog && map.fog.length >= 4) scene.fog = new THREE.Fog('#d9e9e9', Math.max(35, map.fog[1]), map.fog[2]);
-    const camera = new THREE.PerspectiveCamera(65, 1, 0.08, 450);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.55;
-    mount.appendChild(renderer.domElement);
-    scene.add(new THREE.HemisphereLight(0xe8f5ff, 0x777c6c, 2.4));
-    const sun = new THREE.DirectionalLight(0xfff0db, 2.3);
-    sun.position.set(40, 70, 45);
-    scene.add(sun);
-    const position = new THREE.Vector3(map.camera?.[0] ?? 0, 0, map.camera?.[2] ?? 0);
-    let yaw = 0;
-    let pitch = 0.1;
     let dragging = false;
     let pointerX = 0;
     let pointerY = 0;
@@ -118,79 +97,88 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
     let lastShot = 0;
     let shotFlash = 0;
     let ready = false;
-    let grounded = false;
-    let verticalSpeed = 0;
-    let rollTime = 0;
     let audioPaused = false;
-    let footstepTime = 0;
-    let footstepIndex = 0;
-    const rollDirection = new THREE.Vector3();
     const keys = new Set<string>();
-    const raycaster = new THREE.Raycaster();
-    const down = new THREE.Vector3(0, -1, 0);
-    const direction = new THREE.Vector3();
-    const candidate = new THREE.Vector3();
-    const target = new THREE.Vector3();
     const clock = new THREE.Clock();
+
+    const audio = createBattleAudio(map.ambience);
+    audio.start();
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#d9e9e9');
+    if (map.fog && map.fog.length >= 4) scene.fog = new THREE.Fog('#d9e9e9', Math.max(35, map.fog[1]), map.fog[2]);
+
+    const camera = new THREE.PerspectiveCamera(65, 1, 0.08, 450);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.55;
+    mount.appendChild(renderer.domElement);
+
+    scene.add(new THREE.HemisphereLight(0xe8f5ff, 0x777c6c, 2.4));
+    const sun = new THREE.DirectionalLight(0xfff0db, 2.3);
+    sun.position.set(40, 70, 45);
+    scene.add(sun);
+
     const flash = new THREE.PointLight(0xffcf79, 0, 7);
     scene.add(flash);
-    const projectiles = createProjectileSystem(scene, () => collisionMeshes.length ? collisionMeshes : mapVisible,
+
+    // 1. 初始化地图物理碰撞与地表查询引擎
+    const mapCollider = new MapCollider();
+    if (map.bounds) mapCollider.setBounds(map.bounds);
+
+    const projectiles = createProjectileSystem(scene, () => mapCollider.collisionMeshes.length ? mapCollider.collisionMeshes : mapCollider.mapVisible,
       (point, radius) => {
-        const distance = point.distanceTo(position.clone().add(new THREE.Vector3(0, 1, 0)));
+        if (!localPlayer) return;
+        const distance = point.distanceTo(localPlayer.modelGroup.position.clone().add(new THREE.Vector3(0, 1, 0)));
         if (distance < radius) damageRef.current(Math.ceil(650 * (1 - distance / radius)));
       });
 
-    const floorAt = (x: number, z: number, fromY: number) => {
-      raycaster.set(new THREE.Vector3(x, fromY, z), down);
-      raycaster.far = 100;
-      const hits = raycaster.intersectObjects(floorMeshes.length ? floorMeshes : mapVisible, true);
-      return hits.find((hit: any) => hit.face &&
-        hit.face.normal.clone().transformDirection(hit.object.matrixWorld).y > 0.35)?.point.y;
-    };
-    const blocked = (from: any, to: any) => {
-      if (!collisionMeshes.length) return false;
-      const motion = to.clone().sub(from);
-      if (motion.lengthSq() < 0.0001) return false;
-      const distance = motion.length();
-      raycaster.set(from.clone().add(new THREE.Vector3(0, 0.7, 0)), motion.normalize());
-      raycaster.far = Math.max(0.55, distance + 0.32);
-      return raycaster.intersectObjects(collisionMeshes, true).some((hit: any) => hit.distance > 0.08);
-    };
     const fire = () => {
       const family = weapons[selected]?.id.split('_')[0] ?? '';
       const kind = weaponKind(weapons[selected]?.id ?? '');
       const delay = kind === 'melee' ? 430 : kind === 'grenade' ? 800 : 140;
-      if (!ready || !avatar || paused.current || performance.now() - lastShot < delay) return;
+      if (!ready || !localPlayer || paused.current || performance.now() - lastShot < delay) return;
       if (kind !== 'melee' && !shotRef.current()) return;
       lastShot = performance.now();
-      avatar.attack();
+
+      localPlayer.attack();
       audio.play(`fire-${['pistol', 'sniperrifle', 'shotgun', 'smg', 'machinegun', 'knives',
         'bow', 'crossbow', 'grenadelauncher', 'grenade', 'shield', 'rpg'].includes(family)
         ? family : kind === 'melee' ? 'knives' : 'pistol'}`, 0.55);
+
       if (kind === 'melee') return;
-      const aim = camera.getWorldDirection(new THREE.Vector3());
-      const muzzle = position.clone().add(new THREE.Vector3(Math.sin(yaw) * 0.75, 1.3, Math.cos(yaw) * 0.75));
+
+      const aim = cameraController ? cameraController.getForwardDirection() : camera.getWorldDirection(new THREE.Vector3());
+      const muzzle = localPlayer.getMuzzlePosition();
       projectiles.spawn(kind, muzzle, aim);
+
       if (kind !== 'grenade') {
         shotFlash = 0.08;
         flash.position.copy(muzzle);
         flash.intensity = 6;
-        
-        raycaster.set(camera.position, aim);
-        raycaster.far = 100;
-        const hits = raycaster.intersectObjects(collisionMeshes, true);
-        const firstHit = hits.find((h: any) => h.distance > 0.08);
-        if (firstHit && firstHit.object.userData?.isPlayer) {
+
+        const hit = mapCollider.raycastBullet(camera.position, aim, 100);
+        if (hit && hit.object.userData?.isPlayer) {
           const damage = family === 'sniperrifle' ? 85 : family === 'shotgun' ? 35 : 18;
-          hitRef.current(firstHit.object.userData.userId, damage);
+          hitRef.current(hit.object.userData.userId, damage);
+          if (hit.object.userData.entity) {
+            hit.object.userData.entity.applyDamage(damage);
+          }
         }
       }
     };
+
     active.current = {
       switchWeapon(index) {
         if (selected === index) return;
         selected = index;
-        avatar?.setWeapon(index);
+        playerAvatar?.setWeapon(index);
+        localPlayer?.switchWeaponSlot(index);
+        const suite = getWeaponActionSuite(weapons[index]?.id ?? 'smg_01');
+        void localPlayer?.loadAnimations(suite.actions);
+
         const family = weapons[index]?.id.split('_')[0] ?? '';
         audio.play(['pistol', 'sniperrifle', 'shotgun', 'smg', 'machinegun', 'knives',
           'grenade', 'rpg', 'bow', 'crossbow', 'shield', 'sprayer', 'grenadelauncher'].includes(family)
@@ -200,31 +188,22 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
       fire,
       reload() {
         if (weaponKind(weapons[selected]?.id ?? '') === 'melee') return;
-        avatar?.reload();
+        localPlayer?.reload();
         reloadRef.current();
       },
     };
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLButtonElement) return;
       if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) event.preventDefault();
       if (paused.current) return;
       keys.add(event.code);
       audio.start();
-      if (event.code === 'Space' && !event.repeat && ready && grounded && !paused.current) {
-        grounded = false;
-        verticalSpeed = 7.5;
-        avatar?.jump();
-        audio.play('jump');
+      if (event.code === 'Space' && !event.repeat && ready && !paused.current) {
+        localPlayer?.jump();
       }
-      if ((event.code === 'ShiftLeft' || event.code === 'ControlLeft') && !event.repeat && ready && grounded && !paused.current && rollTime <= 0) {
-        rollTime = 0.45;
-        rollDirection.set(0, 0, 1);
-        if (keys.has('KeyA')) rollDirection.x = 1;
-        if (keys.has('KeyD')) rollDirection.x = -1;
-        if (keys.has('KeyS')) rollDirection.z = -1;
-        rollDirection.normalize().applyAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
-        avatar?.roll();
-        audio.play('roll');
+      if ((event.code === 'ShiftLeft' || event.code === 'ControlLeft') && !event.repeat && ready && !paused.current) {
+        localPlayer?.roll();
       }
       if (event.code === 'KeyR' && !event.repeat) active.current?.reload();
       if (event.code.startsWith('Digit') && !event.repeat) {
@@ -232,8 +211,10 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
         if (index >= 0 && index < weapons.length) active.current?.switchWeapon(index);
       }
     };
+
     const onKeyUp = (event: KeyboardEvent) => keys.delete(event.code);
     const onBlur = () => keys.clear();
+
     const onMove = (event: PointerEvent) => {
       const locked = document.pointerLockElement === renderer.domElement || document.pointerLockElement === document.body;
       if (!locked && !dragging) return;
@@ -241,13 +222,14 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
       const dy = locked ? event.movementY : event.clientY - pointerY;
       pointerX = event.clientX;
       pointerY = event.clientY;
-      yaw -= dx * 0.005;
-      pitch = THREE.MathUtils.clamp(pitch + dy * 0.003, -0.35, 0.65);
+      cameraController?.onMouseMove(dx, dy);
     };
+
     const onDown = (event: PointerEvent) => {
       if (paused.current) return;
       audio.start();
       if (event.button === 2) {
+        cameraController?.setAiming(true);
         if (!document.pointerLockElement) void renderer.domElement.requestPointerLock();
         dragging = true;
         pointerX = event.clientX;
@@ -258,19 +240,29 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
         else fire();
       }
     };
+
     const onUp = (event: PointerEvent) => {
-      if (event.button === 2) dragging = false;
+      if (event.button === 2) {
+        dragging = false;
+        cameraController?.setAiming(false);
+      }
     };
+
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
       if (paused.current || !weapons.length) return;
       active.current?.switchWeapon((selected + (event.deltaY > 0 ? 1 : weapons.length - 1)) % weapons.length);
     };
+
     const onContext = (event: MouseEvent) => event.preventDefault();
     const onLockChange = () => {
       dragging = false;
-      if (!document.pointerLockElement) keys.clear();
+      if (!document.pointerLockElement) {
+        keys.clear();
+        cameraController?.setAiming(false);
+      }
     };
+
     addEventListener('keydown', onKeyDown);
     addEventListener('keyup', onKeyUp);
     addEventListener('blur', onBlur);
@@ -280,6 +272,7 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
     mount.addEventListener('wheel', onWheel, { passive: false });
     mount.addEventListener('contextmenu', onContext);
     document.addEventListener('pointerlockchange', onLockChange);
+
     const resize = () => {
       const width = mount.clientWidth;
       const height = mount.clientHeight;
@@ -291,54 +284,70 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
     const observer = new ResizeObserver(resize);
     observer.observe(mount);
 
+    const otherPlayerEntities = new Map<string, PlayerEntity>();
+
     const load = async () => {
       const loader = new GLTFLoader();
-      const [mapGltf, collisionGltf, player] = await Promise.all([
+      const [mapGltf, collisionGltf, avatar] = await Promise.all([
         loader.loadAsync(`${BASE}${map.scene}`),
         map.collision ? loader.loadAsync(`${BASE}${map.collision}`).catch(() => null) : Promise.resolve(null),
         createBattleAvatar(creation, creation.jobs[character.jobId].presets[character.appearance.gender], character.appearance, weapons),
       ]);
-      if (cancelled) { player.dispose(); return; }
+      if (cancelled) { avatar.dispose(); return; }
+
+      playerAvatar = avatar;
       visual = mapGltf.scene;
       collision = collisionGltf?.scene ?? null;
-      const airWalls = new Set(map.airWalls);
-      visual.traverse((object: any) => {
-        if (!(object instanceof THREE.Mesh)) return;
-        if (airWalls.has(object.name)) {
-          const materials = Array.isArray(object.material) ? object.material : [object.material];
-          materials.forEach((material: any) => replacedMaterials.add(material));
-          object.material = airWallMaterial;
-          object.userData.airWall = true;
-          return;
-        }
-        object.frustumCulled = true;
-        mapVisible.push(object);
-      });
-      collision?.traverse((object: any) => {
-        if (!(object instanceof THREE.Mesh)) return;
-        collisionMeshes.push(object);
-        if (object.userData.collision?.surfaceId !== 2) floorMeshes.push(object);
-      });
+
+      // 注册场景网格与物理碰撞
+      mapCollider.registerVisualScene(visual, map.airWalls);
+      if (collision) mapCollider.registerCollisionScene(collision);
       scene.add(visual);
-      collision?.updateMatrixWorld(true);
-      avatar = player;
-      scene.add(player.root);
-      const ground = floorAt(position.x, position.z, 80);
-      position.y = ground ?? 0;
-      grounded = ground !== undefined;
-      player.root.position.copy(position);
+
+      // 2. 主玩家实体化 (挂载 PlayerEntity 核心类)
+      localPlayer = new PlayerEntity(scene);
+      localPlayer.attachAvatarRoot(avatar.root);
+      localPlayer.setCollisionEnvironment(mapCollider.toCollisionEnvironment());
+
+      // 挂接音效与事件
+      localPlayer.events.onFootstep = (idx) => audio.play(`step${idx}`, 0.35);
+      localPlayer.events.onJump = () => audio.play('jump');
+      localPlayer.events.onLand = () => audio.play('land', 0.4);
+      localPlayer.events.onRoll = () => audio.play('roll');
+      localPlayer.events.onDamage = (dmg) => damageRef.current(dmg);
+
+      // 加载首套武器的动作预设
+      const initialSuite = getWeaponActionSuite(weapons[0]?.id ?? 'smg_01');
+      await localPlayer.loadAnimations(initialSuite.actions);
+
+      // 3. 相机控制器实例化并绑定
+      cameraController = new CameraController(camera, {
+        distance: 2.9,
+        pitch: 0.1,
+        yaw: 0,
+        heightOffset: 1.25,
+        shoulderOffset: 0.35
+      });
+      cameraController.setTarget(localPlayer.modelGroup);
+
+      const spawnX = map.camera?.[0] ?? 0;
+      const spawnZ = map.camera?.[2] ?? 0;
+      const ground = mapCollider.floorAt(spawnX, spawnZ, 80) ?? 0;
+      localPlayer.modelGroup.position.set(spawnX, ground, spawnZ);
+
       ready = true;
       readyRef.current();
     };
+
     void load().catch((error: unknown) => {
       if (!cancelled) mount.dataset.error = error instanceof Error ? error.message : '战场加载失败';
     });
-    const otherPlayerAvatars = new Map<string, any>();
 
     const animate = () => {
       frame = requestAnimationFrame(animate);
       const delta = Math.min(clock.getDelta(), 0.05);
 
+      // 多人联机对手同步与插值
       if (otherPlayers.current) {
         const renderTime = performance.now() - 100;
         for (const [userIdStr, stateObj] of Object.entries(otherPlayers.current)) {
@@ -357,7 +366,6 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
               break;
             }
           }
-
           if (!found) {
             state0 = buffer[0];
             state1 = buffer[0];
@@ -378,24 +386,13 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
             interpYaw = state0.yaw + dy * clampedT;
           }
 
-          let avatarObj = otherPlayerAvatars.get(userIdStr);
-          if (!avatarObj) {
-            // Create a dummy group to hold the avatar and hitbox immediately
-            const group = new THREE.Group();
-            scene.add(group);
-            
-            // Add collision capsule to root immediately
-            const capsuleGeom = new THREE.CapsuleGeometry(0.35, 0.9, 4, 8);
-            const capMat = new THREE.MeshBasicMaterial({ visible: false }); // Invisible hitbox
-            const hitbox = new THREE.Mesh(capsuleGeom, capMat);
-            hitbox.position.y = 0.8;
-            hitbox.userData = { isPlayer: true, userId: userIdStr };
-            group.add(hitbox);
-            collisionMeshes.push(hitbox);
-            
-            avatarObj = { root: group, update: null, loaded: false };
-            otherPlayerAvatars.set(userIdStr, avatarObj);
-            
+          let remoteEntity = otherPlayerEntities.get(userIdStr);
+          if (!remoteEntity) {
+            remoteEntity = new PlayerEntity(scene);
+            remoteEntity.hitbox.userData = { isPlayer: true, userId: userIdStr, entity: remoteEntity };
+            mapCollider.collisionMeshes.push(remoteEntity.hitbox);
+            otherPlayerEntities.set(userIdStr, remoteEntity);
+
             const pInfo = roomPlayers && roomPlayers[userIdStr];
             if (pInfo && pInfo.jobId && pInfo.appearance) {
               const job = (creation.jobs as any)[pInfo.jobId];
@@ -404,43 +401,33 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
                 let pWeapons = pInfo.weaponIds ? pInfo.weaponIds.map((wId: string) => assets.weapons[wId]).filter(Boolean) : job.weapons;
                 if (!pWeapons || pWeapons.length === 0) pWeapons = job.weapons;
                 createBattleAvatar(creation, preset, pInfo.appearance, pWeapons).then(loadedAvatar => {
-                  group.add(loadedAvatar.root);
-                  avatarObj.update = loadedAvatar.update;
-                  avatarObj.loaded = true;
+                  remoteEntity!.attachAvatarRoot(loadedAvatar.root);
+                  const suite = getWeaponActionSuite(pWeapons[0]?.id ?? 'smg_01');
+                  void remoteEntity!.loadAnimations(suite.actions);
                 }).catch(err => {
-                  console.error('Avatar load error:', err);
+                  console.error('Remote player load error:', err);
                   logDebug(`[Avatar Error] ${err.message || String(err)}`);
                 });
               }
             } else {
-              // Fallback if data is missing, render red capsule
-              const mat = new THREE.MeshStandardMaterial({ color: 0xef4e54 });
-              const fallbackMesh = new THREE.Mesh(capsuleGeom, mat);
-              fallbackMesh.position.y = 0.8;
-              group.add(fallbackMesh);
-              avatarObj.loaded = true;
+              remoteEntity.loadAvatar('/assets/creation/models/malecommandos.glb', '/assets/creation/models/body01.glb').then(() => {
+                void remoteEntity!.loadAnimations(getWeaponActionSuite('smg_01').actions);
+              }).catch(() => null);
             }
           }
-          
-          if (avatarObj = otherPlayerAvatars.get(userIdStr)) {
-            const floor = floorAt(interpX, interpZ, 80) ?? 0;
-            const oldPos = avatarObj.root.position.clone();
-            avatarObj.root.position.set(interpX, floor, interpZ);
-            avatarObj.root.rotation.y = interpYaw;
-            if (avatarObj.update && avatarObj.loaded) {
-              const speed = oldPos.distanceTo(avatarObj.root.position) / delta;
-              const isMoving = speed > 0.1;
-              const charInfo = {
-                moveX: 0,
-                moveY: isMoving ? 1 : 0,
-                weapon: 0,
-                aim: new THREE.Vector3(0, 0, 1).applyEuler(new THREE.Euler(0, interpYaw, 0)),
-                grounded: true,
-                yaw: interpYaw,
-                pitch: 0,
-              };
-              avatarObj.update(delta, charInfo, false);
+
+          const floor = mapCollider.floorAt(interpX, interpZ, 80) ?? 0;
+          const oldPos = remoteEntity.modelGroup.position.clone();
+          remoteEntity.setTransform(interpX, floor, interpZ, interpYaw);
+
+          if (remoteEntity.isReady) {
+            const speed = oldPos.distanceTo(remoteEntity.modelGroup.position) / delta;
+            if (speed > 0.1) {
+              remoteEntity.playAction('run', 0.15, true);
+            } else {
+              remoteEntity.playAction('idle', 0.15, true);
             }
+            if (remoteEntity.mixer) remoteEntity.mixer.update(delta);
           }
         }
       }
@@ -450,70 +437,38 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
         if (audioPaused) audio.pause();
         else audio.start();
       }
-      if (avatar) {
-        direction.set(0, 0, 0);
-        if (keys.has('KeyW') || keys.has('ArrowUp')) direction.z += 1;
-        if (keys.has('KeyS') || keys.has('ArrowDown')) direction.z -= 1;
-        if (keys.has('KeyA') || keys.has('ArrowLeft')) direction.x += 1;
-        if (keys.has('KeyD') || keys.has('ArrowRight')) direction.x -= 1;
-        const moving = direction.lengthSq() > 0 || rollTime > 0;
-        avatar.setMoving(moving && !paused.current);
-        if (moving && !paused.current) {
-          if (rollTime > 0) direction.copy(rollDirection);
-          else direction.normalize().applyAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
-          candidate.copy(position).addScaledVector(direction, delta * (rollTime > 0 ? 8.5 : 4.5));
-          const bounds = map.bounds;
-          if (bounds?.length && (candidate.x < bounds[0] - bounds[2] / 2 || candidate.x > bounds[0] + bounds[2] / 2 ||
-            candidate.z < bounds[1] - bounds[3] / 2 || candidate.z > bounds[1] + bounds[3] / 2)) {
-            candidate.copy(position);
-          }
-          const floor = floorAt(candidate.x, candidate.z, position.y + (grounded ? 2.4 : 0.3));
-          if ((floor === undefined || !grounded || Math.abs(floor - position.y) < 0.65) && !blocked(position, candidate)) {
-            position.x = candidate.x;
-            position.z = candidate.z;
-            if (grounded && floor !== undefined) position.y = floor;
-          }
-          if (grounded && rollTime <= 0) {
-            footstepTime -= delta;
-            if (footstepTime <= 0) {
-              footstepIndex = (footstepIndex % 3) + 1;
-              audio.play(`step${footstepIndex}`, 0.35);
-              footstepTime = 0.34;
-            }
-          }
-        }
-        if (!moving) footstepTime = 0;
-        if (rollTime > 0 && !paused.current) rollTime = Math.max(0, rollTime - delta);
-        if (!grounded && !paused.current) {
-          verticalSpeed -= 18 * delta;
-          position.y += verticalSpeed * delta;
-          const floor = floorAt(position.x, position.z, position.y + 0.25);
-          if (verticalSpeed <= 0 && floor !== undefined && position.y <= floor) {
-            position.y = floor;
-            verticalSpeed = 0;
-            grounded = true;
-            audio.play('land', 0.4);
-          }
-        }
-        avatar.root.position.copy(position);
-        avatar.root.rotation.y = yaw;
-        avatar.update(delta);
-        target.copy(position).add(new THREE.Vector3(0, 1.15 + pitch, 0));
-        camera.position.copy(position).add(new THREE.Vector3(-Math.sin(yaw) * 2.9, 1.75 + pitch * 2.2, -Math.cos(yaw) * 2.9));
-        camera.lookAt(target.clone().add(new THREE.Vector3(Math.sin(yaw) * 3, 0, Math.cos(yaw) * 3)));
-        
-        // Throttle position reporting to 15 ticks per second to prevent network flood
+
+      // 主玩家输入驱动与更新
+      if (localPlayer && ready) {
+        const dir = new THREE.Vector3();
+        if (keys.has('KeyW') || keys.has('ArrowUp')) dir.z += 1;
+        if (keys.has('KeyS') || keys.has('ArrowDown')) dir.z -= 1;
+        if (keys.has('KeyA') || keys.has('ArrowLeft')) dir.x += 1;
+        if (keys.has('KeyD') || keys.has('ArrowRight')) dir.x -= 1;
+        if (dir.lengthSq() > 0) dir.normalize();
+
+        const yaw = cameraController?.yaw ?? 0;
+        localPlayer.setInput(dir, yaw, false);
+        localPlayer.update(delta);
+
+        cameraController?.update(delta, mapCollider.collisionMeshes);
+
+        const currentPos = localPlayer.modelGroup.position;
+        const currentYaw = localPlayer.modelGroup.rotation.y;
         if (performance.now() - (positionRef.current as any).lastTime > 66 || !(positionRef.current as any).lastTime) {
           (positionRef.current as any).lastTime = performance.now();
-          positionRef.current(position.x, position.z, yaw);
+          positionRef.current(currentPos.x, currentPos.z, currentYaw);
         }
       }
+
       if (shotFlash > 0) { shotFlash -= delta; if (shotFlash <= 0) flash.intensity = 0; }
       projectiles.update(delta);
       mount.dataset.projectileCount = String(projectiles.count());
       renderer.render(scene, camera);
     };
+
     animate();
+
     return () => {
       cancelled = true;
       cancelAnimationFrame(frame);
@@ -529,25 +484,35 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
       document.removeEventListener('pointerlockchange', onLockChange);
       active.current = null;
       if (document.pointerLockElement) document.exitPointerLock();
+
       audio.dispose();
       projectiles.dispose();
-      avatar?.dispose();
-      visual?.traverse((object: any) => {
-        if (object instanceof THREE.Mesh) {
-          object.geometry.dispose();
-          const materials = Array.isArray(object.material) ? object.material : [object.material];
-          materials.forEach((material: any) => material.dispose());
-        }
-      });
-      collision?.traverse((object: any) => { if (object instanceof THREE.Mesh) object.geometry.dispose(); });
-      replacedMaterials.forEach((material: any) => material.dispose());
-      airWallMaterial.dispose();
+      playerAvatar?.dispose();
+      localPlayer?.dispose();
+      for (const entity of otherPlayerEntities.values()) {
+        entity.dispose();
+      }
+      otherPlayerEntities.clear();
+      mapCollider.dispose();
+
+      if (visual) {
+        visual.traverse((object: any) => {
+          if (object instanceof THREE.Mesh) {
+            object.geometry?.dispose();
+            const mats = Array.isArray(object.material) ? object.material : [object.material];
+            mats.forEach((m: any) => m?.dispose());
+          }
+        });
+      }
+      if (collision) {
+        collision.traverse((object: any) => {
+          if (object instanceof THREE.Mesh) object.geometry?.dispose();
+        });
+      }
+
       renderer.dispose();
       renderer.forceContextLoss();
       renderer.domElement.remove();
-      mapVisible = [];
-      collisionMeshes = [];
-      floorMeshes = [];
     };
   }, [map, character, creation, weapons, active, paused]);
   return <div className="battle-canvas" ref={mountRef} data-gameplay-canvas />;
