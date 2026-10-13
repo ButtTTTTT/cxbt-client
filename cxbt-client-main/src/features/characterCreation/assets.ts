@@ -12,6 +12,10 @@ export type CreationWeapon = {
 export type CreationPreset = {
   id: string;
   body: string;
+  skinColor?: string;
+  headTexture?: string;
+  rightEyes?: string[];
+  noseTexture?: string | null;
   hair: ModelPart[];
   ears: string[];
   eyes: string[];

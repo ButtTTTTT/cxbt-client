@@ -80,7 +80,7 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
   };
 
   const eyes = await Promise.all(preset.eyes.map(loadTexture));
-  const rightEyes = eyes.map((texture) => {
+  const rightEyes = preset.rightEyes ? await Promise.all(preset.rightEyes.map(loadTexture)) : eyes.map((texture) => {
     const mirror = texture.clone();
     mirror.repeat.x = -1;
     mirror.offset.x = 1;
@@ -90,12 +90,14 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
   });
   const mouths = await Promise.all(preset.mouths.map(loadTexture));
   await Promise.all([
-    addPart(assets.models.head01, material(null, assets.skinColor)),
+    preset.headTexture ? loadTexture(preset.headTexture).then((map) => addPart(assets.models.head01, material(map)))
+      : addPart(assets.models.head01, material(null, preset.skinColor ?? assets.skinColor)),
     addPart(assets.models.l_eye, material(eyes[appearance.eyes] ?? eyes[0], '#ffffff', true)),
     addPart(assets.models.r_eye, material(rightEyes[appearance.eyes] ?? rightEyes[0], '#ffffff', true)),
     addPart(assets.models.mouth, material(mouths[appearance.mouth] ?? mouths[0], '#ffffff', true)),
-    loadTexture(assets.models.noseTexture).then((map) => addPart(assets.models.nose, material(map, '#ffffff', true))),
-    ...preset.ears.map((path, index) => addPart(path, material(null, assets.skinColor),
+    ...(preset.noseTexture === null ? [] : [loadTexture(preset.noseTexture ?? assets.models.noseTexture)
+      .then((map) => addPart(assets.models.nose, material(map, '#ffffff', true)))]),
+    ...preset.ears.map((path, index) => addPart(path, material(null, preset.skinColor ?? assets.skinColor),
       [index === 0 ? 0.235 : -0.235, 1.04, 0.035])),
     ...preset.fixedParts.map(async (part) => addPart(part.model, material(await loadTexture(part.texture)))),
     ...preset.hair.map(async (part, index) => {

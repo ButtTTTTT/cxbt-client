@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="data:,">
+  <style>
+    html, body { margin: 0; background: transparent; }
+    #root { width: 160px; height: 200px; background: url('/assets/avatar-cards/card-frame.png') center / 100% 100%; }
+    .creation-character { position: absolute; left: 12px; top: 27px; width: 136px; height: 159px; }
+    .creation-character canvas { display: block; width: 100%; height: 100%; }
+    .creation-loading { display: none; }
+  </style>
+</head>
+<body><div id="root"></div>
+<script type="module">
+  import React from 'react';
+  import { createRoot } from 'react-dom/client';
+  import CharacterPreview from '/src/features/characterCreation/CharacterPreview.tsx';
+  import { initialAppearance } from '/src/features/characterCreation/assets.ts';
+  const assets = await fetch('/assets/creation/config.json').then(response => response.json());
+  const cards = await fetch('/assets/avatar-cards/catalog.json').then(response => response.json()).then(catalog => catalog.cards);
+  const root = createRoot(document.getElementById('root'));
+  const weapons = [];
+  window.showAvatarCard = id => {
+    const card = cards.find(entry => entry.id === id);
+    if (!card) throw new Error('Unknown avatar card: ' + id);
+    root.render(React.createElement(CharacterPreview, { assets, preset: card.preset,
+      appearance: initialAppearance(card.preset), motion: false, weapons, weaponIndex: null }));
+  };
+</script></body></html>

@@ -1,11 +1,9 @@
-import { useState, type CSSProperties } from 'react';
-import type { LobbyAssets } from '../lobby/assets';
-import { lobbyUrl } from '../lobby/assets';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { apiFetch } from '../../api';
+import { lobbyUrl, type LobbyAssets } from '../lobby/assets';
 import CreateRoomDialog, { type RoomConfig } from './CreateRoomDialog';
 import RoomSettings from './RoomSettings';
 import './PracticeRoom.css';
-import { apiFetch } from '../../api';
-import { useEffect, useCallback } from 'react';
 
 type PracticeRoomProps = {
   assets: LobbyAssets;
@@ -16,235 +14,164 @@ type PracticeRoomProps = {
   onStart: (room: RoomConfig) => void;
   onStatus: (message: string) => void;
 };
-
-type Room = {
-  id: number;
-  name: string;
-  host: string;
-  map: string;
-  mode: string;
-  players: string;
-  state: string;
-};
-
-const COLUMNS = [
-  ['ID', '65px'], ['状态', '61px'], ['房间名称', '185px'], ['房主', '164px'],
-  ['地图', '142px'], ['Watch', '70px'], ['模式', '60px'], ['人数', '66px'],
-] as const;
-const EMPTY_ROWS = Array.from({ length: 8 }, (_, index) => index);
-
-type ApiRoom = {
+type ApiRoom = RoomConfig & {
   id: string;
-  name: string;
   hostId: number;
-  mapName: string;
-  modeName: string;
-  players: any;
-  maxPlayers: number;
+  hostName?: string;
   state: string;
+  watchCount?: number;
 };
+const COLUMNS = ['N0', '状态', '房间名称', '房主', '地图', 'Watch', '模式', '人数'];
 const MODES = [
-  { id: 'all', label: '全部', icon: 'practiceModeAll' },
-  { id: 'team', label: '团队', icon: 'practiceModeTeam' },
-  { id: 'occupy', label: '占点', icon: 'practiceModeOccupy' },
-  { id: 'flag', label: '夺旗', icon: 'practiceModeFlag' },
-  { id: 'treasure', label: '夺宝', icon: 'practiceModeTreasure' },
-  { id: 'kill', label: '歼灭', icon: 'practiceModeKill' },
-  { id: 'blast', label: '爆破', icon: 'practiceModeBlast' },
-  { id: 'survival', label: '生存', icon: 'practiceModeSurvival' },
+  { id: 'all', label: '全部', skin: 'skin_playgame_mode6', icon: 'practiceModeAll' },
+  { id: 'team', label: '团队', skin: 'skin_playgame_mode3', icon: 'practiceModeTeam' },
+  { id: 'occupy', label: '占点', skin: 'skin_playgame_mode5', icon: 'practiceModeOccupy' },
+  { id: 'flag', label: '夺旗', skin: 'skin_playgame_mode2', icon: 'practiceModeFlag' },
+  { id: 'treasure', label: '夺宝', skin: 'skin_playgame_mode4', icon: 'practiceModeTreasure' },
+  { id: 'kill', label: '歼灭', skin: 'skin_playgame_mode8', icon: 'practiceModeKill' },
+  { id: 'blast', label: '爆破', skin: 'skin_playgame_mode10', icon: 'practiceModeBlast' },
 ] as const;
+
+const roomHost = (room: ApiRoom) => room.hostName ?? room.players?.[String(room.hostId)]?.username ?? `Host-${room.hostId}`;
 
 function art(assets: LobbyAssets, key: string): CSSProperties {
   return { backgroundImage: `url("${lobbyUrl(assets.ui[key])}")` };
 }
-
 function buttonArt(assets: LobbyAssets, key: string): CSSProperties {
-  return {
-    '--art': `url("${lobbyUrl(assets.ui[`${key}_normal`])}")`,
-    '--hover-art': `url("${lobbyUrl(assets.ui[`${key}_hover`])}")`,
-    '--down-art': `url("${lobbyUrl(assets.ui[`${key}_down`])}")`,
-  } as CSSProperties;
+  return { '--art': `url("${lobbyUrl(assets.ui[key + '_normal'])}")`,
+    '--hover-art': `url("${lobbyUrl(assets.ui[key + '_hover'])}")`,
+    '--down-art': `url("${lobbyUrl(assets.ui[key + '_down'])}")` } as CSSProperties;
 }
-
-function ActionButton({ assets, icon, label, className, onClick, 'aria-label': ariaLabel }: {
-  assets: LobbyAssets;
-  icon: string;
-  label: string;
-  className?: string;
-  'aria-label'?: string;
-  onClick: () => void;
+function ActionButton({ assets, icon, label, className, onClick, disabled = false, ariaLabel }: {
+  assets: LobbyAssets; icon: string; label: string; className: string;
+  onClick: () => void; disabled?: boolean; ariaLabel?: string;
 }) {
-  return <button className={`practice-action ${className ?? ''}`} aria-label={ariaLabel ?? label} style={buttonArt(assets, 'practiceButton')} onClick={onClick}>
-    <img src={lobbyUrl(assets.ui[icon])} alt="" />
-    <span>{label}</span>
+  return <button className={`practice-action ${className}`} aria-label={ariaLabel ?? label} disabled={disabled}
+    style={buttonArt(assets, className === 'practice-watch' ? 'practiceWatch' : 'practiceButton')} onClick={onClick}>
+    <img src={lobbyUrl(assets.ui[icon])} alt="" /><span>{label}</span>
   </button>;
-}
-
-function EmptyRow({ index }: { index: number }) {
-  return <div className="practice-room-row" role="row" aria-label={`空房间 ${index + 1}`}>
-    {COLUMNS.map(([label]) => <span key={label} role="cell">-</span>)}
-  </div>;
 }
 
 export default function PracticeRoom({ assets, hostName, hostIcon, weaponIds, onBack, onStart, onStatus }: PracticeRoomProps) {
   const [mode, setMode] = useState<(typeof MODES)[number]['id']>('all');
-  const [selectedRoom, setSelectedRoom] = useState<any>();
+  const [selectedId, setSelectedId] = useState<string>();
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
-  const [createdRoom, setCreatedRoom] = useState<any>();
-  const [roomList, setRoomList] = useState<any[]>([]);
-  const [searchRoomId, setSearchRoomId] = useState('');
+  const [createdRoom, setCreatedRoom] = useState<ApiRoom>();
+  const [roomList, setRoomList] = useState<ApiRoom[]>([]);
+  const [sortColumn, setSortColumn] = useState(5);
+  const [ascending, setAscending] = useState(true);
+  const [scrollPosition, setScrollPosition] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const fetchRooms = useCallback(async () => {
     try {
-      const data = await apiFetch('/rooms');
-      setRoomList(data || []);
-      setCreatedRoom((prev: any) => {
-        if (!prev) return prev;
-        const updated = (data || []).find((r: any) => r.id === prev.id);
-        return updated || prev;
-      });
-    } catch (e) {
-      console.error(e);
-    }
+      const data: ApiRoom[] = await apiFetch('/rooms') ?? [];
+      setRoomList(data);
+      setCreatedRoom(previous => previous ? data.find(room => room.id === previous.id) ?? previous : undefined);
+    } catch (error) { console.error(error); }
   }, []);
-
   useEffect(() => {
-    fetchRooms();
-    const timer = setInterval(fetchRooms, 3000);
+    void fetchRooms();
+    const timer = setInterval(() => void fetchRooms(), 3000);
     return () => clearInterval(timer);
   }, [fetchRooms]);
-
-  const chooseMode = (nextMode: (typeof MODES)[number]['id']) => {
-    setMode(nextMode);
-    setSelectedRoom(undefined);
-    onStatus(`${MODES.find((entry) => entry.id === nextMode)?.label ?? '全部'}房间`);
+  const rooms = useMemo(() => {
+    const result = roomList.filter(room => mode === 'all' || room.modeId === mode || room.modeName === MODES.find(entry => entry.id === mode)?.label);
+    const value = (room: ApiRoom): string | number => [room.id, room.state, room.name, roomHost(room),
+      room.mapName, room.watchCount ?? 0, room.modeName, Object.keys(room.players ?? {}).length][sortColumn];
+    return result.sort((a, b) => String(value(a)).localeCompare(String(value(b)), 'zh-CN', { numeric: true }) * (ascending ? 1 : -1));
+  }, [roomList, mode, sortColumn, ascending]);
+  const selectedRoom = roomList.find(room => room.id === selectedId);
+  const joinRoom = async (room: ApiRoom) => {
+    try {
+      await apiFetch(`/rooms/${room.id}/join`, { method: 'POST', body: JSON.stringify({ password: '', weaponIds }) });
+      setCreatedRoom(room);
+      onStatus(`已进入房间 · ${room.name}`);
+    } catch (error) { onStatus(error instanceof Error ? error.message : '进入失败'); }
   };
-
+  const chooseMode = (id: (typeof MODES)[number]['id']) => {
+    setMode(id); setSelectedId(undefined); setScrollPosition(0);
+    listRef.current?.scrollTo({ top: 0 });
+    onStatus(`${MODES.find(entry => entry.id === id)?.label ?? '全部'}房间`);
+  };
+  const maxScroll = Math.max(0, Math.max(8, rooms.length) * 43 - 344);
+  const scroll = (direction: number) => listRef.current?.scrollBy({ top: direction * 43, behavior: 'smooth' });
   return <section className="practice-room-layer" aria-label="练习赛房间列表" data-practice-room-ready="true">
     {createdRoom ? <RoomSettings assets={assets} room={createdRoom} hostName={hostName} hostIcon={hostIcon}
-      onLeave={() => { setCreatedRoom(undefined); onStatus(''); }} onSettings={() => setCreateRoomOpen(true)} onStart={(r) => onStart(r || createdRoom)} onStatus={onStatus} /> :
-    <div className="practice-room-root">
-      <div className="practice-room-content" style={art(assets, 'content')}>
-        <div className="practice-room-topbar" style={art(assets, 'practiceInternalTop')} />
-
-        <aside className="practice-advance" style={art(assets, 'practiceAdvance')}>
-          <p>在练习赛中可以自定义队友和对手，自由设置游戏房间。</p>
-        </aside>
-
-        <section className="practice-mode-panel" style={art(assets, 'practiceModePanel')} aria-label="模式选择">
-          <h2>模式选择</h2>
-          <div className="practice-mode-frame" style={art(assets, 'practiceListFrame')}>
-            {MODES.map((entry) => <button key={entry.id} className={`practice-mode-button${mode === entry.id ? ' selected' : ''}`}
-              aria-label={entry.label} aria-pressed={mode === entry.id} onClick={() => chooseMode(entry.id)}>
-              <span className="practice-mode-mark"><img src={lobbyUrl(assets.ui[entry.icon])} alt="" /></span>
-              <span className="practice-mode-label">{entry.label}</span>
-            </button>)}
-          </div>
-        </section>
-
-        <section className="practice-list-panel" style={art(assets, 'practiceRoomPanel')} aria-label="房间列表">
-          <div className="practice-list-frame" style={art(assets, 'practiceListFrame')}>
-            <div className="practice-room-table" role="table" aria-label="练习赛房间">
-              <div className="practice-room-header" role="row" style={{ gridTemplateColumns: COLUMNS.map(([, width]) => width).join(' ') }}>
-                {COLUMNS.map(([label]) => <span key={label} role="columnheader">{label}</span>)}
-              </div>
-              {roomList.length === 0 ? EMPTY_ROWS.map((index) => <EmptyRow key={index} index={index} />) : 
-                roomList.map((room, i) => (
-                  <div key={room.id} className={`practice-room-row ${selectedRoom?.id === room.id ? 'selected' : ''}`} onClick={() => setSelectedRoom(room)} role="row" style={{ gridTemplateColumns: COLUMNS.map(([, width]) => width).join(' '), cursor: 'pointer' }}>
-                    <span role="cell" style={{ fontSize: '12px' }}>{room.id.replace('room-', '')}</span>
-                    <span role="cell">{room.state === 'Playing' ? '游戏中' : '等待中'}</span>
-                    <span role="cell">{room.name}</span>
-                    <span role="cell">{"Host-" + room.hostId}</span>
-                    <span role="cell">{room.mapName}</span>
-                    <span role="cell">-</span>
-                    <span role="cell">{room.modeName}</span>
-                    <span role="cell">{Object.keys(room.players || {}).length}/{room.maxPlayers}</span>
-                  </div>
-                ))}
+      onLeave={() => { setCreatedRoom(undefined); onStatus(''); }} onSettings={() => setCreateRoomOpen(true)}
+      onStart={room => onStart(room || createdRoom)} onStatus={onStatus} /> :
+      <div className="practice-room-root">
+        <div className="practice-room-content" style={art(assets, 'content')}>
+          <div className="practice-room-topbar" style={art(assets, 'practiceInternalTop')} />
+          <aside className="practice-advance" style={art(assets, 'practiceAdvance')}>
+            <p>在练习赛中可以自订队友和对手，自由设定游戏房间。</p>
+          </aside>
+          <section className="practice-mode-panel" style={art(assets, 'practiceModePanel')} aria-label="模式选择">
+            <h2>模式选择</h2>
+            <div className="practice-mode-frame" style={art(assets, 'practiceModeFrame')}>
+              {MODES.map(entry => <button key={entry.id} className={`practice-mode-button lobby-art-button${mode === entry.id ? ' active' : ''}`}
+                style={buttonArt(assets, entry.skin)} aria-label={entry.label} aria-pressed={mode === entry.id} onClick={() => chooseMode(entry.id)} />)}
             </div>
-          </div>
-          <div className="practice-actions">
-            <ActionButton assets={assets} icon="practiceIconBack" label="返回" aria-label="返回凌云要塞" onClick={onBack} />
-            <ActionButton assets={assets} icon="practiceIconWatch" label="快速加入" onClick={async () => {
-              onStatus('正在匹配中...');
-              try {
-                const res = await apiFetch('/rooms/quickmatch', { method: 'POST' });
-                await apiFetch(`/rooms/${res.roomId}/join`, { method: 'POST', body: JSON.stringify({ password: '', weaponIds }) });
-                const roomRes = await apiFetch('/rooms');
-                const matched = roomRes.find((r: any) => r.id === res.roomId);
-                if (matched) setCreatedRoom(matched);
-              } catch (e: any) {
-                onStatus(e.message || '没有匹配到房间');
-              }
-            }} />
-            <ActionButton assets={assets} icon="practiceIconCreate" label="创建房间" onClick={() => setCreateRoomOpen(true)} />
-            <button className="practice-action practice-enter" aria-label="进入房间" style={buttonArt(assets, 'practiceStart')} onClick={async () => {
-              if (!selectedRoom) {
-                onStatus('请选择一个房间后再进入');
-                return;
-              }
-              try {
-                await apiFetch(`/rooms/${selectedRoom.id}/join`, { method: 'POST', body: JSON.stringify({ password: '', weaponIds }) });
-                setCreatedRoom(selectedRoom as any);
-                onStatus(`已进入房间 · ${selectedRoom.name}`);
-              } catch (e: any) {
-                onStatus(e.message || '进入失败');
-              }
-            }}>
-              <img src={lobbyUrl(assets.ui.practiceIconEnter)} alt="" /><span>进入房间</span>
-            </button>
-            <div style={{ position: 'absolute', left: '160px', top: '15px', display: 'flex', alignItems: 'center', background: 'rgba(0,0,0,0.7)', padding: '4px', borderRadius: '4px', border: '1px solid #5a8a9e', zIndex: 10 }}>
-              <input 
-                type="text" 
-                value={searchRoomId} 
-                onChange={(e) => setSearchRoomId(e.target.value)}
-                placeholder="输入房间ID..."
-                style={{ background: 'transparent', border: 'none', color: 'white', width: '100px', outline: 'none', paddingLeft: '5px' }}
-              />
-              <button 
-                onClick={async () => {
-                  if (!searchRoomId) {
-                    onStatus('请输入房间号');
-                    return;
-                  }
-                  let targetId = searchRoomId.trim();
-                  if (!targetId.startsWith('room-')) {
-                    targetId = 'room-' + targetId;
-                  }
-                  try {
-                    await apiFetch(`/rooms/${targetId}/join`, { method: 'POST', body: JSON.stringify({ password: '', weaponIds }) });
-                    const roomRes = await apiFetch('/rooms');
-                    const matched = roomRes.find((r: any) => r.id === targetId);
-                    if (matched) {
-                      setCreatedRoom(matched);
-                      onStatus(`已进入房间 · ${matched.name}`);
-                    }
-                  } catch (e: any) {
-                    onStatus(e.message || '加入失败，请检查房间号');
-                  }
-                }}
-                style={{ background: 'linear-gradient(to bottom, #4f9ec4, #276380)', border: '1px solid #a3c2cf', color: 'white', cursor: 'pointer', borderRadius: '2px', padding: '2px 8px', marginLeft: '5px' }}
-              >
-                查找加入
+          </section>
+          <section className="practice-list-panel" style={art(assets, 'practiceRoomPanel')} aria-label="房间列表">
+            <div className="practice-list-frame" style={art(assets, 'practiceListFrame')}>
+              <div className="practice-room-table" role="table" aria-label="练习赛房间">
+                <div className="practice-room-header" role="row">
+                  {COLUMNS.map((label, index) => <button key={label} role="columnheader" aria-sort={sortColumn === index ? ascending ? 'ascending' : 'descending' : 'none'}
+                    style={{ borderImage: `url("${lobbyUrl(assets.ui.practiceHeader_normal)}") 4 fill / 4px` }} onClick={() => { setSortColumn(index); setAscending(sortColumn === index ? !ascending : true); }}>
+                    {label}{sortColumn === index && <i className={ascending ? '' : 'descending'} />}
+                  </button>)}
+                </div>
+                <div className="practice-room-rows" ref={listRef} onScroll={event => setScrollPosition(event.currentTarget.scrollTop)}>
+                  {Array.from({ length: Math.max(8, rooms.length) }, (_, index) => {
+                    const room = rooms[index];
+                    const entry = MODES.find(mode => mode.id === room?.modeId || mode.label === room?.modeName);
+                    const count = Object.keys(room?.players ?? {}).length;
+                    return room ? <div key={room.id} className={`practice-room-row${selectedId === room.id ? ' selected' : ''}`}
+                      style={buttonArt(assets, 'practiceListRow')} role="row" aria-selected={selectedId === room.id} tabIndex={0}
+                      onClick={() => setSelectedId(room.id)} onDoubleClick={() => void joinRoom(room)} onKeyDown={event => {
+                        if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); setSelectedId(room.id); }
+                      }}>
+                      <span role="cell" className="practice-room-number" title={room.id}>{room.id.replace('room-', '')}</span>
+                      <span role="cell"><i className={`practice-room-state ${room.state === 'Playing' ? 'playing' : 'waiting'}`} aria-label={room.state === 'Playing' ? '游戏中' : '等待中'} /></span>
+                      <span role="cell" className="practice-room-name" title={room.name}>{room.name}</span>
+                      <span role="cell" className="practice-room-host">{roomHost(room)}</span>
+                      <span role="cell" className="practice-room-map">{room.mapName}</span>
+                      <span role="cell">{room.watchCount || ''}</span>
+                      <span role="cell">{entry && <img className="practice-room-mode-icon" src={lobbyUrl(assets.ui[entry.icon])} alt={room.modeName} />}</span>
+                      <span role="cell" className={`practice-room-count${count >= room.maxPlayers ? ' full' : ''}`}>{count}/{room.maxPlayers}</span>
+                    </div> : <div key={`empty-${index}`} className="practice-room-row empty" style={art(assets, 'practiceListRow_normal')} role="row" aria-label={`空房间 ${index + 1}`}>
+                      {COLUMNS.map(label => <span key={label} role="cell" />)}
+                    </div>;
+                  })}
+                </div>
+                <div className="practice-scrollbar" style={art(assets, 'practiceScrollTrack')}>
+                  <button className="practice-scroll-up" style={art(assets, 'practiceScrollUp')} aria-label="向上滚动房间列表" onClick={() => scroll(-1)} />
+                  {maxScroll > 0 && <span className="practice-scroll-thumb" style={{ ...art(assets, 'practiceScrollThumb'), top: 22 + (scrollPosition / maxScroll) * 277 }} />}
+                  <button className="practice-scroll-down" style={art(assets, 'practiceScrollDown')} aria-label="向下滚动房间列表" onClick={() => scroll(1)} />
+                </div>
+              </div>
+            </div>
+            <div className="practice-actions">
+              <ActionButton assets={assets} icon="practiceIconBack" label="返回" ariaLabel="返回凌云要塞" className="practice-back" onClick={onBack} />
+              <ActionButton assets={assets} icon="practiceIconWatch" label="观战" className="practice-watch" disabled={!selectedRoom || selectedRoom.state !== 'Playing'}
+                onClick={() => onStatus('当前服务器尚未开放观战')} />
+              <ActionButton assets={assets} icon="practiceIconCreate" label="创建战场" className="practice-create" onClick={() => setCreateRoomOpen(true)} />
+              <button className="practice-action practice-enter lobby-art-button" aria-label="进入战场" style={buttonArt(assets, 'practiceStart')}
+                onClick={() => selectedRoom ? void joinRoom(selectedRoom) : onStatus('请选择一个房间后再进入')}>
+                <img src={lobbyUrl(assets.ui.practiceIconEnter)} alt="" /><span>进入战场</span>
               </button>
             </div>
-          </div>
-        </section>
-      </div>
-      <div className="practice-room-title-bar" style={art(assets, 'practiceTitleBar')}>
+          </section>
+        </div>
         <div className="practice-room-title-tab" style={art(assets, 'practiceTitleTab')}><h1 className="practice-room-title">练习赛</h1></div>
-      </div>
-    </div>}
+      </div>}
     {createRoomOpen && <CreateRoomDialog assets={assets} initialRoom={createdRoom} onClose={() => setCreateRoomOpen(false)}
-      onCreate={async (room) => {
+      onCreate={async room => {
         try {
-          const newRoom = await apiFetch('/rooms', { method: 'POST', body: JSON.stringify({ ...room, weaponIds }) });
-          setCreatedRoom(newRoom);
-          setCreateRoomOpen(false);
-          onStatus('');
-        } catch (e: any) {
-          onStatus('房间创建失败');
-        }
+          const newRoom: ApiRoom = await apiFetch('/rooms', { method: 'POST', body: JSON.stringify({ ...room, weaponIds }) });
+          setCreatedRoom(newRoom); setCreateRoomOpen(false); onStatus('');
+        } catch (error) { onStatus(error instanceof Error ? error.message : '房间创建失败'); }
       }} />}
   </section>;
 }

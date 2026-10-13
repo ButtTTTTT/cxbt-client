@@ -180,8 +180,6 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
         </div>
       </section>
     </div>
-    <div className="practice-room-title-bar" style={art(assets, 'practiceTitleBar')}>
-      <div className="practice-room-title-tab" style={art(assets, 'practiceTitleTab')}><h1 className="practice-room-title">练习赛</h1></div>
-    </div>
+    <div className="practice-room-title-tab" style={art(assets, 'practiceTitleTab')}><h1 className="practice-room-title">练习赛</h1></div>
   </div>;
 }

@@ -1,5 +1,10 @@
 .lobby-viewport { position: fixed; inset: 0; overflow: hidden; background: #16071f; color: #f5e8cb; }
 .lobby-screen { position: absolute; left: 50%; top: 50%; margin: -450px 0 0 -720px; width: 1440px; height: 900px; transform-origin: center; overflow: hidden; background-size: 100% 100%; font: 16px/1.2 AvatarHei, 'Microsoft YaHei', sans-serif; font-synthesis: weight; }
+.lobby-practice-screen { width: 1200px; margin-left: -600px; }
+.lobby-practice-screen .lobby-frame { left: -200px; }
+.lobby-practice-screen .lobby-header { left: 0; }
+.lobby-practice-screen .lobby-footer { left: 826px; }
+.lobby-practice-screen .lobby-status { left: 60px; }
 .lobby-screen button, .lobby-screen input { font: inherit; }
 .lobby-screen button { cursor: pointer; padding: 0; border: 0; color: inherit; background-color: transparent; background-repeat: no-repeat; background-size: 100% 100%; }
 .lobby-screen button:disabled { cursor: default; }
@@ -76,8 +81,11 @@
 .lobby-inventory-grid { position: absolute; left: 30px; top: 10px; display: grid; grid-template-columns: repeat(6, 80px); grid-template-rows: repeat(4, 80px); column-gap: 6px; row-gap: 4px; }
 .lobby-item { position: relative; width: 80px; height: 80px; }
 .lobby-item > img { display: block; width: 80px; height: 80px; }
+.lobby-avatar-card > img { width: 54px; height: 67px; margin: 0 auto; object-fit: contain; }
+.lobby-avatar-card-label { position: absolute; left: 3px; right: 3px; bottom: 3px; padding: 2px 0; background: #36280fd9; color: #fff1cb; font-size: 10px; line-height: 13px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .lobby-item:not(:disabled):hover::after, .lobby-item.selected::after { content: ''; position: absolute; inset: 0; background: var(--selected-art) center / 100% 100%; pointer-events: none; }
 .lobby-equipped-mark { position: absolute; bottom: 3px; left: 4px; color: #ffe02f; font-weight: bold; font-size: 17px; text-shadow: 1px 1px #84651f; }
+.lobby-avatar-card .lobby-equipped-mark { top: 3px; bottom: auto; }
 .lobby-empty { position: absolute; top: 140px; width: 100%; text-align: center; }
 .lobby-bag-tools { position: absolute; top: 458px; left: 23px; right: 20px; display: flex; align-items: center; gap: 7px; height: 36px; }
 .lobby-bag-tools > button { width: 32px; height: 36px; flex-shrink: 0; }

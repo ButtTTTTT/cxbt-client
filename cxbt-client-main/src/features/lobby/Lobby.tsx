@@ -6,8 +6,9 @@ import GameModeLobby from '../gameMode/GameModeLobby';
 import PracticeRoom from '../gameMode/PracticeRoom';
 import type { RoomConfig } from '../gameMode/CreateRoomDialog';
 import Gameplay from '../gameplay/Gameplay';
-import { loadLobbyAssets, lobbyUrl, type InventoryCategory, type InventoryItem, type LobbyAssets } from './assets';
+import { loadLobbyAssets, lobbyUrl, type AvatarCard, type InventoryCategory, type InventoryItem, type LobbyAssets } from './assets';
 import GlobalChat from './GlobalChat';
+import SettingsMenu from './SettingsMenu';
 import './Lobby.css';
 
 const PAGE_SIZE = 24;
@@ -37,7 +38,7 @@ function validAppearance(assets: CreationAssets, character: SavedCharacter): App
     accessory: saved.accessory < preset.accessorySets.length ? saved.accessory : fallback.accessory };
 }
 
-export default function Lobby({ character, onExit }: { character: SavedCharacter; onExit: () => void }) {
+export default function Lobby({ character, onExit, onQuit = onExit }: { character: SavedCharacter; onExit: () => void; onQuit?: () => void }) {
   const [creation, setCreation] = useState<CreationAssets>();
   const [assets, setAssets] = useState<LobbyAssets>();
   const [error, setError] = useState('');
@@ -51,10 +52,13 @@ export default function Lobby({ character, onExit }: { character: SavedCharacter
   const [animation, setAnimation] = useState<string>();
   const [appearance, setAppearance] = useState(character.appearance);
   const [previewJob, setPreviewJob] = useState<CreationJob>(character.jobId);
+  const [avatarCard, setAvatarCard] = useState<AvatarCard>();
   const [rotation, setRotation] = useState(0);
   const [revision, setRevision] = useState(0);
   const [motion, setMotion] = useState(true);
   const [volume, setVolume] = useState(0.38);
+  const [effectsVolume, setEffectsVolume] = useState(0.38);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [scale, setScale] = useState(1);
   const [dialog, setDialog] = useState<{ title: string; message?: string }>();
   const [gameModeLobby, setGameModeLobby] = useState(false);
@@ -75,21 +79,26 @@ export default function Lobby({ character, onExit }: { character: SavedCharacter
       setCreation(config);
       setAssets(catalogue);
       setAppearance(validAppearance(config, character));
+      let savedCard: string | null = null;
+      try { savedCard = localStorage.getItem(`avatarstar.skin.${character.userId}.${character.name}`); } catch { /* Storage can be disabled. */ }
+      const card = catalogue.items.find((item) => item.avatarCard?.id === savedCard)?.avatarCard;
+      setAvatarCard(card);
+      if (card) setAppearance(initialAppearance(card.preset, character.appearance.gender));
       const defaults = config.jobs[character.jobId].weapons.map((weapon) => weapon.id);
       setQuickbar(Array.from({ length: 12 }, (_, index) => defaults[index] ?? null));
     }).catch((reason: unknown) => { if (!controller.signal.aborted) setError(String(reason)); });
     return () => controller.abort();
   }, [character]);
   useEffect(() => {
-    const resize = () => setScale(Math.min(innerWidth / 1440, innerHeight / 900));
+    const resize = () => setScale(Math.min(innerWidth / (practiceRoom ? 1200 : 1440), innerHeight / 900));
     resize();
     addEventListener('resize', resize);
     return () => removeEventListener('resize', resize);
-  }, []);
+  }, [practiceRoom]);
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
-    if (weaponAudioRef.current) weaponAudioRef.current.volume = volume;
-  }, [volume, assets]);
+    if (weaponAudioRef.current) weaponAudioRef.current.volume = effectsVolume;
+  }, [volume, effectsVolume, assets]);
   useEffect(() => () => { weaponAudioRef.current?.pause(); }, [battleRoom]);
   useEffect(() => {
     const audio = audioRef.current;
@@ -131,6 +140,14 @@ export default function Lobby({ character, onExit }: { character: SavedCharacter
 
   const chooseItem = (item: InventoryItem) => {
     setSelected(item);
+    if (item.avatarCard) {
+      setAvatarCard(item.avatarCard);
+      setPreviewJob(character.jobId);
+      setAppearance(initialAppearance(item.avatarCard.preset, character.appearance.gender));
+      try { localStorage.setItem(`avatarstar.skin.${character.userId}.${character.name}`, item.avatarCard.id); } catch { /* Keep the current selection in memory. */ }
+      setStatus(`${item.name} · 已切换造型`);
+      return;
+    }
     setWeaponId(undefined);
     setAttachment(undefined);
     setAnimation(undefined);
@@ -142,7 +159,7 @@ export default function Lobby({ character, onExit }: { character: SavedCharacter
         weaponAudioRef.current = audio;
         audio.pause();
         audio.src = `${WEAPON_AUDIO_BASE}${family === 'stick' ? 'knives' : family}.wav`;
-        audio.volume = volume;
+        audio.volume = effectsVolume;
         void audio.play().catch(() => undefined);
       }
       setWeaponId(item.weapon);
@@ -156,6 +173,8 @@ export default function Lobby({ character, onExit }: { character: SavedCharacter
       setAnimation(item.animation);
       setStatus(`${item.name} · 动作预览`);
     } else if (item.preset && creation) {
+      setAvatarCard(undefined);
+      try { localStorage.removeItem(`avatarstar.skin.${character.userId}.${character.name}`); } catch { /* Storage can be disabled. */ }
       const preset = creation.jobs[item.preset.jobId].presets[item.preset.gender];
       setPreviewJob(item.preset.jobId);
       setAppearance(initialAppearance(preset, item.preset.gender));
@@ -167,8 +186,9 @@ export default function Lobby({ character, onExit }: { character: SavedCharacter
   const chooseCategory = (value: InventoryCategory) => { setCategory(value); setPage(0); setQuery(''); };
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (dialog || battleRoom || practiceRoom || gameModeLobby || event.target instanceof HTMLInputElement) return;
-      if (event.key === 'Escape') { setDialog({ title: '设置' }); return; }
+      if (dialog || settingsOpen || battleRoom || event.target instanceof HTMLInputElement) return;
+      if (event.key === 'Escape') { setSettingsOpen(true); return; }
+      if (practiceRoom || gameModeLobby) return;
       const index = QUICK_KEYS.indexOf(event.key);
       if (index < 0) return;
       const item = assets?.items.find((entry) => entry.id === quickbar[index]);
@@ -180,15 +200,18 @@ export default function Lobby({ character, onExit }: { character: SavedCharacter
 
   if (!assets || !creation) return <main className="lobby-viewport"><p role="status">{error || '正在进入大厅…'}</p></main>;
   if (battleRoom) return <Gameplay room={battleRoom} character={character} creation={creation} assets={assets}
+    avatarPreset={avatarCard?.preset}
     weaponIds={battleWeapons} onExit={() => setBattleRoom(undefined)} />;
   const art = (key: string): CSSProperties => ({ backgroundImage: `url("${lobbyUrl(assets.ui[key])}")` });
   const buttonArt = (key: string): CSSProperties => ({ '--art': `url("${lobbyUrl(assets.ui[`${key}_normal`])}")`,
     '--hover-art': `url("${lobbyUrl(assets.ui[`${key}_hover`])}")`, '--down-art': `url("${lobbyUrl(assets.ui[`${key}_down`])}")` } as CSSProperties);
-  const preset = creation.jobs[previewJob].presets[appearance.gender];
+  const preset = avatarCard?.preset ?? creation.jobs[previewJob].presets[appearance.gender];
   const originalAppearance = validAppearance(creation, character);
   const originalPreset = creation.jobs[character.jobId].presets[originalAppearance.gender];
   const reset = () => {
     setAppearance(originalAppearance); setPreviewJob(character.jobId); setRotation(0);
+    setAvatarCard(undefined);
+    try { localStorage.removeItem(`avatarstar.skin.${character.userId}.${character.name}`); } catch { /* Storage can be disabled. */ }
     setWeaponId(undefined); setAttachment(undefined); setAnimation(undefined); setSelected(undefined); setRevision((value) => value + 1); setStatus('');
   };
   const assignQuickbar = (index: number, id: string) => {
@@ -198,14 +221,15 @@ export default function Lobby({ character, onExit }: { character: SavedCharacter
   const moduleDialog = (title: string) => setDialog({ title, message: `${title}功能需要连接游戏服务器。当前可以在背包中浏览物品、试穿造型并预览装备动作。` });
 
   return <main className="lobby-viewport">
-    <div className="lobby-screen" data-lobby-ready="true" style={{ transform: `scale(${scale})`, backgroundImage: `url("${assetUrl(creation.ui.background)}")` }}
+    <div className={`lobby-screen${practiceRoom ? ' lobby-practice-screen' : ''}`} data-lobby-ready="true" style={{ transform: `scale(${scale})`, backgroundImage: `url("${assetUrl(creation.ui.background)}")` }}
       onPointerDown={() => { void audioRef.current?.play().catch(() => undefined); }}>
       <audio ref={audioRef} src={`${MUSIC_BASE}${musicTrack}.ogg`} loop preload="auto"
         aria-label={musicTrack === 'music-lobby' ? '大厅背景音乐' : '凌云要塞背景音乐'} />
       <img className="lobby-frame" src={lobbyUrl(assets.ui.frame)} alt="" draggable={false} />
       <header className="lobby-header">
         <div className="lobby-portrait" style={art('portraitFrame')}>
-          <CharacterPreview assets={creation} preset={originalPreset} appearance={originalAppearance} motion={false}
+          <CharacterPreview assets={creation} preset={avatarCard?.preset ?? originalPreset}
+            appearance={avatarCard ? initialAppearance(avatarCard.preset, character.appearance.gender) : originalAppearance} motion={false}
             weapons={NO_WEAPONS} weaponIndex={null} view="portrait" />
         </div>
         <span className="lobby-level">1</span>
@@ -279,14 +303,17 @@ export default function Lobby({ character, onExit }: { character: SavedCharacter
             <div className="lobby-inventory-grid" role="grid" aria-label={`${TABS.find((tab) => tab.id === category)?.label}，共${filtered.length}项`} data-item-count={filtered.length}>
               {Array.from({ length: PAGE_SIZE }, (_, index) => {
                 const item = pageItems[index];
-                return <button key={item?.id ?? `empty-${index}`} role="gridcell" className={'lobby-item' + (item && selected?.id === item.id ? ' selected' : '')}
+                const isSelected = !!item && (selected?.id === item.id || avatarCard?.id === item.id);
+                return <button key={item?.id ?? `empty-${index}`} role="gridcell" className={'lobby-item' + (item?.avatarCard ? ' lobby-avatar-card' : '') + (isSelected ? ' selected' : '')}
                   style={{ ...art(item ? 'occupiedSlot' : 'slot'), '--selected-art': `url("${lobbyUrl(assets.ui.slotSelected)}")` } as CSSProperties}
-                  disabled={!item} data-item-id={item?.id} aria-label={item?.name ?? '空格'} aria-selected={!!item && selected?.id === item.id}
-                  title={item ? `${item.name}\n${item.id}${item.weapon || item.attachment || item.animation || item.preset ? '\n点击预览，拖动到快捷栏' : ''}` : undefined}
+                  disabled={!item} data-item-id={item?.id} aria-label={item?.name ?? '空格'} aria-selected={isSelected}
+                  title={item ? `${item.name}\n${item.id}${item.avatarCard ? '\n点击切换角色皮肤' : item.weapon || item.attachment || item.animation || item.preset ? '\n点击预览，拖动到快捷栏' : ''}` : undefined}
                   draggable={!!item} onDragStart={(event) => { if (item) event.dataTransfer.setData('text/plain', item.id); }}
                   onClick={() => { if (item) chooseItem(item); }}>
                   <img src={lobbyUrl(item?.icon ?? assets.ui.slotLogo)} alt="" draggable={false} />
+                  {item?.avatarCard && <span className="lobby-avatar-card-label">{item.name}</span>}
                   {item && quickbar.includes(item.id) && <span className="lobby-equipped-mark">E</span>}
+                  {item?.avatarCard && avatarCard?.id === item.id && <span className="lobby-equipped-mark">E</span>}
                 </button>;
               })}
             </div>
@@ -325,7 +352,7 @@ export default function Lobby({ character, onExit }: { character: SavedCharacter
       <div className="lobby-status" role="status">{status}</div>
       <nav className="lobby-footer" aria-label="大厅工具">
         {FOOTER.map(([key, label]) => <button key={key} aria-label={label} onClick={() => {
-          if (key === 'setup') setDialog({ title: '设置' });
+          if (key === 'setup') setSettingsOpen(true);
           else if (key === 'chat') setGlobalChatOpen(true);
           else moduleDialog(label);
         }}>
@@ -333,14 +360,13 @@ export default function Lobby({ character, onExit }: { character: SavedCharacter
         </button>)}
       </nav>
       {globalChatOpen && <GlobalChat hostName={character.name} onClose={() => setGlobalChatOpen(false)} />}
+      {settingsOpen && <SettingsMenu assets={assets} volume={volume} effectsVolume={effectsVolume} motion={motion}
+        onVolume={setVolume} onEffectsVolume={setEffectsVolume} onMotion={setMotion} onClose={() => setSettingsOpen(false)}
+        onExit={onExit} onQuit={() => { audioRef.current?.pause(); weaponAudioRef.current?.pause(); onQuit(); }} />}
       {dialog && <div className="lobby-modal-shade">
         <section ref={dialogRef} className="lobby-modal" style={art('modal')} role="dialog" aria-modal="true" aria-labelledby="lobby-dialog-title">
           <h2 id="lobby-dialog-title">{dialog.title}</h2>
-          {dialog.title === '设置' ? <>
-            <label>音乐音量 <input aria-label="音乐音量" type="range" min="0" max="1" step="0.01" value={volume} onChange={(event) => setVolume(Number(event.target.value))} /></label>
-            <label><input type="checkbox" checked={motion} onChange={(event) => setMotion(event.target.checked)} />播放角色动作</label>
-            <button className="lobby-exit lobby-art-button" style={buttonArt('button')} onClick={onExit}>返回角色选择</button>
-          </> : <p>{dialog.message}</p>}
+          <p>{dialog.message}</p>
           <button className="lobby-dialog-close lobby-art-button" style={buttonArt('button')} onClick={() => setDialog(undefined)}>确定</button>
         </section>
       </div>}

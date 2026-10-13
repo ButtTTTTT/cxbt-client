@@ -1,0 +1,15 @@
+.settings-menu-shade { position: absolute; inset: 0; z-index: 25; display: grid; place-items: center; }
+.settings-menu { position: relative; width: 251px; height: 425px; background-size: 100% 100%; color: #fff8e6; }
+.settings-menu h2 { position: absolute; left: 30px; top: 0; margin: 0; height: 30px; line-height: 30px; font-size: 16px; font-weight: normal; }
+.settings-menu-close { position: absolute; right: 9px; top: 4px; width: 24px; height: 24px; }
+.settings-menu-inner { position: absolute; left: 14px; top: 45px; width: 222px; height: 350px; background-size: 100% 100%; }
+.settings-menu .settings-menu-action { position: absolute; left: 16px; width: 193px; height: 37px; color: #fff8ed; font-size: 18px; text-shadow: 0 1px #543626; }
+.settings-menu-options { position: absolute; inset: 20px 16px 65px; color: #715341; }
+.settings-menu-options label { display: block; margin: 15px 0 25px; font-size: 16px; }
+.settings-menu-options output { float: right; }
+.settings-menu-options input[type='range'] { display: block; width: 100%; margin-top: 15px; accent-color: #9c673f; }
+.settings-menu-options .settings-menu-check { display: flex; align-items: center; gap: 8px; }
+.settings-menu-options .settings-menu-option-button { width: 193px; height: 37px; color: #fff8ed; }
+.settings-menu-keys { margin: 4px 0; font-size: 14px; }
+.settings-menu-keys div { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #b79c77; }
+.settings-menu-keys dt, .settings-menu-keys dd { margin: 0; }

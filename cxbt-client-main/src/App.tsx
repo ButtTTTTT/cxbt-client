@@ -4,7 +4,7 @@ import CharacterCreation from './features/characterCreation/CharacterCreation'
 import Lobby from './features/lobby/Lobby'
 import { readCharacter, fetchCharacterFromServer } from './features/characterCreation/character'
 import AuthOverlay from './features/auth/AuthOverlay'
-import { getToken } from './api'
+import { clearToken, getToken } from './api'
 import CharacterPreview from './features/characterCreation/CharacterPreview'
 import { initialAppearance, loadCreationAssets, type CreationAssets, type CreationJob, type CreationWeapon } from './features/characterCreation/assets'
 
@@ -157,6 +157,12 @@ function App() {
   }
 
   if (inLobby && character) return <Lobby character={character} onExit={() => {
+    setInLobby(false);
+    setStarted(false);
+    history.pushState(null, '', import.meta.env.BASE_URL);
+  }} onQuit={() => {
+    clearToken();
+    setIsAuth(false);
     setInLobby(false);
     setStarted(false);
     history.pushState(null, '', import.meta.env.BASE_URL);

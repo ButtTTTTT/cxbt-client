@@ -72,7 +72,7 @@
     "ui/skinf/skin_playgame_bg35.tga"
   ],
   "ui/practiceTitleTab.png": [
-    "ui/skinf/skin_playgame_bg29.tga"
+    "AvatarStar_cache/ui/skinf/skin_playgame_bg29.tga"
   ],
   "ui/practiceAdvance.png": [
     "ui/skinf/skin_playgame_bg26.tga"
@@ -8758,5 +8758,80 @@
   ],
   "ui/skin_playgame_mode10_hover.png": [
     "AvatarStar_zh_cn_cache/ui/skinf/skin_playgame_mode10_hover.tga"
+  ],
+  "ui/settingsPanel.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_background31.tga"
+  ],
+  "ui/settingsInner.png": [
+    "AvatarStar_cache/ui/skinf/skin_playgame_bg13.tga"
+  ],
+  "ui/settingsButton_normal.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button_normal.tga"
+  ],
+  "ui/settingsClose_normal.png": [
+    "AvatarStar_cache/ui/skinf/skin_info_closebutton_normal.tga"
+  ],
+  "ui/practiceWatch_normal.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button02_normal_10.tga"
+  ],
+  "ui/practiceListRow_normal.png": [
+    "AvatarStar_cache/ui/skinf/skin_playgame_bg01_normal.tga"
+  ],
+  "ui/settingsButton_hover.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button_hover.tga"
+  ],
+  "ui/settingsClose_hover.png": [
+    "AvatarStar_cache/ui/skinf/skin_info_closebutton_hover.tga"
+  ],
+  "ui/practiceWatch_hover.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button02_hover_10.tga"
+  ],
+  "ui/practiceListRow_hover.png": [
+    "AvatarStar_cache/ui/skinf/skin_playgame_bg01_hover.tga"
+  ],
+  "ui/settingsButton_down.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button_down.tga"
+  ],
+  "ui/settingsClose_down.png": [
+    "AvatarStar_cache/ui/skinf/skin_info_closebutton_down.tga"
+  ],
+  "ui/practiceWatch_down.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button02_down_10.tga"
+  ],
+  "ui/practiceListRow_down.png": [
+    "AvatarStar_cache/ui/skinf/skin_playgame_bg01_down.tga"
+  ],
+  "ui/settingsButton_disabled.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button_disabled.tga"
+  ],
+  "ui/settingsClose_disabled.png": [
+    "AvatarStar_cache/ui/skinf/skin_info_closebutton_disabled.tga"
+  ],
+  "ui/practiceWatch_disabled.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button02_disabled_10.tga"
+  ],
+  "ui/practiceListRow_disabled.png": [
+    "AvatarStar_cache/ui/skinf/skin_playgame_bg01_disabled.tga"
+  ],
+  "ui/skin_playgame_mode6_normal.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_playgame_mode6_normal.tga"
+  ],
+  "ui/skin_playgame_mode6_hover.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_playgame_mode6_hover.tga"
+  ],
+  "ui/practiceScrollUp.png": [
+    "AvatarStar_cache/ui/skinf/skin_gam_scrollbar2_button_up_normal.tga"
+  ],
+  "ui/practiceScrollDown.png": [
+    "AvatarStar_cache/ui/skinf/skin_gam_scrollbar2_button_down_normal.tga"
+  ],
+  "ui/practiceScrollTrack.png": [
+    "AvatarStar_cache/ui/skinf/skin_gam_scrollbar2_bg.tga"
+  ],
+  "ui/practiceScrollThumb.png": [
+    "AvatarStar_cache/ui/skinf/skin_gam_scrollbar2_button_normal.tga"
+  ],
+  "ui/practiceModeFrame.png": [
+    "AvatarStar_cache/ui/skinf/skin_playgame_bg13.tga"
   ]
 }

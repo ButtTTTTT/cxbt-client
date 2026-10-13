@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import * as THREE from 'three';
 import { WS_BASE } from '../../api';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { SavedCharacter } from '../characterCreation/character';
-import { type CreationAssets, type CreationWeapon } from '../characterCreation/assets';
+import { initialAppearance, type CreationAssets, type CreationPreset, type CreationWeapon } from '../characterCreation/assets';
 import type { LobbyAssets } from '../lobby/assets';
 import type { RoomConfig } from '../gameMode/CreateRoomDialog';
 import { createBattleAvatar, type BattleAvatar } from './avatar';
 import { createBattleAudio } from './audio';
+import BattleHud from './BattleHud';
+import { BATTLE_QUICK_KEYS } from './hud';
 import { createProjectileSystem, weaponKind } from './projectiles';
 import './Gameplay.css';
 import { WebRTCClient } from '../../network/WebRTCClient';
@@ -43,12 +45,13 @@ function formatTime(seconds: number) {
   return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
 }
 
-function BattleScene({ map, character, creation, assets, weapons, active, onReady, onPosition,
+function BattleScene({ map, character, creation, assets, avatarPreset, weapons, active, onReady, onPosition,
   onShot, onHit, onReload, onWeaponChange, onDamage, paused, otherPlayers, roomPlayers, logDebug }: {
   map: MapDefinition;
   character: SavedCharacter;
   creation: CreationAssets;
   assets: LobbyAssets;
+  avatarPreset?: CreationPreset;
   weapons: CreationWeapon[];
   active: RefObject<BattleControl | null>;
   paused: RefObject<boolean>;
@@ -227,8 +230,8 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
         audio.play('roll');
       }
       if (event.code === 'KeyR' && !event.repeat) active.current?.reload();
-      if (event.code.startsWith('Digit') && !event.repeat) {
-        const index = Number(event.code.slice(5)) - 1;
+      if (!event.repeat) {
+        const index = BATTLE_QUICK_KEYS.indexOf(event.key);
         if (index >= 0 && index < weapons.length) active.current?.switchWeapon(index);
       }
     };
@@ -296,7 +299,8 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
       const [mapGltf, collisionGltf, player] = await Promise.all([
         loader.loadAsync(`${BASE}${map.scene}`),
         map.collision ? loader.loadAsync(`${BASE}${map.collision}`).catch(() => null) : Promise.resolve(null),
-        createBattleAvatar(creation, creation.jobs[character.jobId].presets[character.appearance.gender], character.appearance, weapons),
+        createBattleAvatar(creation, avatarPreset ?? creation.jobs[character.jobId].presets[character.appearance.gender],
+          avatarPreset ? initialAppearance(avatarPreset, character.appearance.gender) : character.appearance, weapons),
       ]);
       if (cancelled) { player.dispose(); return; }
       visual = mapGltf.scene;
@@ -549,15 +553,16 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
       collisionMeshes = [];
       floorMeshes = [];
     };
-  }, [map, character, creation, weapons, active, paused]);
+  }, [map, character, creation, avatarPreset, weapons, active, paused]);
   return <div className="battle-canvas" ref={mountRef} data-gameplay-canvas />;
 }
 
-export default function Gameplay({ room, character, creation, assets, weaponIds, onExit }: {
+export default function Gameplay({ room, character, creation, assets, avatarPreset, weaponIds, onExit }: {
   room: RoomConfig & { id: string; players?: Record<string, any> };
   character: SavedCharacter;
   creation: CreationAssets;
   assets: LobbyAssets;
+  avatarPreset?: CreationPreset;
   weaponIds: string[];
   onExit: () => void;
 }) {
@@ -600,10 +605,6 @@ export default function Gameplay({ room, character, creation, assets, weaponIds,
   const current = weapons[selected] ?? weapons[0];
   const currentKind = weaponKind(current?.id ?? '');
   const currentMagazine = current ? magazine(current) : 0;
-  const ammoRatio = currentKind === 'melee' ? 1 : Math.max(0, Math.min(1, (ammo[selected] ?? currentMagazine) / Math.max(1, currentMagazine)));
-  const healthRatio = health / MAX_HEALTH;
-  const healthColor = healthRatio > 0.55 ? '#49d6ef' : healthRatio > 0.25 ? '#ffc354' : '#ef4e54';
-  const ammoColor = ammoRatio > 0.55 ? '#49d6ef' : ammoRatio > 0.25 ? '#ffc354' : '#ef4e54';
   const chosenMap = mapDefinitions?.[room.mapId] ?? mapDefinitions?.level1;
   const mapArt = chosenMap?.minimap;
 
@@ -729,7 +730,7 @@ export default function Gameplay({ room, character, creation, assets, weaponIds,
   const markerY = bounds?.length ? 50 - (position.z - bounds[1]) / bounds[3] * 100 : 50;
 
   return <main className={`battle-root${paused ? ' paused' : ''}`} data-gameplay-ready={ready}>
-    {chosenMap && <BattleScene map={chosenMap} character={character} creation={creation} assets={assets} weapons={weapons}
+    {chosenMap && <BattleScene map={chosenMap} character={character} creation={creation} assets={assets} avatarPreset={avatarPreset} weapons={weapons}
       active={control} paused={pausedRef} onReady={() => setReady(true)} onPosition={reportPosition}
       otherPlayers={otherPlayersRef}
       roomPlayers={room.players}
@@ -748,48 +749,23 @@ export default function Gameplay({ room, character, creation, assets, weaponIds,
       {SKILL_ICONS.map((icon) => <span key={icon}><img src={img(icon)} alt="" /></span>)}
       <small>{formatTime(remaining)}</small>
     </div>
-    <div className="battle-top">
-      <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', marginTop: '60px', background: 'rgba(0,0,0,0.6)', color: '#fff', padding: '4px 12px', borderRadius: '12px', fontSize: '12px', zIndex: 10, pointerEvents: 'none', border: '1px solid rgba(255,255,255,0.2)' }}>
-        房间号: {room.id.replace('room-', '')} | 地图: {room.mapName}
-      </div>
-      <div style={{ position: 'absolute', top: 120, left: '50%', transform: 'translateX(-50%)', background: 'rgba(255,0,0,0.7)', color: '#fff', padding: '10px', borderRadius: '8px', fontSize: '14px', zIndex: 20, pointerEvents: 'none', minWidth: '300px' }}>
-        <strong>联机诊断日志 (Debug Log):</strong><br/>
-        {debugLog.length === 0 ? "等待网络连接..." : debugLog.map((log, i) => <div key={i}>{log}</div>)}
-      </div>
-      <div className="battle-team red"><strong>{scoreRed}</strong></div>
-      <div className="battle-time"><b>05</b><small><em>TIME</em> {formatTime(remaining)}</small><div className="battle-progress"><i /><i /></div></div>
-      <div className="battle-team blue"><strong>{scoreBlue}</strong></div>
-    </div>
+    <BattleHud scoreRed={scoreRed} scoreBlue={scoreBlue} time={formatTime(remaining)} health={health} maxHealth={MAX_HEALTH}
+      ammo={ammo[selected] ?? currentMagazine} magazine={currentMagazine} melee={currentKind === 'melee'}
+      weapons={weapons} skillIcons={SKILL_ICONS} selected={selected} onSwitchWeapon={switchWeapon} />
     <aside className="battle-minimap" aria-label="小地图">
       <div className="battle-map-image" style={mapArt ? { backgroundImage: `url(${BASE}${mapArt})` } : undefined}>
         <span className="battle-map-marker" style={{ left: `${THREE.MathUtils.clamp(markerX, 5, 95)}%`, top: `${THREE.MathUtils.clamp(markerY, 5, 95)}%`, transform: `translate(-50%, -50%) rotate(${-position.yaw}rad)` }}>▲</span>
       </div>
       <span className="battle-map-name">{room.mapName}</span>
     </aside>
-    <div className="battle-bottom">
-      <div className="battle-health" aria-label={`生命值 ${health} / ${MAX_HEALTH}`}><img src={img('skin_ingame_heart01')} alt="" />
-        <span className="battle-health-meter" role="progressbar" aria-label="生命值" aria-valuemin={0} aria-valuemax={MAX_HEALTH} aria-valuenow={health}>
-          <i style={{ height: `${healthRatio * 100}%`, backgroundColor: healthColor }} /></span><b>{health}</b></div>
-      <div className="battle-inventory" aria-label="物品栏">{weapons.map((weapon, index) => <button key={`${weapon.id}-${index}`}
-        className={index === selected ? 'active' : ''} aria-label={`切换到${weapon.label}`} aria-pressed={index === selected}
-        title={`${index + 1} · ${weapon.label}`} onClick={() => switchWeapon(index)}>
-        <small>{index + 1}</small><img src={weapon.icon ? `${import.meta.env.BASE_URL}assets/creation/${weapon.icon}` : ''} alt="" />
-      </button>)}{SKILL_ICONS.map((icon, index) => <span className="battle-skill" key={icon}>
-        <small>{index === 0 ? '左Shift' : index + weapons.length + 1}</small><img src={img(icon)} alt="" />
-      </span>)}</div>
-      <div className="battle-ammo" aria-label={currentKind === 'melee' ? '近战武器' : `弹药 ${ammo[selected] ?? currentMagazine} / ${currentMagazine}`}>
-        <span className="battle-ammo-meter" role="progressbar" aria-label="弹夹" aria-valuemin={0} aria-valuemax={currentMagazine} aria-valuenow={ammo[selected] ?? currentMagazine}
-          style={{ '--meter-color': ammoColor } as CSSProperties}><i style={{ width: `${ammoRatio * 100}%` }} /></span>
-        <b style={{ color: ammoColor }}>{currentKind === 'melee' ? '∞' : ammo[selected] ?? currentMagazine}</b>
-        <img src={img('skin_ingame_icon_ammobg_row')} alt="" /><strong>{reserves[selected] ?? currentMagazine * 4}</strong></div>
-    </div>
     <div className="battle-touch-controls"><button onClick={fire}>开火</button><button onClick={() => control.current?.reload()}>换弹</button></div>
     <button className="battle-menu-button" aria-label="打开菜单" title="菜单" onClick={() => setPaused(true)}>☰</button>
     {paused && <div className="battle-pause-shade"><section className="battle-pause" role="dialog" aria-modal="true" aria-label="游戏菜单">
-      <h2>游戏菜单</h2><button onClick={() => {
+      <h2>游戏菜单</h2><p>房间号: {room.id.replace('room-', '')} · {room.mapName}</p><button onClick={() => {
         setPaused(false);
         void document.querySelector<HTMLCanvasElement>('[data-gameplay-canvas] canvas')?.requestPointerLock();
       }}>继续游戏</button><button onClick={onExit}>退出战场</button>
+      {import.meta.env.DEV && <details><summary>联机诊断日志</summary>{debugLog.map((log, index) => <p key={index}>{log}</p>)}</details>}
     </section></div>}
   </main>;
 }
