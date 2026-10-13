@@ -17,15 +17,6 @@ type PracticeRoomProps = {
   onStatus: (message: string) => void;
 };
 
-type Room = {
-  id: number;
-  name: string;
-  host: string;
-  map: string;
-  mode: string;
-  players: string;
-  state: string;
-};
 
 const COLUMNS = [
   ['ID', '65px'], ['状态', '61px'], ['房间名称', '185px'], ['房主', '164px'],
@@ -33,16 +24,6 @@ const COLUMNS = [
 ] as const;
 const EMPTY_ROWS = Array.from({ length: 8 }, (_, index) => index);
 
-type ApiRoom = {
-  id: string;
-  name: string;
-  hostId: number;
-  mapName: string;
-  modeName: string;
-  players: any;
-  maxPlayers: number;
-  state: string;
-};
 const MODES = [
   { id: 'all', label: '全部', icon: 'practiceModeAll' },
   { id: 'team', label: '团队', icon: 'practiceModeTeam' },
@@ -149,7 +130,7 @@ export default function PracticeRoom({ assets, hostName, hostIcon, weaponIds, on
                 {COLUMNS.map(([label]) => <span key={label} role="columnheader">{label}</span>)}
               </div>
               {roomList.length === 0 ? EMPTY_ROWS.map((index) => <EmptyRow key={index} index={index} />) : 
-                roomList.map((room, i) => (
+                roomList.map((room) => (
                   <div key={room.id} className={`practice-room-row ${selectedRoom?.id === room.id ? 'selected' : ''}`} onClick={() => setSelectedRoom(room)} role="row" style={{ gridTemplateColumns: COLUMNS.map(([, width]) => width).join(' '), cursor: 'pointer' }}>
                     <span role="cell" style={{ fontSize: '12px' }}>{room.id.replace('room-', '')}</span>
                     <span role="cell">{room.state === 'Playing' ? '游戏中' : '等待中'}</span>

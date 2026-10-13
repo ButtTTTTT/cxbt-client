@@ -1,4 +1,4 @@
-import { CREATION_JOBS, type Appearance, type CreationJob } from './assets';
+import { type Appearance, type CreationJob } from './assets';
 import { apiFetch } from '../../api';
 
 export type SavedCharacter = { 
@@ -29,14 +29,14 @@ export async function fetchCharacterFromServer(): Promise<SavedCharacter | null>
       name: data.name,
       jobId: data.jobId,
       appearance: data.appearance,
-      userId: data.userId,
+      userId: data.userId ?? 0,
       level: data.level,
       exp: data.exp,
       coins: data.coins,
       rating: data.rating,
     };
     return localCharacterCache;
-  } catch (e) {
+  } catch (_e) {
     return null;
   }
 }
@@ -52,10 +52,11 @@ export async function saveCharacter(name: string, jobId: CreationJob, appearance
     name: data.name,
     jobId: data.jobId as CreationJob,
     appearance: data.appearance,
+    userId: data.userId ?? 0,
     level: data.level,
     exp: data.exp,
     coins: data.coins,
     rating: data.rating,
   };
-  return localCharacterCache;
+  return localCharacterCache as SavedCharacter;
 }

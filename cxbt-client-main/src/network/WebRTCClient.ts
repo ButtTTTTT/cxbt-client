@@ -2,7 +2,7 @@ export class WebRTCClient {
   private gameWs: WebSocket; // Game events
   public onMessage?: (msg: any) => void;
 
-  constructor(gameUrl: string, signalingUrl: string, onReady?: () => void) {
+  constructor(gameUrl: string, _signalingUrl?: string, onReady?: () => void) {
     this.gameWs = new WebSocket(gameUrl);
     
     this.gameWs.onopen = () => {

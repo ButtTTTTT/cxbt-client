@@ -398,7 +398,7 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
             
             const pInfo = roomPlayers && roomPlayers[userIdStr];
             if (pInfo && pInfo.jobId && pInfo.appearance) {
-              const job = creation.jobs[pInfo.jobId];
+              const job = (creation.jobs as any)[pInfo.jobId];
               if (job) {
                 const preset = job.presets[pInfo.appearance.gender];
                 let pWeapons = pInfo.weaponIds ? pInfo.weaponIds.map((wId: string) => assets.weapons[wId]).filter(Boolean) : job.weapons;
@@ -554,7 +554,7 @@ function BattleScene({ map, character, creation, assets, weapons, active, onRead
 }
 
 export default function Gameplay({ room, character, creation, assets, weaponIds, onExit }: {
-  room: RoomConfig & { id: string; players?: Record<string, any> };
+  room: RoomConfig & { id?: string; players?: Record<string, any> };
   character: SavedCharacter;
   creation: CreationAssets;
   assets: LobbyAssets;
@@ -612,8 +612,9 @@ export default function Gameplay({ room, character, creation, assets, weaponIds,
   }, [paused]);
 
   useEffect(() => {
-    const gameUrl = `${WS_BASE}?roomId=${room.id}&playerId=${myUserId}`;
-    const sigUrl = `${WS_BASE.replace('/ws', '/webrtc')}?roomId=${room.id}&playerId=${myUserId}`;
+    const roomId = room.id ?? 'default-room';
+    const gameUrl = `${WS_BASE}?roomId=${roomId}&playerId=${myUserId}`;
+    const sigUrl = `${WS_BASE.replace('/ws', '/webrtc')}?roomId=${roomId}&playerId=${myUserId}`;
     const ws = new WebRTCClient(gameUrl, sigUrl, () => {
       console.log('WebRTC Ready! Sending first sync.');
       logDebug(`[Network] WebRTC DataChannel OPENED! 握手成功`);
@@ -750,7 +751,7 @@ export default function Gameplay({ room, character, creation, assets, weaponIds,
     </div>
     <div className="battle-top">
       <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', marginTop: '60px', background: 'rgba(0,0,0,0.6)', color: '#fff', padding: '4px 12px', borderRadius: '12px', fontSize: '12px', zIndex: 10, pointerEvents: 'none', border: '1px solid rgba(255,255,255,0.2)' }}>
-        房间号: {room.id.replace('room-', '')} | 地图: {room.mapName}
+        房间号: {(room.id ?? 'room-default').replace('room-', '')} | 地图: {room.mapName}
       </div>
       <div style={{ position: 'absolute', top: 120, left: '50%', transform: 'translateX(-50%)', background: 'rgba(255,0,0,0.7)', color: '#fff', padding: '10px', borderRadius: '8px', fontSize: '14px', zIndex: 20, pointerEvents: 'none', minWidth: '300px' }}>
         <strong>联机诊断日志 (Debug Log):</strong><br/>

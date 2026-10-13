@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { PlayerEntity } from '../../features/gameplay/engine/PlayerEntity';
+import { PlayerEntity, CameraController } from '../../features/gameplay/engine';
 
 // 武器与动作预设配置
 export interface WeaponActionSet {
@@ -13,6 +13,7 @@ export interface WeaponActionSet {
     jump: string;
     roll?: string;
     attack?: string;
+    reload?: string;
   };
 }
 
@@ -126,25 +127,35 @@ const ACTION_LABELS: Record<string, string> = {
   run: '奔跑 (Run)',
   jump: '跳跃 (Jump)',
   roll: '战术翻滚 (Roll)',
-  attack: '近战攻击 (Attack)'
+  attack: '近战攻击 (Attack)',
+  reload: '快速换弹 (Reload)',
+  hit: '受击硬直 (Hit)',
+  death: '阵亡倒地 (Death)'
 };
 
 export default function CharacterController() {
   const mountRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState('正在加载引擎类...');
-  
+
   // 动作套件与动作选项状态
   const [activeSuiteId, setActiveSuiteId] = useState<string>(WEAPON_SUITES[0].id);
   const [actionOption, setActionOption] = useState<string>('auto'); // 'auto' | action name
   const [availableActions, setAvailableActions] = useState<string[]>(Object.keys(WEAPON_SUITES[0].actions));
 
+  // 视图与相机模式
+  const [cameraMode, setCameraMode] = useState<'orbit' | 'tps'>('orbit');
   const [showSkeleton, setShowSkeleton] = useState(true);
   const [showMesh, setShowMesh] = useState(true);
+  const [showHitbox, setShowHitbox] = useState(false);
+  const [health, setHealth] = useState(3200);
 
   const skeletonHelperRef = useRef<any | null>(null);
   const modelRef = useRef<any | null>(null);
   const playerRef = useRef<PlayerEntity | null>(null);
+  const cameraControllerRef = useRef<CameraController | null>(null);
   const actionBadgeRef = useRef<HTMLSpanElement | null>(null);
+  const cameraModeRef = useRef<'orbit' | 'tps'>('orbit');
+  cameraModeRef.current = cameraMode;
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -152,32 +163,69 @@ export default function CharacterController() {
     // 1. 初始化纯场景
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#1e293b');
-    
+
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 3, 6);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
     mountRef.current.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.maxPolarAngle = Math.PI / 2 - 0.05;
+    controls.dampingFactor = 0.05;
 
-    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    // 初始化第三人称 TPS 摄像机控制器
+    const tpsCamera = new CameraController(camera, {
+      distance: 3.2,
+      heightOffset: 1.25,
+      shoulderOffset: 0.35
+    });
+    cameraControllerRef.current = tpsCamera;
+
+    // 添加环境光与主光源
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+    hemiLight.position.set(0, 20, 0);
+    scene.add(hemiLight);
+
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
     dirLight.position.set(5, 10, -5);
     scene.add(dirLight);
     scene.add(new THREE.GridHelper(50, 50, 0x555555, 0x222222));
 
-    // 2. 引入游戏底层引擎类
+    // 2. 引入游戏底层引擎实体类
     const player = new PlayerEntity(scene);
     playerRef.current = player;
+    tpsCamera.setTarget(player.modelGroup);
+
+    // 挂接引擎事件监听
+    player.events = {
+      onFootstep: () => {
+        // 沙盒状态栏轻微提示
+      },
+      onJump: () => setStatus('实体触发起跳事件 (onJump)'),
+      onLand: () => setStatus('实体平稳着地 (onLand)'),
+      onRoll: () => setStatus('实体执行战术翻滚 (onRoll)'),
+      onAttack: () => setStatus('实体触发普攻/射击 (onAttack)'),
+      onReload: () => setStatus('实体开始换弹 (onReload)'),
+      onDamage: (amount, currentHp) => {
+        setHealth(currentHp);
+        setStatus(`受到 ${amount} 点伤害，剩余血量: ${currentHp}`);
+      },
+      onDeath: () => {
+        setHealth(0);
+        setStatus('玩家阵亡倒地！');
+      },
+      onRevive: () => {
+        setHealth(player.maxHealth);
+        setStatus('玩家已满血复活！');
+      }
+    };
 
     player.loadAvatar('/assets/creation/models/malecommandos.glb', '/assets/creation/models/body01.glb')
       .then(async (headScene) => {
-        // 沙盒专属特权：获取到底层组装好的头节点，用来挂载调试骨架线
+        // 获取底层组装好的头节点挂载调试骨架线
         const skeleton = new THREE.SkeletonHelper(headScene);
         skeletonHelperRef.current = skeleton;
         scene.add(skeleton);
@@ -186,7 +234,7 @@ export default function CharacterController() {
         const initialSuite = WEAPON_SUITES[0];
         await player.loadAnimations(initialSuite.actions);
         setAvailableActions(Object.keys(initialSuite.actions));
-        setStatus('PlayerEntity 引擎加载完毕！动作系统就绪');
+        setStatus('PlayerEntity 引擎加载完毕！动作与物理系统就绪');
       })
       .catch(err => setStatus(`引擎加载失败: ${err}`));
 
@@ -211,6 +259,9 @@ export default function CharacterController() {
       if (e.code === 'KeyJ') {
         player.attack();
       }
+      if (e.code === 'KeyR') {
+        player.reload();
+      }
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -221,18 +272,32 @@ export default function CharacterController() {
       if (e.code === 'Space') keys.space = false;
     };
 
+    const onPointerMove = (e: PointerEvent) => {
+      if (cameraModeRef.current === 'tps' && document.pointerLockElement === renderer.domElement) {
+        tpsCamera.handlePointerMove(e.movementX, e.movementY);
+      }
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      if (cameraModeRef.current === 'tps') {
+        tpsCamera.handleWheel(e.deltaY);
+      }
+    };
+
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('wheel', onWheel);
 
-    // 4. 帧循环
+    // 4. 引擎帧循环
     const clock = new THREE.Clock();
     let animationId: number;
 
     const animate = () => {
       animationId = requestAnimationFrame(animate);
-      const delta = clock.getDelta();
+      const delta = Math.min(clock.getDelta(), 0.05);
 
-      // 把本帧的物理输入意图打包，发送给引擎处理
+      // 把本帧的物理输入意图打包发送给引擎处理
       direction.set(0, 0, 0);
       if (keys.w) direction.z -= 1;
       if (keys.s) direction.z += 1;
@@ -240,27 +305,35 @@ export default function CharacterController() {
       if (keys.d) direction.x += 1;
       direction.normalize();
 
-      const cameraYaw = Math.atan2(
-        camera.position.x - player.modelGroup.position.x, 
-        camera.position.z - player.modelGroup.position.z
-      );
+      const cameraYaw = cameraModeRef.current === 'tps'
+        ? tpsCamera.yaw
+        : Math.atan2(
+            camera.position.x - player.modelGroup.position.x, 
+            camera.position.z - player.modelGroup.position.z
+          );
 
       player.setInput(direction, cameraYaw, keys.space);
 
-      // 让引擎自行计算本帧所有的位移、物理、转身、动作过渡
+      // 引擎自驱动更新物理、重力、碰撞与动作过渡
       player.update(delta);
 
-      // 实时更新当前动作状态徽标 (避免 React state 频繁重渲染造成掉帧)
+      // 实时更新当前动作状态徽标
       if (actionBadgeRef.current) {
         const cur = player.getCurrentAction();
         actionBadgeRef.current.textContent = cur ? (ACTION_LABELS[cur] || cur) : 'idle';
       }
 
-      // 视角跟随
-      controls.target.copy(player.modelGroup.position);
-      controls.target.y += 1;
+      // 相机更新
+      if (cameraModeRef.current === 'tps') {
+        controls.enabled = false;
+        tpsCamera.update(delta);
+      } else {
+        controls.enabled = true;
+        controls.target.copy(player.modelGroup.position);
+        controls.target.y += 1;
+        controls.update();
+      }
 
-      controls.update();
       renderer.render(scene, camera);
     };
     animate();
@@ -276,13 +349,16 @@ export default function CharacterController() {
       cancelAnimationFrame(animationId);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('wheel', onWheel);
       window.removeEventListener('resize', handleResize);
+      player.dispose();
       renderer.dispose();
       mountRef.current?.removeChild(renderer.domElement);
     };
   }, []);
 
-  // 开关调试网格和骨架
+  // 开关调试网格、骨架和碰撞体
   useEffect(() => {
     if (skeletonHelperRef.current) skeletonHelperRef.current.visible = showSkeleton;
     if (modelRef.current) {
@@ -290,7 +366,10 @@ export default function CharacterController() {
         if (child.isMesh) child.visible = showMesh;
       });
     }
-  }, [showSkeleton, showMesh]);
+    if (playerRef.current) {
+      playerRef.current.setHitboxVisible(showHitbox);
+    }
+  }, [showSkeleton, showMesh, showHitbox]);
 
   // 切换武器动作套件
   const handleSuiteChange = async (suiteId: string) => {
@@ -303,7 +382,6 @@ export default function CharacterController() {
     const actions = Object.keys(suite.actions);
     setAvailableActions(actions);
 
-    // 如果当前选中的强制动作在新的套件中不存在，重置为自动模式
     if (actionOption !== 'auto' && !actions.includes(actionOption)) {
       setActionOption('auto');
       playerRef.current.setForcedAction(null);
@@ -337,6 +415,18 @@ export default function CharacterController() {
     if (playerRef.current) playerRef.current.jump();
   };
 
+  const triggerReload = () => {
+    if (playerRef.current) playerRef.current.reload();
+  };
+
+  const triggerDamage = () => {
+    if (playerRef.current) playerRef.current.takeDamage(600);
+  };
+
+  const triggerRevive = () => {
+    if (playerRef.current) playerRef.current.revive();
+  };
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
@@ -344,21 +434,76 @@ export default function CharacterController() {
       {/* 控制器与动作选项面板 */}
       <div style={{
         position: 'absolute', top: 20, left: 20, 
-        background: 'rgba(15, 23, 42, 0.92)', color: '#f8fafc',
+        background: 'rgba(15, 23, 42, 0.94)', color: '#f8fafc',
         padding: '18px 22px', borderRadius: '12px', 
-        fontFamily: 'sans-serif', width: '320px',
+        fontFamily: 'sans-serif', width: '330px',
         boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)',
         border: '1px solid #334155',
-        backdropFilter: 'blur(8px)'
+        backdropFilter: 'blur(8px)',
+        maxHeight: '90vh',
+        overflowY: 'auto'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #334155', paddingBottom: '10px', marginBottom: '14px' }}>
-          <h3 style={{ margin: 0, color: '#37f4d3', fontSize: '16px' }}>🎮 跑跳行为控制器</h3>
+          <h3 style={{ margin: 0, color: '#37f4d3', fontSize: '16px' }}>🎮 游戏引擎与角色控制</h3>
           <span style={{ fontSize: '11px', background: '#1e293b', border: '1px solid #475569', padding: '2px 8px', borderRadius: '12px', color: '#94a3b8' }}>
             沙盒调试
           </span>
         </div>
 
-        {/* 1. 动作套件 (武器风格) 选择 */}
+        {/* 1. 生命状态条 */}
+        <div style={{ marginBottom: '14px', background: '#0f172a', padding: '8px 10px', borderRadius: '8px', border: '1px solid #334155' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
+            <span style={{ color: '#94a3b8' }}>生命值 (HP)</span>
+            <span style={{ color: health > 0 ? '#38bdf8' : '#ef4444', fontWeight: 'bold' }}>{health} / 3200</span>
+          </div>
+          <div style={{ height: '8px', background: '#334155', borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{ 
+              height: '100%', 
+              width: `${Math.max(0, (health / 3200) * 100)}%`, 
+              background: health > 1000 ? '#38bdf8' : '#ef4444',
+              transition: 'width 0.3s ease'
+            }} />
+          </div>
+        </div>
+
+        {/* 2. 视角模式切换 */}
+        <div style={{ marginBottom: '12px' }}>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', marginBottom: '5px', color: '#cbd5e1' }}>
+            🎥 摄像机模式：
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <button
+              onClick={() => setCameraMode('orbit')}
+              style={{
+                padding: '6px',
+                background: cameraMode === 'orbit' ? '#37f4d3' : '#1e293b',
+                color: cameraMode === 'orbit' ? '#0f172a' : '#94a3b8',
+                border: '1px solid #475569',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}>
+              🌐 自由轨道视角
+            </button>
+            <button
+              onClick={() => setCameraMode('tps')}
+              style={{
+                padding: '6px',
+                background: cameraMode === 'tps' ? '#37f4d3' : '#1e293b',
+                color: cameraMode === 'tps' ? '#0f172a' : '#94a3b8',
+                border: '1px solid #475569',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}>
+              🎯 越肩 TPS 视角
+            </button>
+          </div>
+        </div>
+
+        {/* 3. 动作套件 (武器风格) 选择 */}
         <div style={{ marginBottom: '12px' }}>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', marginBottom: '5px', color: '#cbd5e1' }}>
             🔫 动作套件 (武器风格)：
@@ -373,7 +518,7 @@ export default function CharacterController() {
           </select>
         </div>
 
-        {/* 2. 动作选项模式 (自动 / 强制循环) */}
+        {/* 4. 动作选项模式 (自动 / 强制循环) */}
         <div style={{ marginBottom: '14px' }}>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', marginBottom: '5px', color: '#cbd5e1' }}>
             🎬 动作选项 / 运行模式：
@@ -391,50 +536,41 @@ export default function CharacterController() {
           </select>
         </div>
 
-        {/* 3. 动作快捷触发按钮组 */}
+        {/* 5. 动作与战斗测试按钮组 */}
         <div style={{ marginBottom: '14px' }}>
-          <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>⚡ 动作快捷触发测试：</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-            <button 
-              onClick={triggerJump}
-              style={{
-                padding: '6px 4px', background: '#1e293b', border: '1px solid #475569',
-                borderRadius: '6px', color: '#f8fafc', fontSize: '12px', cursor: 'pointer',
-                transition: 'all 0.15s'
-              }}
-              title="按空格键 Space 亦可触发">
+          <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>⚡ 动作与战斗快捷测试：</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginBottom: '6px' }}>
+            <button onClick={triggerJump} style={btnStyle} title="按空格键 Space 亦可触发">
               🦘 跳跃
             </button>
-            <button 
-              onClick={triggerRoll}
-              style={{
-                padding: '6px 4px', background: '#1e293b', border: '1px solid #475569',
-                borderRadius: '6px', color: '#f8fafc', fontSize: '12px', cursor: 'pointer',
-                transition: 'all 0.15s'
-              }}
-              title="按 Shift 键亦可触发">
+            <button onClick={triggerRoll} style={btnStyle} title="按 Shift 键亦可触发">
               ⚡ 翻滚
             </button>
             <button 
               onClick={triggerAttack}
-              disabled={!availableActions.includes('attack')}
               style={{
-                padding: '6px 4px', 
-                background: availableActions.includes('attack') ? '#1e293b' : '#0f172a', 
-                border: `1px solid ${availableActions.includes('attack') ? '#475569' : '#334155'}`,
-                borderRadius: '6px', 
-                color: availableActions.includes('attack') ? '#f8fafc' : '#64748b', 
-                fontSize: '12px', 
-                cursor: availableActions.includes('attack') ? 'pointer' : 'not-allowed',
-                transition: 'all 0.15s'
+                ...btnStyle,
+                color: availableActions.includes('attack') ? '#f8fafc' : '#64748b',
+                cursor: availableActions.includes('attack') ? 'pointer' : 'not-allowed'
               }}
-              title="按 J 键亦可触发 (需近战/盾牌套件)">
+              title="按 J 键亦可触发">
               ⚔️ 攻击
+            </button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+            <button onClick={triggerReload} style={btnStyle} title="按 R 键亦可触发">
+              🔄 换弹
+            </button>
+            <button onClick={triggerDamage} style={{ ...btnStyle, color: '#f87171' }} title="承受 600 点伤害">
+              💥 扣血
+            </button>
+            <button onClick={triggerRevive} style={{ ...btnStyle, color: '#4ade80' }} title="复活并回满血">
+              ❤️ 复活
             </button>
           </div>
         </div>
 
-        {/* 4. 实时动作与按键指引 */}
+        {/* 6. 实时动作与按键指引 */}
         <div style={{ 
           background: '#0f172a', padding: '10px', borderRadius: '8px', 
           border: '1px solid #334155', marginBottom: '12px' 
@@ -453,23 +589,27 @@ export default function CharacterController() {
           <div style={{ fontSize: '12px', color: '#64748b', lineHeight: '1.6' }}>
             <b>W A S D</b> : 移动 &nbsp;|&nbsp; <b>Space</b> : 跳跃<br/>
             <b>Shift</b> : 战术翻滚 &nbsp;|&nbsp; <b>J</b> : 普攻/挥砍<br/>
-            <b>鼠标左键</b> : 旋转视角
+            <b>R</b> : 快速换弹 &nbsp;|&nbsp; <b>滚轮</b> : 调节视距
           </div>
         </div>
         
-        {/* 5. 视图辅助选项 */}
-        <div style={{ display: 'flex', gap: '15px', fontSize: '13px', borderTop: '1px solid #334155', paddingTop: '10px' }}>
+        {/* 7. 视图辅助选项 */}
+        <div style={{ display: 'flex', gap: '12px', fontSize: '12px', borderTop: '1px solid #334155', paddingTop: '10px' }}>
           <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-            <input type="checkbox" checked={showSkeleton} onChange={e => setShowSkeleton(e.target.checked)} style={{ marginRight: '6px' }}/>
+            <input type="checkbox" checked={showSkeleton} onChange={e => setShowSkeleton(e.target.checked)} style={{ marginRight: '4px' }}/>
             骨骼连线
           </label>
           <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-            <input type="checkbox" checked={showMesh} onChange={e => setShowMesh(e.target.checked)} style={{ marginRight: '6px' }}/>
+            <input type="checkbox" checked={showMesh} onChange={e => setShowMesh(e.target.checked)} style={{ marginRight: '4px' }}/>
             模型网格
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+            <input type="checkbox" checked={showHitbox} onChange={e => setShowHitbox(e.target.checked)} style={{ marginRight: '4px' }}/>
+            碰撞胶囊体
           </label>
         </div>
 
-        {/* 6. 状态提示 */}
+        {/* 8. 状态提示 */}
         <p style={{ margin: '10px 0 0 0', fontSize: '11px', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           ℹ️ {status}
         </p>
@@ -477,3 +617,14 @@ export default function CharacterController() {
     </div>
   );
 }
+
+const btnStyle: React.CSSProperties = {
+  padding: '6px 4px',
+  background: '#1e293b',
+  border: '1px solid #475569',
+  borderRadius: '6px',
+  color: '#f8fafc',
+  fontSize: '12px',
+  cursor: 'pointer',
+  transition: 'all 0.15s'
+};

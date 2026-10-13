@@ -3,7 +3,7 @@ import type { LobbyAssets } from '../lobby/assets';
 import { lobbyUrl } from '../lobby/assets';
 import type { RoomConfig } from './CreateRoomDialog';
 import './RoomSettings.css';
-import { apiFetch, WS_BASE, getToken } from '../../api';
+import { apiFetch, WS_BASE } from '../../api';
 import { useEffect } from 'react';
 
 type RoomSettingsProps = {
@@ -32,7 +32,7 @@ function buttonArt(assets: LobbyAssets, key: string): CSSProperties {
 }
 
 export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave, onSettings, onStart, onStatus }: RoomSettingsProps) {
-  const [team, setTeam] = useState<'red' | 'blue'>('red');
+  const [, setTeam] = useState<'red' | 'blue'>('red');
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<string[]>([`进入房间: ${room.name}`]);
   const map = assets.maps.find((entry) => entry.id === room.mapId);

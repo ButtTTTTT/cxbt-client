@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import CharacterPreview from './CharacterPreview';
 import { assetUrl, CREATION_JOBS, initialAppearance, loadCreationAssets, type Appearance, type CreationAssets, type CreationJob } from './assets';
 import './CharacterCreation.css';
-import { CHARACTER_KEY, type SavedCharacter, saveCharacter } from './character';
+import { type SavedCharacter, saveCharacter } from './character';
 
 const INITIAL_APPEARANCE: Appearance = { gender: 0, hair: 1, eyes: 0, mouth: 0, accessory: 3 };
 const PARTS = [
