@@ -163,9 +163,9 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
         root.add(group);
         return group;
       };
-      const skinMaterial = material(null, assets.skinColor);
+      const skinMaterial = material(null, preset.skinColor ?? assets.skinColor);
       const eyeMaps = await Promise.all(preset.eyes.map(loadTexture));
-      const rightEyeMaps = eyeMaps.map((map) => {
+      const rightEyeMaps = preset.rightEyes ? await Promise.all(preset.rightEyes.map(loadTexture)) : eyeMaps.map((map) => {
         const mirrored = map.clone();
         mirrored.repeat.x = -1;
         mirrored.offset.x = 1;
@@ -178,11 +178,13 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
       const rightEyeMaterial = material(rightEyeMaps[0], '#ffffff', true);
       const mouthMaterial = material(mouthMaps[0], '#ffffff', true);
       await Promise.all([
-        addPart(assets.models.head01, skinMaterial),
+        preset.headTexture ? loadTexture(preset.headTexture).then((map) => addPart(assets.models.head01, material(map)))
+          : addPart(assets.models.head01, skinMaterial),
         addPart(assets.models.l_eye, eyeMaterial, 2),
         addPart(assets.models.r_eye, rightEyeMaterial, 2),
         addPart(assets.models.mouth, mouthMaterial, 3),
-        loadTexture(assets.models.noseTexture).then((map) => addPart(assets.models.nose, material(map, '#ffffff', true), 4)),
+        ...(preset.noseTexture === null ? [] : [loadTexture(preset.noseTexture ?? assets.models.noseTexture)
+          .then((map) => addPart(assets.models.nose, material(map, '#ffffff', true), 4))]),
         ...preset.ears.map((path, index) => addPart(path, skinMaterial, 0, [index === 0 ? 0.235 : -0.235, 1.04, 0.035])),
       ]);
       const hairs = await Promise.all(preset.hair.map(async (part) => addPart(part.model, material(await loadTexture(part.texture)))));

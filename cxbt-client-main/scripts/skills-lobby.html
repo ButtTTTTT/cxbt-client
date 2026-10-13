@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><link rel="icon" href="data:,"></head>
+<body style="margin:0"><div id="root"></div><script type="module">
+  import React from 'react';
+  import { createRoot } from 'react-dom/client';
+  import Lobby from '/src/features/lobby/Lobby.tsx';
+  const root = createRoot(document.getElementById('root'));
+  const jobId = new URLSearchParams(location.search).get('job') ?? 'guardian';
+  const character = { version: 1, name: '青衫骨', userId: 1, jobId,
+    appearance: { gender: 0, hair: 0, eyes: 0, mouth: 0, accessory: 0 } };
+  window.showLobby = () => root.render(React.createElement(Lobby, { character, onExit: () => {} }));
+  window.showLobby();
+</script></body></html>

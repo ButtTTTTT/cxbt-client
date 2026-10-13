@@ -23,6 +23,8 @@ HUD = [
     "skin_ingame_icon_ammobg_row", "skin_ingame_skill_bg",
     "skin_ingame_skill_bg02", "skin_ingame_timebg_redicon", "skin_ingame_timebg_blueicon",
     "skin_ingame_bg01_blue", "skin_ingame_bg04", "small_map_mask", "map_cursor01",
+    "skin_ingame_bg01_red02", "skin_ingame_heart_row", "skin_ingame_danyao_row",
+    "skin_ingame_skill_bg_light", "skin_ingame_b01_number0_9",
 ]
 
 SKILL_ICONS = ("ballistic", "bandage_heal", "assimilation", "bloodpoison")

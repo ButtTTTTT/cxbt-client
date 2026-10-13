@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type FormEvent } from 'react';
+import { useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import type { LobbyAssets } from '../lobby/assets';
 import { lobbyUrl } from '../lobby/assets';
 import type { RoomConfig } from './CreateRoomDialog';
@@ -41,6 +41,21 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
   const players = Object.values((room as any).players || {}) as any[];
   const redPlayers = players.filter(p => p.team === 'red');
   const bluePlayers = players.filter(p => p.team === 'blue');
+  const startedRef = useRef(false);
+  const startRef = useRef(onStart);
+  useEffect(() => { startRef.current = onStart; }, [onStart]);
+
+  /** Hands the round over once. The start event travels through Redis pub/sub, so it
+   * can arrive late, twice, or not at all when it races the room subscription. */
+  const enterBattle = (roomId: string) => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    void document.body.requestPointerLock();
+    apiFetch('/rooms').then((rooms: any) => {
+      const latest = (rooms || []).find((entry: any) => entry.id === roomId);
+      startRef.current(latest ?? undefined);
+    }).catch(() => startRef.current());
+  };
 
   const sendMessage = (event: FormEvent) => {
     event.preventDefault();
@@ -56,17 +71,13 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
 
   useEffect(() => {
     if (!room.id) return;
-    const ws = new WebSocket(`${WS_BASE}?roomId=${room.id}&playerId=${hostName}`);
+    const roomId = room.id;
+    const ws = new WebSocket(`${WS_BASE}?roomId=${roomId}&playerId=${hostName}`);
     (window as any)._roomWs = ws;
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);
       if (msg.type === 'start_game') {
-        document.body.requestPointerLock();
-        apiFetch('/rooms').then(rooms => {
-          const latest = (rooms || []).find((r: any) => r.id === room.id);
-          if (latest) onStart(latest);
-          else onStart();
-        }).catch(() => onStart());
+        enterBattle(roomId);
       } else if (msg.type === 'join' || msg.type === 'leave') {
         setMessages((current) => [...current.slice(-47), `系统: 玩家 ${msg.userId} ${msg.type === 'join' ? '进入' : '离开'}了房间`]);
       } else if (msg.type === 'chat') {
@@ -166,7 +177,14 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
               try {
                 if (room.id) {
                   await apiFetch(`/rooms/${room.id}/start`, { method: 'POST' });
-                  // onStart() will be handled by WS 'start_game' event
+                  // onStart() is handled by the 'start_game' event, so poll the room
+                  // state as a fallback for a lost event.
+                  for (let attempt = 0; attempt < 10 && !startedRef.current; attempt += 1) {
+                    await new Promise((resolve) => setTimeout(resolve, 750));
+                    if (startedRef.current) break;
+                    const rooms: any[] = await apiFetch('/rooms').catch(() => []);
+                    if ((rooms ?? []).some((entry: any) => entry.id === room.id && entry.state === 'Playing')) enterBattle(room.id);
+                  }
                 } else {
                   void document.body.requestPointerLock();
                   onStart();
@@ -180,8 +198,6 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
         </div>
       </section>
     </div>
-    <div className="practice-room-title-bar" style={art(assets, 'practiceTitleBar')}>
-      <div className="practice-room-title-tab" style={art(assets, 'practiceTitleTab')}><h1 className="practice-room-title">练习赛</h1></div>
-    </div>
+    <div className="practice-room-title-tab" style={art(assets, 'practiceTitleTab')}><h1 className="practice-room-title">练习赛</h1></div>
   </div>;
 }

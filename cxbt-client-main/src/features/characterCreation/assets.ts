@@ -12,6 +12,10 @@ export type CreationWeapon = {
 export type CreationPreset = {
   id: string;
   body: string;
+  skinColor?: string;
+  headTexture?: string;
+  rightEyes?: string[];
+  noseTexture?: string | null;
   hair: ModelPart[];
   ears: string[];
   eyes: string[];
@@ -46,6 +50,6 @@ export const CREATION_JOBS = {
   gunner: { name: '重装兵', stats: [3, 2, 5, 3], description: '●"重装兵"是强壮、无畏的勇士，掩护同伴、冲锋在前是他们的使命。\n●机关枪、火箭筒，火力强悍极具侵略性。\n●盾牌配合防御性技能，造就了以守为攻的职业打法。' },
   assassin: { name: '突击兵', stats: [4, 5, 3, 2], description: '●"突击兵"总是如幽灵般潜伏或游走。寻找时机，迅速偷走敌人的生命。\n●近身短刀突袭，远程精准狙击。极端的作战距离让他成为战斗中的孤胆英雄。' },
   // The biochemical description is absent from this cache's game_text.lua.
-  biochemist: { name: '生化专家', stats: [2, 4, 2, 4], description: '' },
+  biochemist: { name: '生化专家', stats: [2, 4, 2, 4], description: '●"生化兵"善用生化武器，擅长控制战场。\n●生化喷射器、榴弹发射器，适合区域压制。\n●治疗和毒素技能为团队提供支援。' },
 };
 export type CreationJob = keyof typeof CREATION_JOBS;

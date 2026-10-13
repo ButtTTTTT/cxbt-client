@@ -1,0 +1,119 @@
+{
+  "frame.png": [
+    "AvatarStar_cache/ui/skinf/skin_windowtop_background01_03.tga"
+  ],
+  "title.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_chara_title2_1.tga"
+  ],
+  "jobPill.png": [
+    "AvatarStar_cache/ui/skinf/skin_chara_bg01_title02.tga"
+  ],
+  "description.png": [
+    "AvatarStar_cache/ui/skinf/skin_chara_bg02_11.tga"
+  ],
+  "statPill.png": [
+    "AvatarStar_cache/ui/skinf/skin_chara_bg01_title01.tga"
+  ],
+  "diamondOn.png": [
+    "AvatarStar_cache/ui/skinf/skin_chara_icon_02.tga"
+  ],
+  "diamondOff.png": [
+    "AvatarStar_cache/ui/skinf/skin_chara_icon_01.tga"
+  ],
+  "back.png": [
+    "AvatarStar_cache/ui/skinf/skin_button_icon_backsmall.tga"
+  ],
+  "settings.png": [
+    "AvatarStar_cache/ui/skinf/skin_button_icon_setupsmall.tga"
+  ],
+  "sparkle.png": [
+    "AvatarStar_cache/vfx/textures/vfx_glow_8.dds"
+  ],
+  "button_normal.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button01_normal_10.tga"
+  ],
+  "create_normal.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button01_normal_10.tga"
+  ],
+  "button_hover.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button01_hover_10.tga"
+  ],
+  "create_hover.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button01_hover_10.tga"
+  ],
+  "button_down.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button01_down_10.tga"
+  ],
+  "create_down.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button01_down_10.tga"
+  ],
+  "button_disabled.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button01_disabled_10.tga"
+  ],
+  "create_disabled.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_button01_disabled_10.tga"
+  ],
+  "guardian-background.png": [
+    "AvatarStar_cache/ui/skinf/bg_normal02.dds"
+  ],
+  "guardian-portrait.png": [
+    "AvatarStar_cache/ui/skinf/skin_zhiye02_icon.tga"
+  ],
+  "guardian-button.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_zhiye02_down.tga"
+  ],
+  "guardian-banner.png": [
+    "AvatarStar_cache/ui/skinf/skin_guardian_title.tga"
+  ],
+  "guardian-icon.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_icon01.tga"
+  ],
+  "assassin-background.png": [
+    "AvatarStar_cache/ui/skinf/bg_normal.dds"
+  ],
+  "assassin-portrait.png": [
+    "AvatarStar_cache/ui/skinf/skin_zhiye03_icon.tga"
+  ],
+  "assassin-button.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_zhiye03_down.tga"
+  ],
+  "assassin-banner.png": [
+    "AvatarStar_cache/ui/skinf/skin_hunter_title.tga"
+  ],
+  "assassin-icon.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_icon03.tga"
+  ],
+  "gunner-background.png": [
+    "AvatarStar_cache/ui/skinf/bg_normal31.dds"
+  ],
+  "gunner-portrait.png": [
+    "AvatarStar_cache/ui/skinf/skin_zhiye01_icon.tga"
+  ],
+  "gunner-button.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_zhiye01_down.tga"
+  ],
+  "gunner-banner.png": [
+    "AvatarStar_cache/ui/skinf/skin_rocker_title.tga"
+  ],
+  "gunner-icon.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_icon02.tga"
+  ],
+  "biochemist-background.png": [
+    "AvatarStar_cache/ui/skinf/bg_normal04.dds"
+  ],
+  "biochemist-portrait.png": [
+    "AvatarStar_cache/ui/skinf/skin_zhiye04_icon.tga"
+  ],
+  "biochemist-button.png": [
+    "AvatarStar_zh_cn_cache/ui/skinf/skin_zhiye04_down.tga"
+  ],
+  "biochemist-banner.png": [
+    "AvatarStar_cache/ui/skinf/skin_chemicalsoldier_title.tga"
+  ],
+  "biochemist-icon.png": [
+    "AvatarStar_cache/ui/skinf/skin_common_icon04.tga"
+  ],
+  "char-change.wav": [
+    "AvatarStar_cache/audio/wav/ui/char_change.wav"
+  ]
+}

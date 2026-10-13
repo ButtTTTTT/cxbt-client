@@ -65,6 +65,24 @@ def map_cover(name, path, size):
     return "ui/" + destination.name
 
 
+def room_mode_assets(ui):
+    # CreateRoom.lua uses battle_004 skins 3, 5, 2, 4, 7 and 8.
+    # The last two map to skin_playgame_mode8 and skin_playgame_mode10.
+    for number in (3, 2, 5, 4, 8, 10):
+        for state in ("normal", "hover"):
+            name = f"skin_playgame_mode{number}_{state}"
+            source = next(root / "ui/skinf" / (name + ".tga")
+                          for root in (MAP_CACHE, CACHE)
+                          if (root / "ui/skinf" / (name + ".tga")).exists())
+            destination = OUTPUT / "ui" / (name + ".png")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            Image.open(source).convert("RGBA").save(destination)
+            path = destination.relative_to(OUTPUT).as_posix()
+            ui[name] = path
+            creation.provenance[path] = [source.relative_to(ROOT).as_posix()]
+        ui[f"skin_playgame_mode{number}_down"] = ui[f"skin_playgame_mode{number}_hover"]
+
+
 def map_catalogue():
     icons = (CACHE / "scripts/sys/iconsD.lua").read_text()
     previews = icons.split("PreviewMaps =", 1)[1].split("PreviewMapsDisable =", 1)[0]
@@ -302,6 +320,7 @@ def main():
     }
     for key, source in direct.items():
         ui[key] = art(key, "ui/skinf/" + source)
+    room_mode_assets(ui)
     maps = map_catalogue()
     slices = {
         "content": ("skin_common_background18.tga", (1128, 645), (40, 40, 40, 40)),

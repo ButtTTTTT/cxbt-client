@@ -1,0 +1,62 @@
+{
+  "ui": {
+    "frame": "frame.png",
+    "title": "title.png",
+    "jobPill": "jobPill.png",
+    "description": "description.png",
+    "statPill": "statPill.png",
+    "diamondOn": "diamondOn.png",
+    "diamondOff": "diamondOff.png",
+    "back": "back.png",
+    "settings": "settings.png",
+    "sparkle": "sparkle.png",
+    "button_normal": "button_normal.png",
+    "create_normal": "create_normal.png",
+    "button_hover": "button_hover.png",
+    "create_hover": "create_hover.png",
+    "button_down": "button_down.png",
+    "create_down": "create_down.png",
+    "button_disabled": "button_disabled.png",
+    "create_disabled": "create_disabled.png",
+    "settingsPanel": "../lobby/ui/settingsPanel.png",
+    "settingsInner": "../lobby/ui/settingsInner.png",
+    "settingsButton_normal": "../lobby/ui/settingsButton_normal.png",
+    "settingsClose_normal": "../lobby/ui/settingsClose_normal.png",
+    "settingsButton_hover": "../lobby/ui/settingsButton_hover.png",
+    "settingsClose_hover": "../lobby/ui/settingsClose_hover.png",
+    "settingsButton_down": "../lobby/ui/settingsButton_down.png",
+    "settingsClose_down": "../lobby/ui/settingsClose_down.png",
+    "settingsButton_disabled": "../lobby/ui/settingsButton_disabled.png",
+    "settingsClose_disabled": "../lobby/ui/settingsClose_disabled.png"
+  },
+  "jobs": {
+    "guardian": {
+      "background": "guardian-background.png",
+      "portrait": "guardian-portrait.png",
+      "button": "guardian-button.png",
+      "banner": "guardian-banner.png",
+      "icon": "guardian-icon.png"
+    },
+    "assassin": {
+      "background": "assassin-background.png",
+      "portrait": "assassin-portrait.png",
+      "button": "assassin-button.png",
+      "banner": "assassin-banner.png",
+      "icon": "assassin-icon.png"
+    },
+    "gunner": {
+      "background": "gunner-background.png",
+      "portrait": "gunner-portrait.png",
+      "button": "gunner-button.png",
+      "banner": "gunner-banner.png",
+      "icon": "gunner-icon.png"
+    },
+    "biochemist": {
+      "background": "biochemist-background.png",
+      "portrait": "biochemist-portrait.png",
+      "button": "biochemist-button.png",
+      "banner": "biochemist-banner.png",
+      "icon": "biochemist-icon.png"
+    }
+  }
+}
