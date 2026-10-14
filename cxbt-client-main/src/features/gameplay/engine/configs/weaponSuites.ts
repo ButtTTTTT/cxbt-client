@@ -10,14 +10,7 @@ export interface WeaponActionSet {
   id: string;
   name: string;
   parts?: WeaponPartConfig[];
-  actions: {
-    idle: string;
-    run: string;
-    jump: string;
-    roll?: string;
-    attack?: string;
-    reload?: string;
-  };
+  actions: Record<string, string>;
 }
 
 export const WEAPON_SUITES: WeaponActionSet[] = [
@@ -32,7 +25,11 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/smg_01-run.json',
       jump: '/assets/gameplay/animations/smg_01-jump.json',
-      roll: '/assets/gameplay/animations/smg_01-roll.json'
+      roll: '/assets/gameplay/animations/smg_01-roll.json',
+      attack: '/assets/gameplay/animations/smg_01-attack.json',
+      reload: '/assets/gameplay/animations/smg_01-reload.json',
+      hit: '/assets/gameplay/animations/common-hit.json',
+      death: '/assets/gameplay/animations/common-death.json'
     }
   },
   {
@@ -45,7 +42,11 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/pistol_01-run.json',
       jump: '/assets/gameplay/animations/pistol_01-jump.json',
-      roll: '/assets/gameplay/animations/pistol_01-roll.json'
+      roll: '/assets/gameplay/animations/pistol_01-roll.json',
+      attack: '/assets/gameplay/animations/pistol_01-attack.json',
+      reload: '/assets/gameplay/animations/pistol_01-reload.json',
+      hit: '/assets/gameplay/animations/common-hit.json',
+      death: '/assets/gameplay/animations/common-death.json'
     }
   },
   {
@@ -59,7 +60,11 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/shotgun_01-run.json',
       jump: '/assets/gameplay/animations/shotgun_01-jump.json',
-      roll: '/assets/gameplay/animations/shotgun_01-roll.json'
+      roll: '/assets/gameplay/animations/shotgun_01-roll.json',
+      attack: '/assets/gameplay/animations/shotgun_01-attack.json',
+      reload: '/assets/gameplay/animations/shotgun_01-reload.json',
+      hit: '/assets/gameplay/animations/common-hit.json',
+      death: '/assets/gameplay/animations/common-death.json'
     }
   },
   {
@@ -73,7 +78,11 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/sniperrifle_01-run.json',
       jump: '/assets/gameplay/animations/sniperrifle_01-jump.json',
-      roll: '/assets/gameplay/animations/sniperrifle_01-roll.json'
+      roll: '/assets/gameplay/animations/sniperrifle_01-roll.json',
+      attack: '/assets/gameplay/animations/sniperrifle_01-attack.json',
+      reload: '/assets/gameplay/animations/sniperrifle_01-reload.json',
+      hit: '/assets/gameplay/animations/common-hit.json',
+      death: '/assets/gameplay/animations/common-death.json'
     }
   },
   {
@@ -87,7 +96,11 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/machinegun_01-run.json',
       jump: '/assets/gameplay/animations/machinegun_01-jump.json',
-      roll: '/assets/gameplay/animations/machinegun_01-roll.json'
+      roll: '/assets/gameplay/animations/machinegun_01-roll.json',
+      attack: '/assets/gameplay/animations/machinegun_01-attack.json',
+      reload: '/assets/gameplay/animations/machinegun_01-reload.json',
+      hit: '/assets/gameplay/animations/common-hit.json',
+      death: '/assets/gameplay/animations/common-death.json'
     }
   },
   {
@@ -101,7 +114,9 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
       run: '/assets/gameplay/animations/knives_01-run.json',
       jump: '/assets/gameplay/animations/knives_01-jump.json',
       roll: '/assets/gameplay/animations/knives_01-roll.json',
-      attack: '/assets/gameplay/animations/knives_01-attack.json'
+      attack: '/assets/gameplay/animations/knives_01-attack.json',
+      hit: '/assets/gameplay/animations/common-hit.json',
+      death: '/assets/gameplay/animations/common-death.json'
     }
   },
   {
@@ -116,7 +131,9 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
       run: '/assets/gameplay/animations/shield_01-run.json',
       jump: '/assets/gameplay/animations/shield_01-jump.json',
       roll: '/assets/gameplay/animations/shield_01-roll.json',
-      attack: '/assets/gameplay/animations/shield_01-attack.json'
+      attack: '/assets/gameplay/animations/shield_01-attack.json',
+      hit: '/assets/gameplay/animations/common-hit.json',
+      death: '/assets/gameplay/animations/common-death.json'
     }
   },
   {
@@ -130,7 +147,11 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/bow_01-run.json',
       jump: '/assets/gameplay/animations/bow_01-jump.json',
-      roll: '/assets/gameplay/animations/bow_01-roll.json'
+      roll: '/assets/gameplay/animations/bow_01-roll.json',
+      attack: '/assets/gameplay/animations/bow_01-attack.json',
+      reload: '/assets/gameplay/animations/bow_01-reload.json',
+      hit: '/assets/gameplay/animations/common-hit.json',
+      death: '/assets/gameplay/animations/common-death.json'
     }
   },
   {
@@ -144,7 +165,11 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/rpg_01-run.json',
       jump: '/assets/gameplay/animations/rpg_01-jump.json',
-      roll: '/assets/gameplay/animations/rpg_01-roll.json'
+      roll: '/assets/gameplay/animations/rpg_01-roll.json',
+      attack: '/assets/gameplay/animations/rpg_01-attack.json',
+      reload: '/assets/gameplay/animations/rpg_01-reload.json',
+      hit: '/assets/gameplay/animations/common-hit.json',
+      death: '/assets/gameplay/animations/common-death.json'
     }
   },
   {
@@ -155,9 +180,13 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
     ],
     actions: {
       idle: '/assets/creation/idle.json',
-      run: '/assets/gameplay/animations/smg_01-run.json',
+      run: '/assets/gameplay/animations/sprayer_01-run.json',
       jump: '/assets/gameplay/animations/smg_01-jump.json',
-      roll: '/assets/gameplay/animations/smg_01-roll.json'
+      roll: '/assets/gameplay/animations/smg_01-roll.json',
+      attack: '/assets/gameplay/animations/sprayer_01-attack.json',
+      reload: '/assets/gameplay/animations/sprayer_01-reload.json',
+      hit: '/assets/gameplay/animations/common-hit.json',
+      death: '/assets/gameplay/animations/common-death.json'
     }
   },
   {
@@ -167,7 +196,9 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/grenade_01-run.json',
       jump: '/assets/gameplay/animations/grenade_01-jump.json',
-      roll: '/assets/gameplay/animations/grenade_01-roll.json'
+      roll: '/assets/gameplay/animations/grenade_01-roll.json',
+      hit: '/assets/gameplay/animations/common-hit.json',
+      death: '/assets/gameplay/animations/common-death.json'
     }
   }
 ];

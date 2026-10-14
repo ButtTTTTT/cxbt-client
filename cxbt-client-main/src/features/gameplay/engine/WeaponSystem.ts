@@ -31,19 +31,19 @@ const DEFAULT_MAG_CAPACITIES: Record<string, number> = {
 };
 
 const DEFAULT_DAMAGE: Record<string, number> = {
-  pistol: 18,
-  sniperrifle: 85,
-  shotgun: 35,
-  smg: 15,
-  machinegun: 16,
-  rpg: 120,
-  grenadelauncher: 90,
-  grenade: 100,
-  bow: 45,
-  crossbow: 50,
-  knives: 40,
-  shield: 25,
-  sprayer: 8
+  pistol: 220,
+  sniperrifle: 1200,
+  shotgun: 140,
+  smg: 110,
+  machinegun: 125,
+  rpg: 1400,
+  grenadelauncher: 950,
+  grenade: 1200,
+  bow: 750,
+  crossbow: 800,
+  knives: 650,
+  shield: 450,
+  sprayer: 85
 };
 
 /**

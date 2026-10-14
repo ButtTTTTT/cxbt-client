@@ -19,7 +19,8 @@ type Projectile = {
 };
 
 export function createProjectileSystem(scene: any, targets: () => any[],
-  onExplosion: (point: any, radius: number) => void) {
+  onExplosion: (point: any, radius: number) => void,
+  onHit?: (hit: any, kind: WeaponKind) => void) {
   const projectiles: Projectile[] = [];
   const impacts: { mesh: any; lifetime: number }[] = [];
   const raycaster = new THREE.Raycaster();
@@ -68,6 +69,9 @@ export function createProjectileSystem(scene: any, targets: () => any[],
       raycaster.far = step.length();
       const hit = raycaster.intersectObjects(targets(), true)[0];
       if (hit || projectile.lifetime <= 0) {
+        if (hit && onHit) {
+          onHit(hit, projectile.kind);
+        }
         impact(hit?.point ?? projectile.mesh.position, projectile.kind === 'grenade' || projectile.kind === 'rocket');
         release(projectile.mesh);
         projectiles.splice(index, 1);
