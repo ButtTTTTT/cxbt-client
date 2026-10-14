@@ -2,13 +2,19 @@
 // Requires Node 22+ and Chromium. Screenshots and browser state stay in /tmp.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const base = (process.argv[2] ?? 'http://127.0.0.1:5173').replace(/\/$/, '');
 const output = await mkdtemp(join(tmpdir(), 'avatar-creation-smoke-'));
-const browser = spawn(process.env.CHROMIUM_PATH ?? 'chromium', [
+const defaultBrowser = process.platform === 'win32'
+  ? (existsSync('C:/Users/Administrator/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe')
+    ? 'C:/Users/Administrator/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe'
+    : 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe')
+  : 'chromium';
+const browser = spawn(process.env.CHROMIUM_PATH ?? defaultBrowser, [
   '--headless', '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu',
   '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
   '--remote-debugging-port=0', `--user-data-dir=${output}/profile`, 'about:blank',
