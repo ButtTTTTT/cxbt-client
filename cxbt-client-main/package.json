@@ -11,6 +11,7 @@
     "smoke:avatars": "node scripts/smoke-avatar-cards.mjs",
     "smoke:skills": "node scripts/smoke-skills.mjs",
     "smoke:battle": "node scripts/smoke-battle.mjs",
+    "smoke:weapons": "node scripts/smoke-weapons-combat.mjs",
     "validate:cache": "node scripts/validate-cache.mjs",
     "preview": "vite preview"
   },
@@ -26,6 +27,7 @@
     "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.1.1",
     "oxlint": "^1.81.0",
+    "playwright": "^1.64.1",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
   }

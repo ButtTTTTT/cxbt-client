@@ -1174,7 +1174,7 @@ export default function CharacterController() {
 
     const animate = () => {
       animationId = requestAnimationFrame(animate);
-      const delta = Math.min(clock.getDelta(), 0.05);
+      const delta = Math.min(clock.getDelta(), 0.1);
 
       // 把本帧的物理输入意图打包发送给引擎处理
       direction.set(0, 0, 0);
@@ -1637,11 +1637,11 @@ export default function CharacterController() {
         fontFamily: 'sans-serif'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#38bdf8' }}>
+          <span id="hud-weapon-name" style={{ fontSize: '13px', fontWeight: 'bold', color: '#38bdf8' }}>
             🔫 {activeProfile.name}
           </span>
           {isReloading ? (
-            <span style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 'bold', animation: 'reload-pulse 0.8s infinite' }}>
+            <span id="hud-reloading-status" style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 'bold', animation: 'reload-pulse 0.8s infinite' }}>
               换弹中 ({Math.floor(reloadProgress * 100)}%)
             </span>
           ) : (
@@ -1653,7 +1653,9 @@ export default function CharacterController() {
 
         {/* 弹药数 */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '4px 0' }}>
-          <span style={{ 
+          <span 
+            id="hud-current-ammo"
+            style={{ 
             fontSize: '32px', 
             fontWeight: '900', 
             fontFamily: 'monospace',
@@ -1662,7 +1664,7 @@ export default function CharacterController() {
             {activeProfile.kind === 'melee' ? '∞' : currentMagAmmo}
           </span>
           {activeProfile.kind !== 'melee' && (
-            <span style={{ fontSize: '15px', color: '#94a3b8', fontFamily: 'monospace' }}>
+            <span id="hud-reserve-ammo" style={{ fontSize: '15px', color: '#94a3b8', fontFamily: 'monospace' }}>
               / {reserveAmmo}
             </span>
           )}
@@ -1782,6 +1784,7 @@ export default function CharacterController() {
             🔫 挂载武器 3D 模型与动作套件：
           </label>
           <select 
+            id="weapon-suite-select"
             style={{ width: '100%', padding: '8px 10px', background: '#0f172a', color: 'white', border: '1px solid #475569', borderRadius: '6px', fontSize: '13px' }}
             value={activeSuiteId} 
             onChange={e => handleSuiteChange(e.target.value)}>
@@ -1822,6 +1825,7 @@ export default function CharacterController() {
               ⚡ 翻滚
             </button>
             <button 
+              id="btn-fire"
               onClick={fireWeapon}
               style={{
                 ...btnStyle,
@@ -1833,13 +1837,13 @@ export default function CharacterController() {
             </button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-            <button onClick={reloadWeapon} style={btnStyle} title="按 R 键亦可触发">
+            <button id="btn-reload" onClick={reloadWeapon} style={btnStyle} title="按 R 键亦可触发">
               🔄 换弹
             </button>
-            <button onClick={triggerDamage} style={{ ...btnStyle, color: '#f87171' }} title="承受 600 点伤害">
+            <button id="btn-damage" onClick={triggerDamage} style={{ ...btnStyle, color: '#f87171' }} title="承受 600 点伤害">
               💥 扣血
             </button>
-            <button onClick={triggerRevive} style={{ ...btnStyle, color: '#4ade80' }} title="复活并回满血">
+            <button id="btn-revive" onClick={triggerRevive} style={{ ...btnStyle, color: '#4ade80' }} title="复活并回满血">
               ❤️ 复活
             </button>
           </div>

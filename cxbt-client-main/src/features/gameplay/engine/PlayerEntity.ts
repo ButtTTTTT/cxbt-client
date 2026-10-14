@@ -345,6 +345,8 @@ export class PlayerEntity {
       }
     }
     this.weaponParts = remaining;
+    this.isReloading = false;
+    this.reloadTimer = 0;
   }
 
   /**
