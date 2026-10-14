@@ -43,6 +43,7 @@ const DEFAULT_DAMAGE: Record<string, number> = {
   crossbow: 800,
   knives: 650,
   shield: 450,
+  stick: 680,
   sprayer: 85
 };
 

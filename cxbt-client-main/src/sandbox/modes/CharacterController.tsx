@@ -115,6 +115,19 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     isAutomatic: false,
     headshotMultiplier: 1.5
   },
+  stick_sh01: {
+    name: '战术战棍 (Stick)',
+    kind: 'melee',
+    damage: 680,
+    pellets: 1,
+    spread: 0,
+    fireDelay: 0.52,
+    magCapacity: 0,
+    reloadTime: 0,
+    fireAudio: 'fire-knives',
+    isAutomatic: false,
+    headshotMultiplier: 1.6
+  },
   shield_01: {
     name: '战术盾牌 (Shield)',
     kind: 'melee',
@@ -141,6 +154,19 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     isAutomatic: false,
     headshotMultiplier: 2.4
   },
+  crossbow_03: {
+    name: '战术十字弩 (Crossbow)',
+    kind: 'arrow',
+    damage: 850,
+    pellets: 1,
+    spread: 0.005,
+    fireDelay: 0.7,
+    magCapacity: 1,
+    reloadTime: 1.1,
+    fireAudio: 'fire-crossbow',
+    isAutomatic: false,
+    headshotMultiplier: 2.5
+  },
   rpg_01: {
     name: '火箭筒 (RPG)',
     kind: 'rocket',
@@ -151,6 +177,20 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     magCapacity: 1,
     reloadTime: 2.2,
     fireAudio: 'fire-rpg',
+    reloadAudio: 'reload_rpg',
+    isAutomatic: false,
+    headshotMultiplier: 1.0
+  },
+  grenadelauncher_01: {
+    name: '榴弹发射器 (GrenadeLauncher)',
+    kind: 'grenade',
+    damage: 1100,
+    pellets: 1,
+    spread: 0.02,
+    fireDelay: 0.8,
+    magCapacity: 6,
+    reloadTime: 2.4,
+    fireAudio: 'fire-grenadelauncher',
     reloadAudio: 'reload_rpg',
     isAutomatic: false,
     headshotMultiplier: 1.0
@@ -172,10 +212,10 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
   grenade_01: {
     name: '战术手雷 (Grenade)',
     kind: 'grenade',
-    damage: 1200,
+    damage: 1350,
     pellets: 1,
     spread: 0.02,
-    fireDelay: 1.0,
+    fireDelay: 1.2,
     magCapacity: 1,
     reloadTime: 1.5,
     fireAudio: 'fire-grenade',

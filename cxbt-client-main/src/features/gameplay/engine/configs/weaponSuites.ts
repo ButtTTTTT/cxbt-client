@@ -190,13 +190,69 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
     }
   },
   {
+    id: 'stick_sh01',
+    name: '近战战棍套件 (Stick - 含攻击)',
+    parts: [
+      { model: '/assets/creation/models/stick_sh01-rv.glb', texture: '/assets/creation/textures/stick_sh01-rv.png', bone: 'handweapon_r' }
+    ],
+    actions: {
+      idle: '/assets/creation/idle.json',
+      run: '/assets/gameplay/animations/stick_sh01-run.json',
+      jump: '/assets/gameplay/animations/stick_sh01-jump.json',
+      roll: '/assets/gameplay/animations/stick_sh01-roll.json',
+      attack: '/assets/gameplay/animations/stick_sh01-attack.json',
+      hit: '/assets/gameplay/animations/common-hit.json',
+      death: '/assets/gameplay/animations/common-death.json'
+    }
+  },
+  {
+    id: 'crossbow_03',
+    name: '战术十字弩套件 (Crossbow)',
+    parts: [
+      { model: '/assets/creation/models/crossbow_03-rv.glb', texture: '/assets/creation/textures/crossbow_03-rv.png', bone: 'handweapon_r' },
+      { model: '/assets/creation/models/crossbow_03-mz.glb', texture: '/assets/creation/textures/crossbow_03-rv.png', bone: 'handweapon_r' }
+    ],
+    actions: {
+      idle: '/assets/creation/idle.json',
+      run: '/assets/gameplay/animations/crossbow_03-run.json',
+      jump: '/assets/gameplay/animations/crossbow_03-jump.json',
+      roll: '/assets/gameplay/animations/crossbow_03-roll.json',
+      attack: '/assets/gameplay/animations/crossbow_03-attack.json',
+      reload: '/assets/gameplay/animations/crossbow_03-reload.json',
+      hit: '/assets/gameplay/animations/common-hit.json',
+      death: '/assets/gameplay/animations/common-death.json'
+    }
+  },
+  {
+    id: 'grenadelauncher_01',
+    name: '榴弹发射器套件 (GrenadeLauncher)',
+    parts: [
+      { model: '/assets/creation/models/grenadelauncher_01-rv.glb', texture: '/assets/creation/textures/grenadelauncher_01-rv.png', bone: 'handweapon_r' },
+      { model: '/assets/creation/models/grenadelauncher_01-mz.glb', texture: '/assets/creation/textures/grenadelauncher_01-rv.png', bone: 'handweapon_r' }
+    ],
+    actions: {
+      idle: '/assets/creation/idle.json',
+      run: '/assets/gameplay/animations/grenadelauncher_01-run.json',
+      jump: '/assets/gameplay/animations/grenadelauncher_01-jump.json',
+      roll: '/assets/gameplay/animations/grenadelauncher_01-roll.json',
+      attack: '/assets/gameplay/animations/grenadelauncher_01-attack.json',
+      reload: '/assets/gameplay/animations/grenadelauncher_01-reload.json',
+      hit: '/assets/gameplay/animations/common-hit.json',
+      death: '/assets/gameplay/animations/common-death.json'
+    }
+  },
+  {
     id: 'grenade_01',
-    name: '战术手雷套件 (Grenade)',
+    name: '战术手雷套件 (Grenade - 投掷)',
+    parts: [
+      { model: '/assets/creation/models/grenade_01-rv.glb', texture: '/assets/creation/textures/grenade_01-rv.png', bone: 'handweapon_r' }
+    ],
     actions: {
       idle: '/assets/creation/idle.json',
       run: '/assets/gameplay/animations/grenade_01-run.json',
       jump: '/assets/gameplay/animations/grenade_01-jump.json',
       roll: '/assets/gameplay/animations/grenade_01-roll.json',
+      attack: '/assets/gameplay/animations/grenade_01-attack.json',
       hit: '/assets/gameplay/animations/common-hit.json',
       death: '/assets/gameplay/animations/common-death.json'
     }

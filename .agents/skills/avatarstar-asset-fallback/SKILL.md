@@ -47,3 +47,25 @@ description: 规定在 cxbt-client 开发中，当缺少武器动作、音效、
 ### 3. 音效文件溯源与挂载
 - 声音资源统一检索自 `AvatarStar_cache/audio/`。
 - 前端播放统一走 `audio.play('<sound_name>')`，对应静态文件放置在 `cxbt-client-main/public/assets/gameplay/audio/`。
+
+---
+
+## 三、端游全武器大类对照表 (14 种武器类型)
+
+| 武器类别 | 代表 ID | 弹道/伤害类型 | 核心手感特征 | 溯源模型与贴图 | 开火音效 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **冲锋枪 (SMG)** | `smg_01` | Hitscan 射线 | 30 发高射速全自动，短点射稳定 | `mesh/weapon/smg_01` | `fire-smg.wav` |
+| **手枪 (Pistol)** | `pistol_01` | Hitscan 射线 | 12 发半自动，精准度极高，副武器首选 | `mesh/weapon/pistol_01` | `fire-pistol.wav` |
+| **霰弹枪 (Shotgun)** | `shotgun_01` | Hitscan 7 弹丸散射 | 8 发泵动单发，近距离一击高伤 | `mesh/weapon/shotgun_01` | `fire-shotgun.wav` |
+| **狙击步枪 (Sniper)** | `sniperrifle_01` | Hitscan 穿透射线 | 5 发栓动，单发极高伤害，爆头 2.5 倍暴击 | `mesh/weapon/sniperrifle_01` | `fire-sniperrifle.wav` |
+| **重机枪 (Machinegun)** | `machinegun_01` | Hitscan 连续射线 | 80 发超大弹匣，火力压制，射速略慢于 SMG | `mesh/weapon/machinegun_01` | `fire-machinegun.wav` |
+| **近战军刀 (Knives)** | `knives_01` | 扇形范围近战 | 高速挥砍连击，无弹药限制 | `mesh/weapon/knives_01` | `fire-knives.wav` |
+| **近战战棍 (Stick)** | `stick_sh01` | 宽范围钝器近战 | 重击击退，硬直效果更长 | `mesh/weapon/stick_sh01` | `fire-knives.wav` |
+| **战术盾牌 (Shield)** | `shield_01` | 近战盾击 / 格挡 | 双手持盾，盾击推击与战术防护 | `mesh/weapon/shield_01` | `fire-shield.wav` |
+| **复合弓 (Bow)** | `bow_01` | 弹道物理箭矢 | 单发拉弓蓄能射击，飞行箭矢下坠与穿透 | `mesh/weapon/bow_01` | `fire-bow.wav` |
+| **战术十字弩 (Crossbow)** | `crossbow_03` | 平直弹道高穿透弩箭 | 单发高速机械发射，弹道下坠极小，爆头致命 | `mesh/weapon/crossbow_03` | `fire-crossbow.wav` |
+| **火箭筒 (RPG)** | `rpg_01` | 物理火箭与范围爆炸 | 尾焰推进，触地/碰撞造成高额大范围爆炸 AOE | `mesh/weapon/rpg_01` | `fire-rpg.wav` |
+| **榴弹发射器 (GrenadeLauncher)** | `grenadelauncher_01` | 抛物线跳跃爆炸弹 | 6 发弹巢，发射弹跳榴弹，落地引爆范围杀伤 | `mesh/weapon/grenadelauncher_01` | `fire-grenadelauncher.wav` |
+| **战术手雷 (Grenade)** | `grenade_01` | 投掷抛物线高爆物 | 抛掷弧线，反弹后延时引爆，破片杀伤 | `mesh/weapon/grenade_01` | `fire-grenade.wav` |
+| **生化喷射器 (Sprayer)** | `sprayer_01` | 锥形生化毒雾持续喷射 | 60 发生化药水，近距大锥角连续腐蚀伤害 | `mesh/weapon/sprayer_01` | `sprayer.wav` |
+
