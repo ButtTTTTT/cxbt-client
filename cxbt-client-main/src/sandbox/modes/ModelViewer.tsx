@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { WEAPON_SUITES, ACTION_LABELS, type WeaponActionSet } from '../../features/gameplay/engine/configs/weaponSuites';
+import { WEAPON_SUITES, ACTION_LABELS, getWeaponActionSuite, type WeaponActionSet, type WeaponPartConfig } from '../../features/gameplay/engine/configs/weaponSuites';
 import { buildFullAvatar, type BuiltAvatar } from '../../features/gameplay/engine/avatarBuilder';
 import { 
   MAP_PRESETS, 
@@ -11,7 +11,8 @@ import {
   type LoadedMapSession 
 } from '../../features/gameplay/engine/MapManager';
 import { MapCollider } from '../../features/gameplay/engine/MapCollider';
-import type { CreationJob } from '../../features/characterCreation/assets';
+import { assetUrl, type CreationJob } from '../../features/characterCreation/assets';
+import { loadLobbyAssets, type LobbyAssets } from '../../features/lobby/assets';
 
 interface JobOption {
   id: CreationJob;
@@ -34,10 +35,13 @@ export default function ModelViewer() {
   const mountRef = useRef<HTMLDivElement>(null);
 
   // 调试状态控制
+  const [lobbyAssets, setLobbyAssets] = useState<LobbyAssets | null>(null);
+  const [selectedAvatarCardId, setSelectedAvatarCardId] = useState<string>('default');
   const [selectedJobIdx, setSelectedJobIdx] = useState<number>(0);
   const [selectedHairIdx, setSelectedHairIdx] = useState<number>(0);
   const [availableHairCount, setAvailableHairCount] = useState<number>(4);
   const [activeWeaponId, setActiveWeaponId] = useState<string>(WEAPON_SUITES[0].id);
+  const [selectedWeaponSkinId, setSelectedWeaponSkinId] = useState<string>('');
   const [activeAnimKey, setActiveAnimKey] = useState<string>('idle');
   const [selectedEnvMapId, setSelectedEnvMapId] = useState<string>('none');
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
@@ -202,15 +206,25 @@ export default function ModelViewer() {
     weaponPartsRef.current = [];
   };
 
+  useEffect(() => {
+    const controller = new AbortController();
+    loadLobbyAssets(controller.signal)
+      .then(assets => {
+        if (!controller.signal.aborted) setLobbyAssets(assets);
+      })
+      .catch(() => null);
+    return () => controller.abort();
+  }, []);
+
   // 挂载武器部件 (支持双持与多部件模型)
-  const mountWeaponParts = async (suite: WeaponActionSet | undefined, skeleton: any) => {
+  const mountWeaponParts = async (parts: WeaponPartConfig[] | undefined, skeleton: any) => {
     clearMountedWeapons();
-    if (!suite?.parts || !skeleton) return;
+    if (!parts || !skeleton) return;
 
     const loader = new GLTFLoader();
     const texLoader = new THREE.TextureLoader();
 
-    for (const part of suite.parts) {
+    for (const part of parts) {
       try {
         const bone = findBone(skeleton, part.bone);
         if (!bone) {
@@ -252,6 +266,19 @@ export default function ModelViewer() {
     }
   };
 
+  const resolveActiveWeaponParts = (): WeaponPartConfig[] | undefined => {
+    if (activeWeaponId === 'none') return undefined;
+    if (selectedWeaponSkinId && lobbyAssets?.weapons[selectedWeaponSkinId]) {
+      return lobbyAssets.weapons[selectedWeaponSkinId].parts.map(p => ({
+        model: assetUrl(p.model),
+        texture: p.texture ? assetUrl(p.texture) : null,
+        bone: p.bone
+      }));
+    }
+    const currentSuite = WEAPON_SUITES.find(s => s.id === activeWeaponId);
+    return currentSuite?.parts;
+  };
+
   // 2. 加载与装配完整角色 (身体 + 面部五官 + 发型 + 贴图材质)
   useEffect(() => {
     const scene = sceneRef.current;
@@ -259,7 +286,11 @@ export default function ModelViewer() {
 
     let cancelled = false;
     const currentJob = JOB_OPTIONS[selectedJobIdx] || JOB_OPTIONS[0];
-    setStatus(`正在装配 [${currentJob.label}] 完整身体、面部与材质...`);
+    const cardItem = selectedAvatarCardId !== 'default'
+      ? lobbyAssets?.items.find(i => i.category === 'avatars' && i.id === selectedAvatarCardId)?.avatarCard
+      : undefined;
+    const label = cardItem ? `造型卡: ${cardItem.name}` : currentJob.label;
+    setStatus(`正在装配 [${label}] 完整身体、面部与材质...`);
 
     // 清理旧模型与骨骼线框
     if (rootGroupRef.current) {
@@ -279,7 +310,8 @@ export default function ModelViewer() {
     buildFullAvatar({
       jobId: currentJob.id,
       gender: currentJob.gender,
-      hairIndex: selectedHairIdx
+      hairIndex: selectedHairIdx,
+      preset: cardItem?.preset
     }).then(async (built: BuiltAvatar) => {
       if (cancelled) {
         built.dispose();
@@ -320,7 +352,7 @@ export default function ModelViewer() {
 
       // 挂载武器
       const currentSuite = WEAPON_SUITES.find(s => s.id === activeWeaponId);
-      await mountWeaponParts(currentSuite, built.skeleton);
+      await mountWeaponParts(resolveActiveWeaponParts(), built.skeleton);
 
       // 应用线框模式设置
       applyWireframe(showWireframe);
@@ -328,7 +360,7 @@ export default function ModelViewer() {
       // 加载并播放动作
       loadActionClip(activeAnimKey, currentSuite);
 
-      setStatus(`[${currentJob.label}] 模型装配完毕！骨骼与五官贴图已全部就绪。`);
+      setStatus(`[${label}] 模型装配完毕！骨骼与五官贴图已全部就绪。`);
     }).catch(err => {
       if (!cancelled) {
         console.error('[ModelViewer] 角色装配失败:', err);
@@ -339,18 +371,20 @@ export default function ModelViewer() {
     return () => {
       cancelled = true;
     };
-  }, [selectedJobIdx, selectedHairIdx]);
+  }, [selectedJobIdx, selectedHairIdx, selectedAvatarCardId, lobbyAssets]);
 
-  // 3. 武器套件切换时挂载模型与动作更新
+  // 3. 武器套件或原版皮肤切换时挂载模型与动作更新
   useEffect(() => {
     if (!mainSkeletonRef.current) return;
     const currentSuite = WEAPON_SUITES.find(s => s.id === activeWeaponId);
-    setStatus(`正在适配 [${currentSuite?.name ?? '无武器'}] 武器模型与挂点...`);
-    mountWeaponParts(currentSuite, mainSkeletonRef.current).then(() => {
-      setStatus(`[${currentSuite?.name ?? '无武器'}] 模型与骨骼适配成功！`);
+    const skinWeapon = selectedWeaponSkinId ? lobbyAssets?.weapons[selectedWeaponSkinId] : undefined;
+    const weaponTitle = skinWeapon ? `${skinWeapon.label} (${skinWeapon.id})` : (currentSuite?.name ?? '无武器');
+    setStatus(`正在适配 [${weaponTitle}] 武器模型与挂点...`);
+    mountWeaponParts(resolveActiveWeaponParts(), mainSkeletonRef.current).then(() => {
+      setStatus(`[${weaponTitle}] 模型与骨骼适配成功！`);
       loadActionClip(activeAnimKey, currentSuite);
     });
-  }, [activeWeaponId]);
+  }, [activeWeaponId, selectedWeaponSkinId]);
 
   // 4. 背景环境地图加载与随时切换
   const switchEnvMap = async (mapId: string) => {
@@ -566,7 +600,7 @@ export default function ModelViewer() {
         </h3>
 
         {/* 1. 角色职业与性别选择 */}
-        <div style={{ marginBottom: '14px' }}>
+        <div style={{ marginBottom: '12px' }}>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: '#cbd5e1' }}>
             👤 角色职业与性别：
           </label>
@@ -576,10 +610,34 @@ export default function ModelViewer() {
             onChange={e => {
               setSelectedJobIdx(Number(e.target.value));
               setSelectedHairIdx(0);
+              setSelectedAvatarCardId('default');
             }}>
             {JOB_OPTIONS.map((job, idx) => (
               <option key={job.label} value={idx}>{job.label}</option>
             ))}
+          </select>
+        </div>
+
+        {/* 1b. 157 款原版角色造型卡皮肤库 */}
+        <div style={{ marginBottom: '14px' }}>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: '#f472b6' }}>
+            🃏 157 款原版角色造型卡皮肤库：
+          </label>
+          <select
+            value={selectedAvatarCardId}
+            onChange={e => {
+              setSelectedAvatarCardId(e.target.value);
+              setSelectedHairIdx(0);
+            }}
+            style={{ width: '100%', padding: '8px 12px', background: '#0f172a', color: 'white', border: '1px solid #ec4899', borderRadius: '8px', fontSize: '13px', outline: 'none' }}>
+            <option value="default">👤 默认职业基础造型</option>
+            {lobbyAssets?.items
+              .filter(item => item.category === 'avatars' && item.avatarCard)
+              .map(item => (
+                <option key={item.id} value={item.id}>
+                  🃏 {item.name} ({item.id})
+                </option>
+              ))}
           </select>
         </div>
 
@@ -633,15 +691,16 @@ export default function ModelViewer() {
         </div>
 
         {/* 4. 武器模型与挂点选择 */}
-        <div style={{ marginBottom: '14px' }}>
+        <div style={{ marginBottom: '12px' }}>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: '#cbd5e1' }}>
-            🔫 挂载 3D 武器模型：
+            🔫 14 类武器家族与动作套件：
           </label>
           <select 
             style={{ width: '100%', padding: '8px 12px', background: '#0f172a', color: 'white', border: '1px solid #475569', borderRadius: '8px', fontSize: '13px', outline: 'none' }}
             value={activeWeaponId} 
             onChange={e => {
               setActiveWeaponId(e.target.value);
+              setSelectedWeaponSkinId('');
               const targetSuite = WEAPON_SUITES.find(s => s.id === e.target.value);
               if (targetSuite && !Object.keys(targetSuite.actions).includes(activeAnimKey)) {
                 setActiveAnimKey('idle');
@@ -654,9 +713,34 @@ export default function ModelViewer() {
               </option>
             ))}
           </select>
+        </div>
+
+        {/* 4b. 484 把原版武器全量模型库 */}
+        <div style={{ marginBottom: '14px' }}>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: '#fbbf24' }}>
+            ✨ 484 把原版武器全量模型库：
+          </label>
+          <select
+            style={{ width: '100%', padding: '8px 12px', background: '#0f172a', color: 'white', border: '1px solid #f59e0b', borderRadius: '8px', fontSize: '13px', outline: 'none' }}
+            value={selectedWeaponSkinId}
+            onChange={e => {
+              const wid = e.target.value;
+              setSelectedWeaponSkinId(wid);
+              if (wid) {
+                const matchedSuite = getWeaponActionSuite(wid);
+                setActiveWeaponId(matchedSuite.id);
+              }
+            }}>
+            <option value="">🔧 使用当前套件默认武器模型</option>
+            {lobbyAssets && Object.values(lobbyAssets.weapons).map(w => (
+              <option key={w.id} value={w.id}>
+                {w.label} [{w.id}]
+              </option>
+            ))}
+          </select>
           {currentSuite?.parts && (
             <div style={{ fontSize: '11px', color: '#38bdf8', marginTop: '6px', lineHeight: '1.4', background: 'rgba(56, 189, 248, 0.08)', padding: '6px 8px', borderRadius: '6px' }}>
-              🎯 已装配骨骼: {currentSuite.parts.map(p => `${p.model.split('/').pop()?.replace('.glb', '')} → ${p.bone}`).join(', ')}
+              🎯 已装配骨骼: {(resolveActiveWeaponParts() ?? currentSuite.parts).map(p => `${p.model.split('/').pop()?.replace('.glb', '')} → ${p.bone}`).join(', ')}
             </div>
           )}
         </div>

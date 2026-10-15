@@ -1,12 +1,14 @@
 import type { CSSProperties } from 'react';
+import { apiFetch } from '../../api';
 import type { LobbyAssets } from '../lobby/assets';
 import { lobbyUrl } from '../lobby/assets';
 import './GameModeLobby.css';
 
 type GameModeLobbyProps = {
   assets: LobbyAssets;
+  weaponIds?: string[];
   onStatus: (message: string) => void;
-  onPractice: () => void;
+  onPractice: (joinedRoom?: any) => void;
 };
 
 type GameMode = {
@@ -37,7 +39,26 @@ function buttonArt(assets: LobbyAssets, key: string): CSSProperties {
   } as CSSProperties;
 }
 
-export default function GameModeLobby({ assets, onStatus, onPractice }: GameModeLobbyProps) {
+export default function GameModeLobby({ assets, weaponIds = [], onStatus, onPractice }: GameModeLobbyProps) {
+  const startQuickMatch = async (modeId = 'team', modeName = '团队', mapId = 'level1', mapName = '训练场') => {
+    try {
+      onStatus('正在为您快速匹配战局…');
+      const res = await apiFetch('/rooms/quickmatch', {
+        method: 'POST',
+        body: JSON.stringify({ modeId, modeName, mapId, mapName, weaponIds }),
+      });
+      if (res?.room) {
+        onStatus(res.message || `已匹配进入房间 · ${res.room.name}`);
+        onPractice(res.room);
+      } else {
+        onPractice();
+      }
+    } catch (e: any) {
+      onStatus(e?.message || '已进入战区房间列表');
+      onPractice();
+    }
+  };
+
   return <section className="game-mode-layer" aria-label="凌云要塞游戏模式" data-game-mode-ready="true">
     <div className="game-mode-map" style={art(assets, 'gameMap')}>
       <div className="game-mode-title" style={art(assets, 'gameTitleBar')}>
@@ -47,11 +68,16 @@ export default function GameModeLobby({ assets, onStatus, onPractice }: GameMode
         aria-label="凌云要塞" onClick={() => onStatus('凌云要塞 · 请选择下方游戏模式')} />
       {GAME_MODES.map((mode) => <button key={mode.id} className={`game-mode-theme game-mode-theme-${mode.id}`}
         style={{ ...buttonArt(assets, `gameTheme${mode.id}`), left: mode.left, top: mode.top, width: mode.width, height: mode.height }}
-        aria-label={mode.label} onClick={() => mode.id === '01' ? onPractice() : onStatus(`${mode.label} · 当前为本地演示，尚未连接游戏服务器`)}>
+        aria-label={mode.label} onClick={() => {
+          if (mode.id === '01') onPractice();
+          else if (mode.id === '02') { onStatus('战场模式 · 已进入凌云要塞战区大厅'); onPractice(); }
+          else if (mode.id === '03') window.location.href = `${import.meta.env.BASE_URL}sandbox`;
+          else if (mode.id === '04') void startQuickMatch('occupy', '占点', 'level1', '远征要塞');
+        }}>
         <span>{mode.label}</span>
       </button>)}
       <button className="game-mode-quick" style={buttonArt(assets, 'gameQuickMatch')} aria-label="快速匹配"
-        onClick={() => onStatus('快速匹配 · 当前没有游戏服务器，无法开始匹配')}><span>快速匹配</span></button>
+        onClick={() => void startQuickMatch()}><span>快速匹配</span></button>
     </div>
   </section>;
 }

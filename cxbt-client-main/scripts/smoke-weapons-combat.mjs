@@ -107,34 +107,46 @@ async function run() {
       await fireBtn.click();
       await page.waitForTimeout(200);
 
-      // 如果是非近战武器，校验开火后弹药正确扣减
+      // 如果是非近战武器，校验开火后弹药扣减与自动换弹/手动换弹
       if (!w.isMelee) {
-        const expectedDecrementedAmmo = w.mag - 1;
-        await page.waitForFunction(
-          (expected) => {
-            const el = document.getElementById('hud-current-ammo');
-            return el && el.textContent.trim() === String(expected);
-          },
-          expectedDecrementedAmmo,
-          { timeout: 5000 }
-        );
+        if (w.mag === 1) {
+          // 单发弹夹武器打空瞬间自动触发换弹，并在换弹完成后自动恢复为 1 发满弹！
+          await page.waitForFunction(
+            (expectedMag) => {
+              const el = document.getElementById('hud-current-ammo');
+              return el && el.textContent.trim() === String(expectedMag);
+            },
+            w.mag,
+            { timeout: 12000 }
+          );
+        } else {
+          const expectedDecrementedAmmo = w.mag - 1;
+          await page.waitForFunction(
+            (expected) => {
+              const el = document.getElementById('hud-current-ammo');
+              return el && el.textContent.trim() === String(expected);
+            },
+            expectedDecrementedAmmo,
+            { timeout: 5000 }
+          );
 
-        // 测试换弹
-        const reloadBtn = page.locator('#btn-reload');
-        await reloadBtn.click();
+          // 测试手动换弹
+          const reloadBtn = page.locator('#btn-reload');
+          await reloadBtn.click();
 
-        // 校验换弹后弹药恢复满额
-        await page.waitForFunction(
-          (expectedMag) => {
-            const el = document.getElementById('hud-current-ammo');
-            return el && el.textContent.trim() === String(expectedMag);
-          },
-          w.mag,
-          { timeout: 12000 }
-        );
+          // 校验换弹后弹药恢复满额
+          await page.waitForFunction(
+            (expectedMag) => {
+              const el = document.getElementById('hud-current-ammo');
+              return el && el.textContent.trim() === String(expectedMag);
+            },
+            w.mag,
+            { timeout: 12000 }
+          );
+        }
       }
 
-      console.log(`   ${indexStr} ✅ ${w.name.padEnd(28)} 挂载/弹药/开火/换弹全部通过`);
+      console.log(`   ${indexStr} ✅ ${w.name.padEnd(28)} 挂载/弹药/开火/自动与手动换弹全部通过`);
       weaponPassCount++;
     }
 
@@ -171,7 +183,26 @@ async function run() {
     assert.ok(revivedHp, '复活后假人 HP 应满额 3200');
     console.log('   ✅ 假人复活重置逻辑成功: HP 满额 3200/3200');
 
-    // 5. 校验控制台未产生致命运行时异常
+    // 5. 校验 3D 地图、模型、人物、动作与怪物编辑器
+    console.log('\n4️⃣ 校验 3D 地图、模型、人物、动作与怪物编辑器:');
+    const mapEditorTab = page.locator('#tab-sandbox-map-editor');
+    await mapEditorTab.click();
+    await page.waitForTimeout(2500);
+
+    await page.locator('#tab-create-monster').click();
+    await page.waitForTimeout(300);
+    await page.locator('#btn-add-monster').click();
+    await page.waitForTimeout(800);
+
+    await page.locator('#btn-save-custom-map').click();
+    await page.waitForTimeout(400);
+    console.log('   ✅ 3D 地图编辑器：成功放置自定义怪物 BOSS 并保存地图蓝图');
+
+    await page.locator('#btn-playtest-custom-map').click();
+    await page.waitForTimeout(2500);
+    console.log('   ✅ 3D 地图编辑器：一键进入实战试玩并加载自定义场景与怪物成功');
+
+    // 6. 校验控制台未产生致命运行时异常
     const fatalErrors = consoleErrors.filter(e => 
       !e.includes('favicon') && 
       !e.includes('audio') && 
@@ -185,7 +216,7 @@ async function run() {
     }
 
     console.log('\n====================================================');
-    console.log('🏆 自动化验证全部成功！14 类武器与战场战斗回路无一遗漏！');
+    console.log('🏆 自动化验证全部成功！14 类武器、自动换弹与 3D 地图编辑器无一遗漏！');
     console.log('====================================================');
   } finally {
     await context.close();

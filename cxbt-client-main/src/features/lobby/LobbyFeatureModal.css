@@ -1,0 +1,225 @@
+.lobby-feature-shade {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 12, 22, 0.72);
+  backdrop-filter: blur(3px);
+}
+
+.lobby-feature-window {
+  width: 820px;
+  max-height: 620px;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  border: 2px solid #f59e0b;
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  color: #f8fafc;
+  overflow: hidden;
+  font-family: "Microsoft YaHei", sans-serif;
+}
+
+.lobby-feature-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: linear-gradient(90deg, #92400e 0%, #b45309 50%, #78350f 100%);
+  border-bottom: 2px solid #fbbf24;
+}
+
+.lobby-feature-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: #fef3c7;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  letter-spacing: 1px;
+}
+
+.lobby-feature-wallet {
+  display: flex;
+  gap: 14px;
+  font-size: 13px;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+
+.lobby-feature-wallet span {
+  color: #fde68a;
+}
+
+.lobby-feature-close {
+  background: #dc2626;
+  color: #fff;
+  border: 1px solid #fca5a5;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.lobby-feature-close:hover {
+  background: #ef4444;
+}
+
+.lobby-feature-toast {
+  background: rgba(16, 185, 129, 0.2);
+  border-bottom: 1px solid rgba(16, 185, 129, 0.45);
+  color: #a7f3d0;
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.lobby-feature-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lobby-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.lobby-feature-card {
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lobby-feature-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lobby-feature-card-info strong {
+  font-size: 15px;
+  color: #fde68a;
+}
+
+.lobby-feature-card-info small {
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.lobby-feature-btn {
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  color: #fff;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.lobby-feature-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.lobby-feature-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lobby-feature-btn.secondary {
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+  border-color: #93c5fd;
+}
+
+.lobby-feature-btn.danger {
+  background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
+  border-color: #fca5a5;
+}
+
+.lobby-feature-row-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.65);
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.lobby-feature-row-form input {
+  flex: 1;
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: #f8fafc;
+  font-size: 13px;
+}
+
+.lobby-feature-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.lobby-feature-table th,
+.lobby-feature-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.lobby-feature-table th {
+  color: #fbbf24;
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.lobby-feature-subtabs {
+  display: flex;
+  gap: 8px;
+}
+
+.lobby-feature-subtabs button {
+  background: rgba(30, 41, 59, 0.9);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lobby-feature-subtabs button.active {
+  background: #d97706;
+  color: #fff;
+  border-color: #fde68a;
+}
+
+.lobby-feature-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 20px;
+  background: rgba(15, 23, 42, 0.9);
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent, useRef } from 'react';
-import { WS_BASE } from '../../api';
+import { apiFetch, WS_BASE } from '../../api';
 import './GlobalChat.css';
 
 type GlobalChatProps = {
@@ -13,12 +13,27 @@ export default function GlobalChat({ hostName, onClose }: GlobalChatProps) {
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const ws = new WebSocket(`${WS_BASE}?roomId=&playerId=${hostName}`);
+    apiFetch('/chat/history?channel=global')
+      .then((rows: any[]) => {
+        if (Array.isArray(rows) && rows.length > 0) {
+          setMessages([
+            '系统: 欢迎来到联机大厅全局频道！',
+            ...rows.map((r) => `${r.sender}: ${r.message}`),
+          ]);
+        }
+      })
+      .catch(() => undefined);
+
+    const ws = new WebSocket(`${WS_BASE}?roomId=&playerId=${encodeURIComponent(hostName)}`);
     wsRef.current = ws;
     ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if (msg.type === 'chat' || msg.type === 'invite') {
-        setMessages((current) => [...current.slice(-99), `${msg.userId}: ${msg.message}`]);
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'chat' || msg.type === 'invite') {
+          setMessages((current) => [...current.slice(-99), `${msg.userId}: ${msg.message}`]);
+        }
+      } catch {
+        // ignore malformed payload
       }
     };
     return () => ws.close();
@@ -30,6 +45,8 @@ export default function GlobalChat({ hostName, onClose }: GlobalChatProps) {
     if (!message) return;
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'chat', message, userId: hostName }));
+    } else {
+      setMessages((current) => [...current.slice(-99), `${hostName}: ${message}`]);
     }
     setDraft('');
   };

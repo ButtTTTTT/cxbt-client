@@ -2,8 +2,16 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { CollisionEnvironment, EntityEvents } from './types';
 import type { WeaponPartConfig } from './configs/weaponSuites';
+import { createStylizedWeaponMesh, enhanceLoadedWeaponModel } from './ProceduralWeaponBuilder';
 
 import { buildFullAvatar, type BuildAvatarOptions } from './avatarBuilder';
+
+const LOWER_BODY_BONES = new Set([
+  'root', 'torso', 'hip',
+  'leg_l', 'leg_r', 'knee_l', 'knee_r',
+  'ankle_l', 'ankle_r', 'toe_l', 'toe_r',
+  'heel_l', 'heel_r', 'ankleIK_l', 'ankleIK_r'
+]);
 
 /**
  * 玩家实体引擎核心类 (与 React 完全解耦的纯粹 3D 逻辑实体)
@@ -18,6 +26,7 @@ export class PlayerEntity {
   public health: number = 3200;
   public maxHealth: number = 3200;
   public isAlive: boolean = true;
+  public godMode: boolean = false;
 
   // 受击胶囊碰撞体
   public hitbox: any = null;
@@ -27,8 +36,11 @@ export class PlayerEntity {
 
   // 动画动作表与状态
   private actions: Record<string, any> = {};
+  private upperActions: Record<string, any> = {};
   private currentActionName: string = 'idle';
+  private currentUpperActionName: string = '';
   private forcedAction: string | null = null;
+  private ghostState = new Map<any, { transparent: boolean; opacity: number; depthWrite: boolean }>();
 
   // 骨架与挂点
   private mainSkeleton: any = null;
@@ -37,6 +49,7 @@ export class PlayerEntity {
   private activeWeaponSlot: number = 0;
 
   // 物理与移动参数
+  private baseSpeed: number = 4.8;
   private speed: number = 4.8;
   private rollSpeed: number = 8.5;
   private gravity: number = -18.0;
@@ -51,8 +64,11 @@ export class PlayerEntity {
   private rollDirection = new THREE.Vector3();
 
   private isAttacking: boolean = false;
+  private activeAttackAction: string = 'attack';
   private attackTimer: number = 0;
   private attackDuration: number = 0.6;
+  private comboCounter: number = 0;
+  private lastAttackAt: number = 0;
 
   private isReloading: boolean = false;
   private reloadTimer: number = 0;
@@ -69,6 +85,7 @@ export class PlayerEntity {
   private targetDirection = new THREE.Vector3();
   private targetCameraYaw: number = 0;
   public isMoving: boolean = false;
+  public aimAtCrosshair: boolean = true;
 
   // 环境碰撞与地图适配接口
   private collisionEnv: CollisionEnvironment | null = null;
@@ -189,15 +206,53 @@ export class PlayerEntity {
   }
 
   /**
-   * 挂接已完成组装的自定义三维角色根节点 (如由 createBattleAvatar 或外部构建的模型)
+   * 挂接由 createBattleAvatar 构建的完整战斗角色实例 (支持全部 484 把原版武器模型、157 套造型卡与上下半身分离动画)
+   */
+  public battleAvatar: any = null;
+
+  public attachBattleAvatar(avatar: any) {
+    if (this.battleAvatar && this.battleAvatar !== avatar) {
+      if (this.battleAvatar.root?.parent) {
+        this.battleAvatar.root.parent.remove(this.battleAvatar.root);
+      }
+      this.battleAvatar.dispose?.();
+    }
+    this.battleAvatar = avatar;
+    this.modelGroup.add(avatar.root);
+    this.mainSkeleton = avatar.skeleton || null;
+    if (!this.mainSkeleton) {
+      avatar.root.traverse((child: any) => {
+        if (child.isSkinnedMesh && child.skeleton) {
+          if (!this.mainSkeleton || child.skeleton.bones.length > this.mainSkeleton.bones.length) {
+            this.mainSkeleton = child.skeleton;
+          }
+        }
+      });
+    }
+    this.boneIndices.clear();
+    if (this.mainSkeleton) {
+      this.mainSkeleton.bones.forEach((bone: any, index: number) => {
+        this.boneIndices.set(bone.name, index);
+      });
+    }
+    this.mixer = null;
+    this.isReady = true;
+    return avatar.root;
+  }
+
+  /**
+   * 挂接已完成组装的自定义三维角色根节点 (如由 buildFullAvatar 或外部构建的模型)
    */
   public attachAvatarRoot(root: any, skeleton?: any) {
+    this.battleAvatar = null;
     this.modelGroup.add(root);
     this.mainSkeleton = skeleton || null;
     if (!this.mainSkeleton) {
       root.traverse((child: any) => {
-        if (child.isSkinnedMesh && !this.mainSkeleton) {
-          this.mainSkeleton = child.skeleton;
+        if (child.isSkinnedMesh && child.skeleton) {
+          if (!this.mainSkeleton || child.skeleton.bones.length > this.mainSkeleton.bones.length) {
+            this.mainSkeleton = child.skeleton;
+          }
         }
       });
     }
@@ -220,6 +275,21 @@ export class PlayerEntity {
   public setTransform(x: number, y: number, z: number, yaw: number) {
     this.modelGroup.position.set(x, y, z);
     this.modelGroup.rotation.y = yaw;
+  }
+
+  /**
+   * 立即将角色朝向对齐到摄像机/准星水平偏航角
+   */
+  public syncFacingToCamera(yaw?: number) {
+    if (yaw !== undefined) {
+      this.targetCameraYaw = yaw;
+    }
+    this.modelGroup.rotation.y = this.targetCameraYaw;
+    this.modelGroup.updateMatrixWorld(true);
+  }
+
+  public setAimAtCrosshair(enabled: boolean) {
+    this.aimAtCrosshair = enabled;
   }
 
   /**
@@ -273,7 +343,7 @@ export class PlayerEntity {
     return this.mainSkeleton.bones[this.mainSkeleton.bones.length - 1] ?? null;
   }
 
-  public async attachWeaponModel(slot: number, modelPath: string, boneName: string, texturePath?: string): Promise<any> {
+  public async attachWeaponModel(slot: number, modelPath: string, boneName: string, texturePath?: string, weaponId = 'smg_01'): Promise<any> {
     if (!this.mainSkeleton) {
       console.warn('[PlayerEntity] Cannot attach weapon before avatar skeleton is ready.');
       return null;
@@ -290,34 +360,54 @@ export class PlayerEntity {
     const weaponModel = gltf.scene;
 
     if (texturePath) {
-      const texLoader = new THREE.TextureLoader();
-      const texture = await texLoader.loadAsync(texturePath);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.flipY = false;
-      const partMaterial = new THREE.MeshPhongMaterial({
-        map: texture,
-        color: '#ffffff',
-        shininess: 12,
-        specular: '#191319'
-      });
-      weaponModel.traverse((child: any) => {
-        if (child.isMesh) {
-          child.material = partMaterial;
-        }
-      });
+      try {
+        const texLoader = new THREE.TextureLoader();
+        const texture = await texLoader.loadAsync(texturePath);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.flipY = false;
+        const partMaterial = new THREE.MeshPhongMaterial({
+          map: texture,
+          color: '#ffffff',
+          shininess: 18,
+          specular: '#26202a',
+          emissive: '#161926',
+          emissiveIntensity: 0.2
+        });
+        weaponModel.traverse((child: any) => {
+          if (child.isMesh) {
+            child.material = partMaterial;
+          }
+        });
+      } catch {
+        // 贴图缺失时保留默认材质并赋予风格化高光
+      }
     }
 
-    weaponModel.traverse((child: any) => {
-      if (child.isMesh) {
-        child.frustumCulled = false;
-        child.castShadow = true;
-      }
-    });
+    const meshCount = enhanceLoadedWeaponModel(weaponModel, weaponId);
+    if (meshCount === 0) {
+      return null;
+    }
 
     weaponModel.visible = slot === this.activeWeaponSlot;
     targetBone.add(weaponModel);
     this.weaponParts.push({ slot, group: weaponModel });
     return weaponModel;
+  }
+
+  /**
+   * 直接挂载 Q版风格化程序生成 3D 武器模型 (作为保底或独立武器外观)
+   */
+  public equipStylizedWeapon(weaponId: string, slot: number = 0): any {
+    if (!this.mainSkeleton) return null;
+    const boneName = weaponId.startsWith('shield') ? 'handweapon_l' : 'handweapon_r';
+    const targetBone = this.getAttachmentBone(boneName);
+    if (!targetBone) return null;
+
+    const stylized = createStylizedWeaponMesh(weaponId);
+    stylized.visible = slot === this.activeWeaponSlot;
+    targetBone.add(stylized);
+    this.weaponParts.push({ slot, group: stylized });
+    return stylized;
   }
 
   /**
@@ -350,38 +440,107 @@ export class PlayerEntity {
   }
 
   /**
-   * 一键装配武器套件的多部件模型 (如枪体、枪口、盾牌双持等)
+   * 一键装配武器套件的多部件模型 (如枪体、枪口、盾牌双持等)，若原版模型缺失则自动生成风格化 3D 武器
    */
-  public async equipWeaponParts(parts: WeaponPartConfig[], slot: number = 0): Promise<any[]> {
+  public async equipWeaponParts(parts: WeaponPartConfig[], slot: number = 0, weaponId: string = 'smg_01'): Promise<any[]> {
     this.clearWeapons(slot);
-    if (!parts || parts.length === 0) return [];
 
     const loadedObjects: any[] = [];
-    for (const part of parts) {
-      try {
-        const obj = await this.attachWeaponModel(slot, part.model, part.bone, part.texture ?? undefined);
-        if (obj) loadedObjects.push(obj);
-      } catch (err) {
-        console.warn(`[PlayerEntity] 武器部件装配失败 (${part.model}):`, err);
+    if (parts && parts.length > 0) {
+      for (const part of parts) {
+        try {
+          const obj = await this.attachWeaponModel(slot, part.model, part.bone, part.texture ?? undefined, weaponId);
+          if (obj) loadedObjects.push(obj);
+        } catch (err) {
+          console.warn(`[PlayerEntity] 武器部件装配失败，将启用风格化 3D 武器建模 (${part.model}):`, err);
+        }
       }
     }
+
+    if (loadedObjects.length === 0) {
+      const fallback = this.equipStylizedWeapon(weaponId, slot);
+      if (fallback) loadedObjects.push(fallback);
+    }
+
     return loadedObjects;
   }
 
   public switchWeaponSlot(slot: number) {
     this.activeWeaponSlot = slot;
+    if (this.battleAvatar) {
+      this.battleAvatar.setWeapon(slot);
+    }
     this.weaponParts.forEach(part => {
       part.group.visible = part.slot === slot;
     });
   }
 
   /**
-   * 计算角色枪口或投射物发射的世界坐标
+   * 计算角色枪口或投射物发射的世界坐标 (优先读取手持 3D 武器模型上的 Gun_Fire 节点)
    */
   public getMuzzlePosition(): any {
+    this.modelGroup.updateMatrixWorld(true);
+
+    if (this.battleAvatar?.getMuzzlePosition) {
+      this.battleAvatar.getMuzzlePosition(this.worldMuzzlePos);
+      if (this.worldMuzzlePos.y > this.modelGroup.position.y + 0.35) {
+        return this.worldMuzzlePos.clone();
+      }
+    }
+
+    // 1. 优先从当前激活槽位的武器部件查找 Gun_Fire 挂点
+    for (const part of this.weaponParts) {
+      if (part.slot === this.activeWeaponSlot && part.group.visible) {
+        const gunFire = part.group.getObjectByName('Gun_Fire');
+        if (gunFire) {
+          gunFire.getWorldPosition(this.worldMuzzlePos);
+          if (this.worldMuzzlePos.y > this.modelGroup.position.y + 0.35) {
+            return this.worldMuzzlePos.clone();
+          }
+        }
+      }
+    }
+
+    // 2. 从角色整体层级中的可见 Gun_Fire 节点查找 (兼容 createBattleAvatar 挂载的武器)
+    let foundMuzzle: any = null;
+    this.modelGroup.traverse((obj: any) => {
+      if (foundMuzzle) return;
+      if (obj.name === 'Gun_Fire') {
+        let p = obj;
+        let vis = true;
+        while (p && p !== this.modelGroup) {
+          if (p.visible === false) { vis = false; break; }
+          p = p.parent;
+        }
+        if (vis) foundMuzzle = obj;
+      }
+    });
+    if (foundMuzzle) {
+      foundMuzzle.getWorldPosition(this.worldMuzzlePos);
+      if (this.worldMuzzlePos.y > this.modelGroup.position.y + 0.35) {
+        return this.worldMuzzlePos.clone();
+      }
+    }
+
+    // 3. 骨骼 handweapon_r 位置回退
+    const rightWeaponBone = this.getAttachmentBone('handweapon_r');
+    if (rightWeaponBone) {
+      rightWeaponBone.getWorldPosition(this.worldMuzzlePos);
+      if (this.worldMuzzlePos.y > this.modelGroup.position.y + 0.35) {
+        const yaw = this.modelGroup.rotation.y;
+        this.worldMuzzlePos.x += Math.sin(yaw) * 0.45;
+        this.worldMuzzlePos.y += 0.08;
+        this.worldMuzzlePos.z += Math.cos(yaw) * 0.45;
+        return this.worldMuzzlePos.clone();
+      }
+    }
+
+    // 4. 数学几何回退
     const yaw = this.modelGroup.rotation.y;
+    const rightX = -Math.cos(yaw) * 0.18;
+    const rightZ = Math.sin(yaw) * 0.18;
     this.worldMuzzlePos.copy(this.modelGroup.position).add(
-      new THREE.Vector3(Math.sin(yaw) * 0.75, 1.25, Math.cos(yaw) * 0.75)
+      new THREE.Vector3(Math.sin(yaw) * 0.72 + rightX, 1.05, Math.cos(yaw) * 0.72 + rightZ)
     );
     return this.worldMuzzlePos.clone();
   }
@@ -390,15 +549,24 @@ export class PlayerEntity {
   // 3. 动画解析与加载 (Animation System)
   // =========================================
   public async loadAnimations(animMap: Record<string, string>) {
+    if (this.battleAvatar) {
+      return;
+    }
     if (!this.mixer) {
       console.warn('[PlayerEntity] Please loadAvatar before loadAnimations.');
       return;
     }
 
-    const fetchClip = async (path: string, name: string) => {
+    const fetchClipData = async (path: string) => {
       const response = await fetch(path);
-      const data = await response.json();
+      return response.json();
+    };
+
+    const buildClip = (data: any, name: string, upperOnly: boolean = false) => {
       return new THREE.AnimationClip(name, data.duration ?? -1, data.tracks.flatMap((track: any) => {
+        if (upperOnly && LOWER_BODY_BONES.has(track.name)) {
+          return [];
+        }
         const positionTimes = track.positions.map((_: any, idx: number) => idx / data.fps);
         const rotationTimes = track.rotations.map((_: any, idx: number) => idx / data.fps);
         return [
@@ -413,21 +581,56 @@ export class PlayerEntity {
         this.mixer.stopAllAction();
       }
       this.actions = {};
+      this.upperActions = {};
+      this.currentUpperActionName = '';
 
       for (const [actionName, path] of Object.entries(animMap)) {
         if (!path) continue;
-        const clip = await fetchClip(path, actionName);
+        const data = await fetchClipData(path);
+        const clip = buildClip(data, actionName, false);
         this.actions[actionName] = this.mixer.clipAction(clip);
+
+        // 为攻击与换弹动作额外构建上半身叠加层动画，支持边跑边射击 / 边跑边换弹
+        if (['attack', 'attack2', 'attack3', 'reload', 'spurt'].includes(actionName)) {
+          const upperClip = buildClip(data, `${actionName}_upper`, true);
+          const upperAction = this.mixer.clipAction(upperClip);
+          upperAction.setLoop(THREE.LoopOnce, 1);
+          upperAction.clampWhenFinished = true;
+          this.upperActions[actionName] = upperAction;
+        }
       }
 
       if (this.forcedAction && this.actions[this.forcedAction]) {
-        this.playAction(this.forcedAction, 0.2, true);
+        this.playAction(this.forcedAction, 0.15, true);
       } else if (this.actions['idle']) {
-        this.playAction('idle', 0.2, true);
+        this.playAction('idle', 0.15, true);
       }
     } catch (err) {
       console.error('[PlayerEntity] Animation Loading Error:', err);
     }
+  }
+
+  private stopUpperActions(fadeDuration: number = 0.1) {
+    for (const act of Object.values(this.upperActions)) {
+      if (act && act.isRunning()) {
+        act.fadeOut(fadeDuration);
+      }
+    }
+    this.currentUpperActionName = '';
+  }
+
+  private playUpperAction(actionName: string) {
+    const upper = this.upperActions[actionName];
+    if (!upper) return;
+    for (const [k, act] of Object.entries(this.upperActions)) {
+      if (k !== actionName && act && act.isRunning()) {
+        act.stop();
+      }
+    }
+    upper.reset();
+    upper.setEffectiveWeight(1.0);
+    upper.play();
+    this.currentUpperActionName = actionName;
   }
 
   // =========================================
@@ -447,7 +650,6 @@ export class PlayerEntity {
       next.clampWhenFinished = true;
     } else {
       next.setLoop(THREE.LoopRepeat, Infinity);
-      next.clampWhenFinished = false;
     }
     next.play();
 
@@ -465,11 +667,13 @@ export class PlayerEntity {
    * 触发翻滚动作
    */
   public roll(): boolean {
-    if (!this.isAlive || this.isRolling || this.isJumping || !this.actions['roll']) return false;
+    if (!this.isAlive || this.isRolling || this.isJumping) return false;
+    if (!this.battleAvatar && !this.actions['roll']) return false;
     this.isRolling = true;
-    const clipDuration = this.actions['roll'].getClip()?.duration;
-    this.rollDuration = clipDuration ? Math.min(clipDuration, 0.95) : 0.8;
+    const clipDuration = this.actions['roll']?.getClip()?.duration;
+    this.rollDuration = clipDuration ? Math.min(clipDuration, 0.95) : 0.65;
     this.rollTimer = this.rollDuration;
+    this.stopUpperActions(0.05);
 
     // 确定翻滚方向
     if (this.isMoving) {
@@ -483,35 +687,139 @@ export class PlayerEntity {
       );
     }
 
-    this.playAction('roll', 0.12, false);
+    if (this.battleAvatar) {
+      this.battleAvatar.roll();
+    } else {
+      this.playAction('roll', 0.12, false);
+    }
     this.events.onRoll?.();
     return true;
   }
 
   /**
-   * 触发近战攻击或射击动作
+   * 触发近战攻击（支持多段连招）或远程射击动作 — 支持边移动边射击，并立即面向准星方向
    */
-  public attack(): boolean {
-    if (!this.isAlive || this.isAttacking || this.isRolling || !this.actions['attack']) return false;
+  public attack(step?: number): boolean {
+    if (!this.isAlive || this.isRolling) return false;
+
+    // 开火瞬间立即让角色对齐摄像机准星朝向
+    this.syncFacingToCamera();
+
+    const now = performance.now();
+    if (this.battleAvatar) {
+      let chosenIdx = 0;
+      if (step !== undefined) {
+        chosenIdx = Math.max(0, step - 1);
+      } else {
+        if (now - this.lastAttackAt > 1200) {
+          this.comboCounter = 0;
+        }
+        chosenIdx = this.comboCounter;
+        this.comboCounter += 1;
+      }
+      this.lastAttackAt = now;
+      this.isAttacking = true;
+      this.activeAttackAction = 'attack';
+      this.attackDuration = 0.35;
+      this.attackTimer = this.attackDuration;
+      this.battleAvatar.setMoving(this.isMoving && !this.isJumping && !this.isRolling);
+      this.battleAvatar.attack(chosenIdx);
+      this.events.onAttack?.('attack');
+      return true;
+    }
+
+    const availableAttacks = ['attack', 'attack2', 'attack3'].filter(k => Boolean(this.actions[k]));
+    if (availableAttacks.length === 0) return false;
+
+    let chosenIdx = 0;
+    if (step !== undefined) {
+      chosenIdx = step % availableAttacks.length;
+    } else if (availableAttacks.length > 1) {
+      if (now - this.lastAttackAt > 1200) {
+        this.comboCounter = 0;
+      }
+      chosenIdx = this.comboCounter % availableAttacks.length;
+      this.comboCounter += 1;
+    }
+    this.lastAttackAt = now;
+
+    const actionKey = availableAttacks[chosenIdx] || 'attack';
     this.isAttacking = true;
-    const clipDuration = this.actions['attack'].getClip()?.duration;
-    this.attackDuration = clipDuration ? Math.min(clipDuration, 1.2) : 0.6;
+    this.activeAttackAction = actionKey;
+    const clipDuration = this.actions[actionKey]?.getClip()?.duration;
+    this.attackDuration = clipDuration ? Math.min(clipDuration, 0.45) : 0.35;
     this.attackTimer = this.attackDuration;
-    this.playAction('attack', 0.1, false);
-    this.events.onAttack?.('attack');
+
+    if (this.isMoving && !this.isJumping && this.actions['run'] && this.upperActions[actionKey]) {
+      // 移动中开火：下半身保持奔跑，上半身叠加射击/挥砍动作
+      if (this.currentActionName !== 'run') {
+        this.playAction('run', 0.1, true);
+      }
+      this.playUpperAction(actionKey);
+    } else {
+      this.stopUpperActions(0.05);
+      this.currentActionName = '';
+      this.playAction(actionKey, 0.06, false);
+    }
+
+    this.events.onAttack?.(actionKey);
     return true;
   }
 
   /**
-   * 触发换弹动作
+   * 触发战术冲刺动作 (Spurt)
+   */
+  public spurt(): boolean {
+    if (!this.isAlive || this.isRolling) return false;
+    this.syncFacingToCamera();
+    if (this.battleAvatar) {
+      this.isAttacking = true;
+      this.activeAttackAction = 'spurt';
+      this.attackDuration = 0.45;
+      this.attackTimer = 0.45;
+      this.battleAvatar.spurt();
+      return true;
+    }
+    const key = this.actions['spurt'] ? 'spurt' : (this.actions['roll'] ? 'roll' : 'run');
+    if (!this.actions[key]) return false;
+    this.isAttacking = true;
+    this.activeAttackAction = key;
+    const clipDuration = this.actions[key]?.getClip()?.duration;
+    this.attackDuration = clipDuration ? Math.min(clipDuration, 0.65) : 0.45;
+    this.attackTimer = this.attackDuration;
+    this.stopUpperActions(0.05);
+    this.currentActionName = '';
+    this.playAction(key, 0.1, false);
+    return true;
+  }
+
+  /**
+   * 触发换弹动作 (支持边移动边换弹)
    */
   public reload(): boolean {
-    if (!this.isAlive || this.isReloading || this.isRolling || !this.actions['reload']) return false;
+    if (!this.isAlive || this.isReloading || this.isRolling) return false;
+    if (this.battleAvatar) {
+      this.isReloading = true;
+      this.reloadDuration = 1.2;
+      this.reloadTimer = 1.2;
+      this.battleAvatar.setMoving(this.isMoving && !this.isJumping && !this.isRolling);
+      this.battleAvatar.reload();
+      this.events.onReload?.();
+      return true;
+    }
+    if (!this.actions['reload']) return false;
     this.isReloading = true;
     const clipDuration = this.actions['reload'].getClip()?.duration;
     this.reloadDuration = clipDuration ? clipDuration : 1.5;
     this.reloadTimer = this.reloadDuration;
-    this.playAction('reload', 0.15, false);
+    if (this.isMoving && !this.isJumping && this.actions['run'] && this.upperActions['reload']) {
+      if (this.currentActionName !== 'run') {
+        this.playAction('run', 0.1, true);
+      }
+      this.playUpperAction('reload');
+    } else {
+      this.playAction('reload', 0.15, false);
+    }
     this.events.onReload?.();
     return true;
   }
@@ -524,7 +832,9 @@ export class PlayerEntity {
     this.isJumping = true;
     this.isGrounded = false;
     this.jumpVelocity = 7.2;
-    if (this.actions['jump']) {
+    if (this.battleAvatar) {
+      this.battleAvatar.jump();
+    } else if (this.actions['jump']) {
       this.playAction('jump', 0.1, false);
     }
     this.events.onJump?.();
@@ -536,6 +846,10 @@ export class PlayerEntity {
    */
   public takeDamage(amount: number): boolean {
     if (!this.isAlive) return false;
+    if (this.godMode) {
+      this.events.onDamage?.(0, this.health);
+      return false;
+    }
     this.health = Math.max(0, this.health - amount);
     this.events.onDamage?.(amount, this.health);
 
@@ -545,12 +859,21 @@ export class PlayerEntity {
     }
 
     // 轻微受击硬直反应
-    if (!this.isRolling && !this.isAttacking && this.actions['hit']) {
+    if (!this.isRolling && !this.isAttacking && !this.isMoving && this.actions['hit']) {
       this.isHitStun = true;
-      this.hitTimer = 0.3;
+      this.hitTimer = 0.25;
       this.playAction('hit', 0.08, false);
     }
     return false;
+  }
+
+  /**
+   * 恢复生命值
+   */
+  public heal(amount: number): number {
+    if (!this.isAlive || amount <= 0) return this.health;
+    this.health = Math.min(this.maxHealth, Math.round(this.health + amount));
+    return this.health;
   }
 
   /**
@@ -563,6 +886,7 @@ export class PlayerEntity {
     this.isRolling = false;
     this.isAttacking = false;
     this.isJumping = false;
+    this.stopUpperActions(0.05);
     if (this.actions['death']) {
       this.playAction('death', 0.2, false);
     }
@@ -579,11 +903,64 @@ export class PlayerEntity {
     this.isAttacking = false;
     this.isJumping = false;
     this.isGrounded = true;
+    this.stopUpperActions(0.05);
     this.currentActionName = '';
     if (this.actions['idle']) {
       this.playAction('idle', 0.2, true);
     }
     this.events.onRevive?.();
+  }
+
+  /**
+   * 动态设置移动速度（供疾行、过激反应、冲刺等技能实时加速）
+   */
+  public setSpeed(newSpeed: number) {
+    this.speed = Math.max(1.0, newSpeed);
+  }
+
+  public getBaseSpeed(): number {
+    return this.baseSpeed;
+  }
+
+  /**
+   * 潜行隐身半透明视觉切换 (与潜行技能同步)
+   */
+  public setGhost(on: boolean) {
+    if (this.battleAvatar) {
+      this.battleAvatar.setGhost(on);
+      return;
+    }
+    this.modelGroup.traverse((object: any) => {
+      if (!object.isMesh || !object.material || object === this.hitbox) return;
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      for (const material of materials) {
+        let base = this.ghostState.get(material);
+        if (!base) {
+          base = {
+            transparent: material.transparent,
+            opacity: material.opacity,
+            depthWrite: material.depthWrite
+          };
+          this.ghostState.set(material, base);
+        }
+        material.transparent = on || base.transparent;
+        material.opacity = on ? 0.32 : base.opacity;
+        material.depthWrite = on ? false : base.depthWrite;
+        material.needsUpdate = true;
+      }
+    });
+  }
+
+  /**
+   * 暂停或恢复角色骨骼动画播放 (影像调整 · 播放角色动作)
+   */
+  public setMotion(on: boolean) {
+    if (this.battleAvatar) {
+      this.battleAvatar.setMotion(on);
+    }
+    if (this.mixer) {
+      this.mixer.timeScale = on ? 1 : 0;
+    }
   }
 
   /**
@@ -602,10 +979,19 @@ export class PlayerEntity {
   }
 
   public getCurrentAction(): string {
+    if (this.isMoving && this.isAttacking) return `${this.activeAttackAction}+run`;
+    if (this.isMoving) return 'run';
+    if (this.isAttacking) return this.activeAttackAction;
+    if (this.isReloading) return 'reload';
+    if (this.isJumping) return 'jump';
+    if (this.isRolling) return 'roll';
     return this.currentActionName;
   }
 
   public getLoadedActions(): string[] {
+    if (this.battleAvatar) {
+      return ['idle', 'run', 'jump', 'roll', 'attack', 'reload', 'spurt'];
+    }
     return Object.keys(this.actions);
   }
 
@@ -618,7 +1004,7 @@ export class PlayerEntity {
   // =========================================
   // 5. 控制指令接收 (Controller Input)
   // =========================================
-  public setInput(direction: any, cameraYaw: number, jumpCmd: boolean) {
+  public setInput(direction: any, cameraYaw: number, jumpCmd: boolean = false) {
     if (!this.isAlive) {
       this.targetDirection.set(0, 0, 0);
       this.isMoving = false;
@@ -664,12 +1050,22 @@ export class PlayerEntity {
 
     if (this.isAttacking) {
       this.attackTimer -= delta;
-      if (this.attackTimer <= 0) this.isAttacking = false;
+      if (this.attackTimer <= 0) {
+        this.isAttacking = false;
+        if (this.currentUpperActionName.startsWith('attack') || this.currentUpperActionName === 'spurt') {
+          this.stopUpperActions(0.08);
+        }
+      }
     }
 
     if (this.isReloading) {
       this.reloadTimer -= delta;
-      if (this.reloadTimer <= 0) this.isReloading = false;
+      if (this.reloadTimer <= 0) {
+        this.isReloading = false;
+        if (this.currentUpperActionName === 'reload') {
+          this.stopUpperActions(0.1);
+        }
+      }
     }
 
     if (this.isHitStun) {
@@ -677,37 +1073,48 @@ export class PlayerEntity {
       if (this.hitTimer <= 0) this.isHitStun = false;
     }
 
-    // 3. 动画状态机决策
-    if (this.isAlive) {
+    // 3. 动画状态机决策 (优先委托给 BattleAvatar，或者使用内部 mixer 上下半身混合)
+    if (this.battleAvatar) {
+      this.battleAvatar.setMoving(this.isMoving && !this.isJumping && !this.isRolling);
+      this.battleAvatar.update(delta);
+    } else if (this.isAlive) {
       let nextAction = 'idle';
       if (this.isRolling && this.actions['roll']) {
         nextAction = 'roll';
-      } else if (this.isHitStun && this.actions['hit']) {
-        nextAction = 'hit';
-      } else if (this.isAttacking && this.actions['attack']) {
-        nextAction = 'attack';
-      } else if (this.isReloading && this.actions['reload']) {
-        nextAction = 'reload';
       } else if (this.isJumping && this.actions['jump']) {
         nextAction = 'jump';
       } else if (this.isMoving && this.actions['run']) {
         nextAction = 'run';
+        if (this.isAttacking && this.upperActions[this.activeAttackAction] && this.currentUpperActionName !== this.activeAttackAction) {
+          this.playUpperAction(this.activeAttackAction);
+        } else if (this.isReloading && this.upperActions['reload'] && this.currentUpperActionName !== 'reload') {
+          this.playUpperAction('reload');
+        }
+      } else if (this.isHitStun && this.actions['hit']) {
+        nextAction = 'hit';
+      } else if (this.isAttacking && this.actions[this.activeAttackAction]) {
+        nextAction = this.activeAttackAction;
+      } else if (this.isReloading && this.actions['reload']) {
+        nextAction = 'reload';
+      }
+
+      if (!this.isMoving && this.currentUpperActionName) {
+        this.stopUpperActions(0.05);
       }
 
       if (this.currentActionName !== nextAction && this.actions[nextAction]) {
-        const isOneShot = ['roll', 'attack', 'reload', 'hit'].includes(nextAction);
-        this.playAction(nextAction, 0.15, !isOneShot);
+        const isOneShot = ['roll', 'attack', 'attack2', 'attack3', 'spurt', 'reload', 'hit'].includes(nextAction);
+        this.playAction(nextAction, 0.12, !isOneShot);
       }
-    }
 
-    // 4. 更新骨骼动作时间轴
-    if (this.mixer) {
-      this.mixer.update(delta);
+      if (this.mixer) {
+        this.mixer.update(delta);
+      }
     }
 
     if (!this.isAlive) return;
 
-    // 5. 转身与平移物理 (含地形碰撞、边界及阻挡检测)
+    // 5. 转身与平移物理 (含边走路边射击、准星朝向锁定、地形碰撞及边界检测)
     const currentPos = this.modelGroup.position;
     this.candidatePos.copy(currentPos);
 
@@ -715,19 +1122,21 @@ export class PlayerEntity {
       // 翻滚位移
       const moveStep = this.rollDirection.clone().multiplyScalar(this.rollSpeed * delta);
       this.candidatePos.add(moveStep);
-    } else if (this.isMoving && !this.isAttacking) {
-      // 角色平滑转身面朝摄像机方向与移动方向之和
-      const angle = Math.atan2(this.targetDirection.x, this.targetDirection.z);
-      const targetRotation = this.targetCameraYaw + angle;
+    } else if (this.isMoving) {
+      // 计算相对于摄像机朝向的真实移动方向角 (WASD 全向移动)
+      const inputAngle = Math.atan2(this.targetDirection.x, this.targetDirection.z);
+      const moveAngle = this.targetCameraYaw + inputAngle;
 
-      let diff = targetRotation - this.modelGroup.rotation.y;
+      // 角色朝向：开火或越肩瞄准模式下始终面朝准星 (targetCameraYaw)，否则面向移动方向
+      const desiredFacingYaw = (this.isAttacking || this.aimAtCrosshair) ? this.targetCameraYaw : moveAngle;
+      let diff = desiredFacingYaw - this.modelGroup.rotation.y;
       while (diff < -Math.PI) diff += Math.PI * 2;
       while (diff > Math.PI) diff -= Math.PI * 2;
+      this.modelGroup.rotation.y += diff * (this.isAttacking ? 28 : 16) * delta;
 
-      this.modelGroup.rotation.y += diff * 12 * delta; // 转身角速度
-
-      const moveX = Math.sin(this.modelGroup.rotation.y) * this.speed * delta;
-      const moveZ = Math.cos(this.modelGroup.rotation.y) * this.speed * delta;
+      // 位移直接沿 moveAngle 推进，支持边横向平移(A/D)/后退(S)边朝准星开火
+      const moveX = Math.sin(moveAngle) * this.speed * delta;
+      const moveZ = Math.cos(moveAngle) * this.speed * delta;
       this.candidatePos.x += moveX;
       this.candidatePos.z += moveZ;
 
@@ -742,6 +1151,17 @@ export class PlayerEntity {
       }
     } else {
       this.footstepTimer = 0;
+      // 站立不动时：若处于开火或准星跟随状态，平滑转向准星方向
+      if (this.isAttacking || this.aimAtCrosshair) {
+        let diff = this.targetCameraYaw - this.modelGroup.rotation.y;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        if (this.isAttacking) {
+          this.modelGroup.rotation.y = this.targetCameraYaw;
+        } else {
+          this.modelGroup.rotation.y += diff * 18 * delta;
+        }
+      }
     }
 
     // 6. 碰撞环境阻挡与地图边界适配
@@ -812,6 +1232,7 @@ export class PlayerEntity {
       this.mixer.stopAllAction();
     }
     this.actions = {};
+    this.upperActions = {};
 
     this.modelGroup.traverse((child: any) => {
       if (child.isMesh) {

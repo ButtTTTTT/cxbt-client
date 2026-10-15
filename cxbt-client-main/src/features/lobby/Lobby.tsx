@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import CharacterPreview from '../characterCreation/CharacterPreview';
 import { assetUrl, CREATION_JOBS, initialAppearance, loadCreationAssets, type Appearance, type CreationAssets, type CreationAttachment, type CreationJob, type CreationWeapon } from '../characterCreation/assets';
-import type { SavedCharacter } from '../characterCreation/character';
+import { fetchCharacterFromServer, type SavedCharacter } from '../characterCreation/character';
 import GameModeLobby from '../gameMode/GameModeLobby';
-import PracticeRoom from '../gameMode/PracticeRoom';
+import PracticeRoom, { type ApiRoom } from '../gameMode/PracticeRoom';
 import type { RoomConfig } from '../gameMode/CreateRoomDialog';
 import Gameplay from '../gameplay/Gameplay';
 import { loadLobbyAssets, lobbyUrl, type AvatarCard, type InventoryCategory, type InventoryItem, type LobbyAssets } from './assets';
 import GlobalChat from './GlobalChat';
+import LobbyFeatureModal from './LobbyFeatureModal';
 import SettingsMenu from './SettingsMenu';
 import SkillPanel from './SkillPanel';
 import { loadSkillAssets, useSkillAllocation, type SkillAssets } from './skills';
@@ -41,6 +42,7 @@ function validAppearance(assets: CreationAssets, character: SavedCharacter): App
 }
 
 export default function Lobby({ character, onExit, onQuit = onExit }: { character: SavedCharacter; onExit: () => void; onQuit?: () => void }) {
+  const [charState, setCharState] = useState<SavedCharacter>(character);
   const [creation, setCreation] = useState<CreationAssets>();
   const [assets, setAssets] = useState<LobbyAssets>();
   const [skillAssets, setSkillAssets] = useState<SkillAssets>();
@@ -68,6 +70,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
   const [dialog, setDialog] = useState<{ title: string; message?: string }>();
   const [gameModeLobby, setGameModeLobby] = useState(false);
   const [practiceRoom, setPracticeRoom] = useState(false);
+  const [quickJoinedRoom, setQuickJoinedRoom] = useState<ApiRoom>();
   const [battleRoom, setBattleRoom] = useState<RoomConfig>();
   const [globalChatOpen, setGlobalChatOpen] = useState(false);
   const [quickbar, setQuickbar] = useState<(string | null)[]>([]);
@@ -82,6 +85,13 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
   const weaponAudioRef = useRef<HTMLAudioElement | null>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const musicTrack = gameModeLobby || practiceRoom ? 'music-fortress' : 'music-lobby';
+
+  useEffect(() => {
+    setCharState(character);
+    void fetchCharacterFromServer().then((latest) => {
+      if (latest) setCharState(latest);
+    });
+  }, [character]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -212,11 +222,16 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
   });
 
   if (!assets || !creation) return <main className="lobby-viewport"><p role="status">{error || '正在进入大厅…'}</p></main>;
-  if (battleRoom) return <Gameplay room={battleRoom} character={character} creation={creation} assets={assets}
+  if (battleRoom) return <Gameplay room={battleRoom} character={charState} creation={creation} assets={assets}
     avatarPreset={avatarCard?.preset}
     quickbar={quickbar} skills={jobSkillList} levels={allocation.levels}
     volume={volume} effectsVolume={effectsVolume} onVolume={setVolume} onEffectsVolume={setEffectsVolume}
-    onExit={() => setBattleRoom(undefined)} onQuit={onQuit} />;
+    onExit={() => {
+      setBattleRoom(undefined);
+      void fetchCharacterFromServer().then((latest) => {
+        if (latest) setCharState(latest);
+      });
+    }} onQuit={onQuit} />;
   const art = (key: string): CSSProperties => ({ backgroundImage: `url("${lobbyUrl(assets.ui[key])}")` });
   const buttonArt = (key: string): CSSProperties => ({ '--art': `url("${lobbyUrl(assets.ui[`${key}_normal`])}")`,
     '--hover-art': `url("${lobbyUrl(assets.ui[`${key}_hover`])}")`, '--down-art': `url("${lobbyUrl(assets.ui[`${key}_down`])}")` } as CSSProperties);
@@ -234,7 +249,11 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
     if (!assets.items.some((item) => item.id === id) && skill?.kind !== 'active') return;
     setQuickbar((slots) => slots.map((value, slot) => slot === index ? id : value));
   };
-  const moduleDialog = (title: string) => setDialog({ title, message: `${title}功能需要连接游戏服务器。当前可以在背包中浏览物品、试穿造型并预览装备动作。` });
+  const moduleDialog = (title: string) => setDialog({ title });
+
+  const level = charState.level ?? 1;
+  const exp = charState.exp ?? 0;
+  const maxExp = level * 100;
 
   return <main className="lobby-viewport">
     <div className={`lobby-screen${practiceRoom ? ' lobby-practice-screen' : ''}`} data-lobby-ready="true" style={{ transform: `scale(${scale})`, backgroundImage: `url("${assetUrl(creation.ui.background)}")` }}
@@ -248,11 +267,11 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
             appearance={avatarCard ? initialAppearance(avatarCard.preset, character.appearance.gender) : originalAppearance} motion={false}
             weapons={NO_WEAPONS} weaponIndex={null} view="portrait" />
         </div>
-        <span className="lobby-level">1</span>
+        <span className="lobby-level">{level}</span>
         <img className="lobby-job-icon" src={assetUrl(creation.jobs[character.jobId].icon)} alt={CREATION_JOBS[character.jobId].name} />
-        <span className="lobby-name">{character.name}</span>
-        <span className="lobby-exp">0 / 100 <span>EXP</span></span>
-        <span className="lobby-gold">100000</span><span className="lobby-cash">0</span><span className="lobby-gems">0</span>
+        <span className="lobby-name">{charState.name}</span>
+        <span className="lobby-exp">{exp} / {maxExp} <span>EXP</span></span>
+        <span className="lobby-gold">{charState.coins ?? 100000}</span><span className="lobby-cash">{charState.cash ?? 0}</span><span className="lobby-gems">{charState.gems ?? 0}</span>
         <img className="lobby-vip" src={lobbyUrl(assets.ui.vip)} alt="VIP" />
         <button className="lobby-recharge" onClick={() => moduleDialog('在线充值')}>在线充值</button>
         <nav className="lobby-menu" aria-label="大厅导航">
@@ -264,17 +283,19 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
             }}>
             <img src={lobbyUrl(assets.ui[`menu-${key}`])} alt="" /><span>{label}</span>
           </button>)}
-          <button className="lobby-reward" onClick={() => moduleDialog('在线奖励')} aria-label="在线奖励"><img src={lobbyUrl(assets.ui.reward)} alt="" /><span>00:01:00</span></button>
+          <button className="lobby-reward" onClick={() => moduleDialog('在线奖励')} aria-label="在线奖励"><img src={lobbyUrl(assets.ui.reward)} alt="" /><span>可领取</span></button>
         </nav>
         <button className="lobby-play" aria-label={practiceRoom ? '返回凌云要塞' : gameModeLobby ? '返回大厅' : '开始游戏'} onClick={() => {
-          if (practiceRoom) { setPracticeRoom(false); setGameModeLobby(true); }
+          if (practiceRoom) { setPracticeRoom(false); setQuickJoinedRoom(undefined); setGameModeLobby(true); }
           else setGameModeLobby((value) => !value);
           setStatus('');
         }}>开始<br />游戏</button>
       </header>
-      {practiceRoom ? <PracticeRoom assets={assets} hostName={character.name} hostIcon={assetUrl(creation.jobs[character.jobId].icon)}
-        weaponIds={battleWeapons} onBack={() => { setPracticeRoom(false); setGameModeLobby(true); setStatus(''); }} onStart={setBattleRoom} onStatus={setStatus} />
-        : gameModeLobby ? <GameModeLobby assets={assets} onPractice={() => { setPracticeRoom(true); setStatus(''); }} onStatus={setStatus} /> : <>
+      {practiceRoom ? <PracticeRoom assets={assets} hostName={charState.name} hostIcon={assetUrl(creation.jobs[character.jobId].icon)}
+        weaponIds={battleWeapons} initialJoinedRoom={quickJoinedRoom}
+        onBack={() => { setPracticeRoom(false); setQuickJoinedRoom(undefined); setGameModeLobby(true); setStatus(''); }} onStart={setBattleRoom} onStatus={setStatus} />
+        : gameModeLobby ? <GameModeLobby assets={assets} weaponIds={battleWeapons}
+          onPractice={(joinedRoom) => { setQuickJoinedRoom(joinedRoom); setPracticeRoom(true); setStatus(''); }} onStatus={setStatus} /> : <>
       <nav className="lobby-main-tabs" aria-label="角色页面">
         {['背包', '技能', '宠物'].map((label, index) => <button key={label}
           className={'lobby-art-button' + ((index === 0 && page === 'bag') || (index === 1 && page === 'skill') ? ' active' : '')}
@@ -293,7 +314,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
               weaponIndex={previewWeapons.length ? 0 : null} animation={animation} attachment={attachment} rotation={rotation} />
           </div>
           <div className="lobby-power-frame" style={art('powerFrame')} />
-          <div className="lobby-power" style={art('power')}><span>战斗力</span><b>0</b><small>冒险实力</small></div>
+          <div className="lobby-power" style={art('power')}><span>战斗力</span><b>{charState.power ?? 1500}</b><small>冒险实力</small></div>
           {page === 'bag' && ['slotStar', 'slotFlame', 'slotRing', 'slotRing'].map((key, index) => <button key={index}
             className={`lobby-equipped-slot slot-${index}`} style={art('slot')} aria-label={['徽章', '翅膀', '左戒指', '右戒指'][index]}
             onClick={() => { chooseCategory('equipment'); setQuery(index === 0 ? 'badge' : index === 1 ? 'wing' : 'ring'); }}>
@@ -307,7 +328,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
           <div className="lobby-character-stats" style={art('stats')}>
             <span className="lobby-stats-title" style={art('statsTitle')}>角色属性</span>
             <div className="lobby-stat-modes">战场 <span>冒险远征</span></div>
-            <div className="lobby-stat-values">{[['生命值', '2300', 1], ['耐力值', '0', 6], ['活力值', '0', 2], ['恢复力', '0', 3], ['护甲值', '0', 4], ['破甲值', '0', 5]].map(([label, value, icon]) =>
+            <div className="lobby-stat-values">{[['生命值', '3201', 1], ['耐力值', '100', 6], ['活力值', '120', 2], ['恢复力', '85', 3], ['护甲值', '240', 4], ['破甲值', '180', 5]].map(([label, value, icon]) =>
               <div key={label}><img src={lobbyUrl(assets.ui[`stat${icon}`])} alt="" /><span>{label}</span><b>{value}</b></div>)}</div>
           </div>
         </section>
@@ -316,7 +337,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
           : <section className="lobby-inventory" style={art('inventory')} aria-label="背包">
           <h1>背包</h1>
           <label className="lobby-search"><span className="sr-only">搜索物品</span><input placeholder="搜索物品" value={query} onChange={(event) => { setQuery(event.target.value); setBagPage(0); }} /></label>
-          <button className="lobby-renew" style={art('renew')} onClick={() => setStatus('全部物品均可在当前背包中预览')}>全部续费</button>
+          <button className="lobby-renew" style={art('renew')} onClick={() => setStatus('全部物品均已永久续费并可在当前背包中预览')}>全部续费</button>
           <nav className="lobby-bag-tabs" aria-label="物品分类">
             {TABS.map((tab) => <button key={tab.id} className={'lobby-art-button' + (category === tab.id ? ' active' : '')} style={buttonArt('bagTab')}
               aria-pressed={category === tab.id} data-category={tab.id} onClick={() => chooseCategory(tab.id)}>
@@ -384,23 +405,25 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
       <nav className="lobby-footer" aria-label="大厅工具">
         {FOOTER.map(([key, label]) => <button key={key} aria-label={label} onClick={() => {
           if (key === 'setup') setSettingsOpen(true);
-          else if (key === 'chat') setGlobalChatOpen(true);
+          else if (key === 'chat' || key === 'message') setGlobalChatOpen(true);
           else moduleDialog(label);
         }}>
           <img src={lobbyUrl(assets.ui[`footer-${key}`])} alt="" />
         </button>)}
       </nav>
-      {globalChatOpen && <GlobalChat hostName={character.name} onClose={() => setGlobalChatOpen(false)} />}
+      {globalChatOpen && <GlobalChat hostName={charState.name} onClose={() => setGlobalChatOpen(false)} />}
       {settingsOpen && <SettingsMenu assets={assets} volume={volume} effectsVolume={effectsVolume} motion={motion}
         onVolume={setVolume} onEffectsVolume={setEffectsVolume} onMotion={setMotion} onClose={() => setSettingsOpen(false)}
         onExit={onExit} onQuit={() => { audioRef.current?.pause(); weaponAudioRef.current?.pause(); onQuit(); }} />}
-      {dialog && <div className="lobby-modal-shade">
-        <section ref={dialogRef} className="lobby-modal" style={art('modal')} role="dialog" aria-modal="true" aria-labelledby="lobby-dialog-title">
-          <h2 id="lobby-dialog-title">{dialog.title}</h2>
-          <p>{dialog.message}</p>
-          <button className="lobby-dialog-close lobby-art-button" style={buttonArt('button')} onClick={() => setDialog(undefined)}>确定</button>
-        </section>
-      </div>}
+      {dialog && <LobbyFeatureModal
+        title={dialog.title}
+        assets={assets}
+        character={charState}
+        onUpdateCharacter={setCharState}
+        onSelectBagItem={(item) => chooseItem(item)}
+        onStatus={setStatus}
+        onClose={() => setDialog(undefined)}
+      />}
     </div>
   </main>;
 }

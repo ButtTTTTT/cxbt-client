@@ -10,313 +10,60 @@ import {
   unloadMapFromScene,
   type LoadedMapSession,
   WEAPON_SUITES, 
-  ACTION_LABELS 
+  ACTION_LABELS,
+  getWeaponCombatProfile,
+  getWeaponActionSuite,
+  CombatEffectsManager,
+  BotManager,
+  type BotSnapshot,
+  type BotBehaviorMode,
+  getSavedCustomMaps,
+  getCustomMapById,
+  mountCustomMapNodesIntoScene
 } from '../../features/gameplay/engine';
 import { createBattleAudio } from '../../features/gameplay/audio';
-import { createProjectileSystem, type WeaponKind } from '../../features/gameplay/projectiles';
+import { createProjectileSystem } from '../../features/gameplay/projectiles';
+import { createSkillEffects } from '../../features/gameplay/skillEffects';
+import { loadSkills, type LoadedSkill } from '../../features/gameplay/skills';
+import { loadSkillAssets, type SkillAssets } from '../../features/lobby/skills';
+import { loadLobbyAssets, type LobbyAssets } from '../../features/lobby/assets';
+import { CREATION_JOBS, assetUrl, type CreationJob, type CreationWeapon } from '../../features/characterCreation/assets';
 
-// 武器战斗性能与手感配置
-export interface WeaponCombatProfile {
-  name: string;
-  kind: WeaponKind;
-  damage: number;
-  pellets: number;
-  spread: number;
-  fireDelay: number;
-  magCapacity: number;
-  reloadTime: number;
-  fireAudio: string;
-  reloadAudio?: string;
-  isAutomatic: boolean;
-  headshotMultiplier: number;
-}
+const LOBBY_ASSET_BASE = `${import.meta.env.BASE_URL}assets/lobby/`;
 
-export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
-  smg_01: {
-    name: '冲锋枪 (SMG)',
-    kind: 'bullet',
-    damage: 115,
-    pellets: 1,
-    spread: 0.035,
-    fireDelay: 0.11,
-    magCapacity: 30,
-    reloadTime: 1.8,
-    fireAudio: 'fire-smg',
-    reloadAudio: 'reload_smg',
-    isAutomatic: true,
-    headshotMultiplier: 2.0
-  },
-  pistol_01: {
-    name: '手枪 (Pistol)',
-    kind: 'bullet',
-    damage: 240,
-    pellets: 1,
-    spread: 0.012,
-    fireDelay: 0.35,
-    magCapacity: 12,
-    reloadTime: 1.6,
-    fireAudio: 'fire-pistol',
-    reloadAudio: 'reload_pistol',
-    isAutomatic: false,
-    headshotMultiplier: 2.2
-  },
-  shotgun_01: {
-    name: '霰弹枪 (Shotgun)',
-    kind: 'bullet',
-    damage: 135,
-    pellets: 7,
-    spread: 0.075,
-    fireDelay: 0.85,
-    magCapacity: 8,
-    reloadTime: 2.2,
-    fireAudio: 'fire-shotgun',
-    reloadAudio: 'reload_shotgun',
-    isAutomatic: false,
-    headshotMultiplier: 1.8
-  },
-  sniperrifle_01: {
-    name: '狙击步枪 (Sniper)',
-    kind: 'bullet',
-    damage: 1250,
-    pellets: 1,
-    spread: 0.002,
-    fireDelay: 1.25,
-    magCapacity: 5,
-    reloadTime: 2.5,
-    fireAudio: 'fire-sniperrifle',
-    reloadAudio: 'reload_sniper',
-    isAutomatic: false,
-    headshotMultiplier: 2.5
-  },
-  machinegun_01: {
-    name: '重机枪 (Machinegun)',
-    kind: 'bullet',
-    damage: 130,
-    pellets: 1,
-    spread: 0.045,
-    fireDelay: 0.12,
-    magCapacity: 80,
-    reloadTime: 3.0,
-    fireAudio: 'fire-machinegun',
-    reloadAudio: 'reload_machinegun',
-    isAutomatic: true,
-    headshotMultiplier: 2.0
-  },
-  knives_01: {
-    name: '近战军刀 (Knives)',
-    kind: 'melee',
-    damage: 720,
-    pellets: 1,
-    spread: 0,
-    fireDelay: 0.48,
-    magCapacity: 0,
-    reloadTime: 0,
-    fireAudio: 'fire-knives',
-    isAutomatic: false,
-    headshotMultiplier: 1.5
-  },
-  stick_sh01: {
-    name: '战术战棍 (Stick)',
-    kind: 'melee',
-    damage: 680,
-    pellets: 1,
-    spread: 0,
-    fireDelay: 0.52,
-    magCapacity: 0,
-    reloadTime: 0,
-    fireAudio: 'fire-knives',
-    isAutomatic: false,
-    headshotMultiplier: 1.6
-  },
-  shield_01: {
-    name: '战术盾牌 (Shield)',
-    kind: 'melee',
-    damage: 520,
-    pellets: 1,
-    spread: 0,
-    fireDelay: 0.55,
-    magCapacity: 0,
-    reloadTime: 0,
-    fireAudio: 'fire-shield',
-    isAutomatic: false,
-    headshotMultiplier: 1.3
-  },
-  bow_01: {
-    name: '复合弓 (Bow)',
-    kind: 'arrow',
-    damage: 780,
-    pellets: 1,
-    spread: 0.008,
-    fireDelay: 0.75,
-    magCapacity: 1,
-    reloadTime: 1.0,
-    fireAudio: 'fire-bow',
-    isAutomatic: false,
-    headshotMultiplier: 2.4
-  },
-  crossbow_03: {
-    name: '战术十字弩 (Crossbow)',
-    kind: 'arrow',
-    damage: 850,
-    pellets: 1,
-    spread: 0.005,
-    fireDelay: 0.7,
-    magCapacity: 1,
-    reloadTime: 1.1,
-    fireAudio: 'fire-crossbow',
-    isAutomatic: false,
-    headshotMultiplier: 2.5
-  },
-  rpg_01: {
-    name: '火箭筒 (RPG)',
-    kind: 'rocket',
-    damage: 1500,
-    pellets: 1,
-    spread: 0.01,
-    fireDelay: 1.4,
-    magCapacity: 1,
-    reloadTime: 2.2,
-    fireAudio: 'fire-rpg',
-    reloadAudio: 'reload_rpg',
-    isAutomatic: false,
-    headshotMultiplier: 1.0
-  },
-  grenadelauncher_01: {
-    name: '榴弹发射器 (GrenadeLauncher)',
-    kind: 'grenade',
-    damage: 1100,
-    pellets: 1,
-    spread: 0.02,
-    fireDelay: 0.8,
-    magCapacity: 6,
-    reloadTime: 2.4,
-    fireAudio: 'fire-grenadelauncher',
-    reloadAudio: 'reload_rpg',
-    isAutomatic: false,
-    headshotMultiplier: 1.0
-  },
-  sprayer_01: {
-    name: '生化喷射器 (Sprayer)',
-    kind: 'bullet',
-    damage: 75,
-    pellets: 1,
-    spread: 0.055,
-    fireDelay: 0.08,
-    magCapacity: 60,
-    reloadTime: 2.0,
-    fireAudio: 'sprayer',
-    reloadAudio: 'reload_smg',
-    isAutomatic: true,
-    headshotMultiplier: 1.5
-  },
-  grenade_01: {
-    name: '战术手雷 (Grenade)',
-    kind: 'grenade',
-    damage: 1350,
-    pellets: 1,
-    spread: 0.02,
-    fireDelay: 1.2,
-    magCapacity: 1,
-    reloadTime: 1.5,
-    fireAudio: 'fire-grenade',
-    isAutomatic: false,
-    headshotMultiplier: 1.0
-  }
-};
-
-// 假人实体定义
-interface BotItem {
-  id: string;
-  entity: PlayerEntity;
-  name: string;
-  hp: number;
-  maxHp: number;
-  mode: 'dummy' | 'patrol' | 'chase';
-  patrolTimer: number;
-  patrolDir: any;
-  attackCooldown: number;
-  hpBar: { sprite: any; updateHp: (currentHp: number, maxHp: number) => void };
-}
-
-// 3D 浮动跳字
-interface FloatingDamageText {
-  sprite: any;
-  position: any;
-  velocity: any;
-  lifetime: number;
-  maxLifetime: number;
-}
-
-// 击中火花/碎屑
-interface SparkParticle {
-  mesh: any;
-  lifetime: number;
-  maxLifetime: number;
-}
-
-// 爆炸环/气浪
-interface ExplosionEffect {
-  mesh: any;
-  scaleSpeed: number;
-  lifetime: number;
-  maxLifetime: number;
-}
-
-function createHpBar(name: string) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 160;
-  canvas.height = 42;
-  const ctx = canvas.getContext('2d')!;
-
-  const texture = new THREE.CanvasTexture(canvas);
-  const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: true });
-  const sprite = new THREE.Sprite(spriteMat);
-  sprite.position.set(0, 2.15, 0);
-  sprite.scale.set(1.1, 0.3, 1);
-
-  const updateHp = (currentHp: number, maxHp: number) => {
-    ctx.clearRect(0, 0, 160, 42);
-    // 背景
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-    ctx.fillRect(0, 0, 160, 42);
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, 158, 40);
-
-    // 假人名字
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = 'bold 12px sans-serif';
-    ctx.fillText(name, 10, 16);
-
-    // HP 数值
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '10px monospace';
-    ctx.fillText(`${Math.max(0, currentHp)}/${maxHp}`, 90, 16);
-
-    // 血条槽
-    const pct = Math.max(0, Math.min(1, currentHp / maxHp));
-    ctx.fillStyle = '#334155';
-    ctx.fillRect(10, 24, 140, 10);
-    ctx.fillStyle = pct > 0.5 ? '#22c55e' : (pct > 0.25 ? '#eab308' : '#ef4444');
-    ctx.fillRect(10, 24, 140 * pct, 10);
-
-    texture.needsUpdate = true;
-  };
-
-  updateHp(3200, 3200);
-  return { sprite, updateHp };
-}
-
-export default function CharacterController() {
+export default function CharacterController({ initialMapId }: { initialMapId?: string } = {}) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState('正在加载引擎类与地图...');
 
   // 地图状态
-  const [selectedMapId, setSelectedMapId] = useState<string>('level1');
+  const [selectedMapId, setSelectedMapId] = useState<string>(initialMapId || 'level1');
   const mapColliderRef = useRef<MapCollider>(new MapCollider());
   const currentMapSessionRef = useRef<LoadedMapSession | null>(null);
+  const customMapGroupRef = useRef<any | null>(null);
   const gridHelperRef = useRef<any | null>(null);
   const mapNameRef = useRef<HTMLElement>(null);
+
+  // 角色职业与性别状态
+  const [selectedJobId, setSelectedJobId] = useState<CreationJob>('assassin');
+  const selectedJobIdRef = useRef<CreationJob>('assassin');
+  selectedJobIdRef.current = selectedJobId;
+
+  const [selectedGender, setSelectedGender] = useState<number>(0);
+  const selectedGenderRef = useRef<number>(0);
+  selectedGenderRef.current = selectedGender;
+
+  // 大厅全量资源库 (484把武器 + 157张角色造型卡)
+  const [lobbyAssets, setLobbyAssets] = useState<LobbyAssets | null>(null);
+  const lobbyAssetsRef = useRef<LobbyAssets | null>(null);
+  lobbyAssetsRef.current = lobbyAssets;
+
+  const [selectedAvatarCardId, setSelectedAvatarCardId] = useState<string>('default');
+  const selectedAvatarCardIdRef = useRef<string>('default');
+  selectedAvatarCardIdRef.current = selectedAvatarCardId;
+
+  const [selectedWeaponSkinId, setSelectedWeaponSkinId] = useState<string>('');
+  const selectedWeaponSkinIdRef = useRef<string>('');
+  selectedWeaponSkinIdRef.current = selectedWeaponSkinId;
 
   // 动作套件与选项
   const [activeSuiteId, setActiveSuiteId] = useState<string>(WEAPON_SUITES[0].id);
@@ -342,6 +89,29 @@ export default function CharacterController() {
   const [reloadProgress, setReloadProgress] = useState<number>(0);
   const reloadTimerRef = useRef<number>(0);
   const maxReloadTimeRef = useRef<number>(1.8);
+
+  // 沙盒全局规则开关 (同步支持正式战场)
+  const [infiniteAmmo, setInfiniteAmmo] = useState<boolean>(false);
+  const infiniteAmmoRef = useRef<boolean>(false);
+  infiniteAmmoRef.current = infiniteAmmo;
+
+  const [noCooldown, setNoCooldown] = useState<boolean>(false);
+  const noCooldownRef = useRef<boolean>(false);
+  noCooldownRef.current = noCooldown;
+
+  const [godMode, setGodMode] = useState<boolean>(false);
+  const [autoRespawnBots, setAutoRespawnBots] = useState<boolean>(false);
+
+  // 职业技能系统状态 (与 Gameplay.tsx 完全同源)
+  const [skillAssets, setSkillAssets] = useState<SkillAssets | null>(null);
+  const activeSkillsRef = useRef<LoadedSkill[]>([]);
+  const [activeSkillsUI, setActiveSkillsUI] = useState<LoadedSkill[]>([]);
+  const [skillCooldowns, setSkillCooldowns] = useState<number[]>([]);
+  const [shieldValue, setShieldValue] = useState<number>(0);
+  const [isStealthed, setIsStealthed] = useState<boolean>(false);
+  const [maxHealth, setMaxHealth] = useState<number>(3200);
+  const maxHealthRef = useRef<number>(3200);
+  maxHealthRef.current = maxHealth;
 
   // 射击冷却与按键状态
   const lastFireTimeRef = useRef<number>(0);
@@ -372,21 +142,17 @@ export default function CharacterController() {
   const motionRef = useRef<HTMLElement>(null);
   const fpsRef = useRef<HTMLElement>(null);
 
-  // Bot 状态与容器
-  const [botList, setBotList] = useState<{ id: string; name: string; hp: number; maxHp: number; mode: string }[]>([]);
-  const [globalBotMode, setGlobalBotMode] = useState<'dummy' | 'patrol' | 'chase'>('chase');
-  const botsRef = useRef<BotItem[]>([]);
+  // Bot 状态与容器 (由共用 BotManager 驱动)
+  const [botList, setBotList] = useState<BotSnapshot[]>([]);
+  const [globalBotMode, setGlobalBotMode] = useState<BotBehaviorMode>('chase');
+  const botManagerRef = useRef<BotManager | null>(null);
+  const combatEffectsRef = useRef<CombatEffectsManager | null>(null);
+  const skillEffectsRef = useRef<ReturnType<typeof createSkillEffects> | null>(null);
   const sceneRef = useRef<any>(null);
 
   // 战斗系统核心组件 Refs
   const battleAudioRef = useRef<ReturnType<typeof createBattleAudio> | null>(null);
   const projectileSystemRef = useRef<ReturnType<typeof createProjectileSystem> | null>(null);
-  const floatingTextsRef = useRef<FloatingDamageText[]>([]);
-  const sparksRef = useRef<SparkParticle[]>([]);
-  const explosionsRef = useRef<ExplosionEffect[]>([]);
-  const muzzleLightRef = useRef<any | null>(null);
-  const muzzleFlashMeshRef = useRef<any | null>(null);
-  const muzzleTimerRef = useRef<number>(0);
 
   const skeletonHelperRef = useRef<any | null>(null);
   const orbitControlsRef = useRef<any | null>(null);
@@ -396,15 +162,33 @@ export default function CharacterController() {
   const cameraControllerRef = useRef<CameraController | null>(null);
   const actionBadgeRef = useRef<HTMLSpanElement | null>(null);
 
-  const syncBotListState = () => {
-    setBotList(botsRef.current.map(b => ({
-      id: b.id,
-      name: b.name,
-      hp: b.hp,
-      maxHp: b.maxHp,
-      mode: b.mode
-    })));
-  };
+  // 加载技能配置表与大厅全量资源库 (484把武器 + 157张造型卡)
+  useEffect(() => {
+    const controller = new AbortController();
+    loadSkillAssets(controller.signal)
+      .then(assets => {
+        if (!controller.signal.aborted) setSkillAssets(assets);
+      })
+      .catch(() => null);
+    loadLobbyAssets(controller.signal)
+      .then(assets => {
+        if (!controller.signal.aborted) setLobbyAssets(assets);
+      })
+      .catch(() => null);
+    return () => controller.abort();
+  }, []);
+
+  // 当职业或技能资源变化时，同步当前职业主动技能列表
+  useEffect(() => {
+    if (!skillAssets) return;
+    const jobSkills = skillAssets.jobs[selectedJobId]?.skills ?? [];
+    const levels = jobSkills.map(() => 5); // 沙盒默认满级 Lv5 以便完整测试技能数值
+    const loaded = loadSkills(jobSkills, levels);
+    const actives = loaded.filter(s => s.active);
+    activeSkillsRef.current = actives;
+    setActiveSkillsUI(actives);
+    setSkillCooldowns(actives.map(() => 0));
+  }, [skillAssets, selectedJobId]);
 
   // 触发击中标记
   const triggerHitmarker = useCallback((isHeadshot: boolean) => {
@@ -416,123 +200,49 @@ export default function CharacterController() {
     }, 160);
   }, []);
 
-  // 触发玩家受击反馈
+  // 触发玩家受击反馈 (含能量盾吸收判定)
   const triggerPlayerHurt = useCallback((dmg: number) => {
+    const player = playerRef.current;
+    if (!player || !player.isAlive) return;
+    if (player.godMode) {
+      setStatus('🛡️ 无敌模式生效，免疫本次伤害');
+      return;
+    }
+
+    const remainingDmg = skillEffectsRef.current ? skillEffectsRef.current.absorb(dmg) : dmg;
+    if (remainingDmg <= 0) {
+      setStatus(`🛡️ 能量护盾吸收了 ${Math.round(dmg)} 点伤害！`);
+      return;
+    }
+
+    player.takeDamage(Math.round(remainingDmg));
     setHurtFlash(true);
     setTimeout(() => setHurtFlash(false), 240);
     battleAudioRef.current?.play('hit_body', 0.85);
-    const scene = sceneRef.current;
-    const player = playerRef.current;
-    if (scene && player) {
-      spawnFloatingDamage(
-        scene,
-        player.modelGroup.position.clone().add(new THREE.Vector3(0, 1.85, 0)),
-        dmg,
-        false,
-        true
-      );
-    }
+    combatEffectsRef.current?.spawnFloatingDamage(
+      player.modelGroup.position.clone().add(new THREE.Vector3(0, 1.85, 0)),
+      remainingDmg,
+      false,
+      true
+    );
   }, []);
 
-  // 3D 浮动伤害跳字生成器
-  const spawnFloatingDamage = (
-    scene: any, 
-    pos: any, 
-    damage: number, 
-    isHeadshot: boolean, 
-    isPlayer: boolean = false
-  ) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 64;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, 256, 64);
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    const text = isHeadshot ? `💥 爆头 -${damage}!` : `-${damage}`;
-    ctx.font = isHeadshot ? 'bold 32px sans-serif' : 'bold 28px sans-serif';
-
-    // 描边
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = isHeadshot ? '#7f1d1d' : (isPlayer ? '#450a0a' : '#0f172a');
-    ctx.strokeText(text, 128, 32);
-
-    // 填充
-    ctx.fillStyle = isHeadshot ? '#fbbf24' : (isPlayer ? '#ef4444' : '#f8fafc');
-    ctx.fillText(text, 128, 32);
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.needsUpdate = true;
-    const material = new THREE.SpriteMaterial({
-      map: texture,
-      transparent: true,
-      depthTest: false
-    });
-    const sprite = new THREE.Sprite(material);
-    sprite.position.copy(pos).add(new THREE.Vector3((Math.random() - 0.5) * 0.3, 0.35, (Math.random() - 0.5) * 0.3));
-    const scale = isHeadshot ? 1.7 : 1.3;
-    sprite.scale.set(scale * 1.5, scale * 0.4, 1);
-    scene.add(sprite);
-
-    floatingTextsRef.current.push({
-      sprite,
-      position: sprite.position,
-      velocity: new THREE.Vector3((Math.random() - 0.5) * 0.6, 2.1 + Math.random() * 0.8, (Math.random() - 0.5) * 0.6),
-      lifetime: isHeadshot ? 1.15 : 0.85,
-      maxLifetime: isHeadshot ? 1.15 : 0.85
-    });
-  };
-
-  // 生成撞墙火花
-  const spawnImpactSpark = (scene: any, point: any) => {
-    const geo = new THREE.SphereGeometry(0.08, 6, 6);
-    const mat = new THREE.MeshBasicMaterial({ color: 0xfacc15, transparent: true, opacity: 0.95 });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.copy(point);
-    scene.add(mesh);
-    sparksRef.current.push({ mesh, lifetime: 0.12, maxLifetime: 0.12 });
-  };
-
-  // 生成爆炸光浪
-  const spawnExplosionEffect = (scene: any, point: any) => {
-    const geom = new THREE.SphereGeometry(1.6, 12, 10);
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0xff6600,
-      transparent: true,
-      opacity: 0.85,
-      wireframe: true
-    });
-    const mesh = new THREE.Mesh(geom, mat);
-    mesh.position.copy(point);
-    scene.add(mesh);
-
-    const core = new THREE.Mesh(
-      new THREE.SphereGeometry(0.7, 8, 8),
-      new THREE.MeshBasicMaterial({ color: 0xffffaa, transparent: true, opacity: 0.95 })
-    );
-    mesh.add(core);
-
-    explosionsRef.current.push({
-      mesh,
-      scaleSpeed: 5.5,
-      lifetime: 0.35,
-      maxLifetime: 0.35
-    });
-  };
-
-  // 换弹逻辑
+  // 换弹逻辑 (备弹耗尽时自动战术补给，防止单发RPG/弓箭/榴弹等弹尽卡死)
   const reloadWeapon = useCallback(() => {
     const player = playerRef.current;
     if (!player || !player.isAlive || isReloadingRef.current) return;
 
     const currentSuite = WEAPON_SUITES.find(s => s.id === activeSuiteIdRef.current) || WEAPON_SUITES[0];
-    const profile = WEAPON_COMBAT_PROFILES[currentSuite.id] || WEAPON_COMBAT_PROFILES['smg_01'];
+    const profile = getWeaponCombatProfile(currentSuite.id);
 
     if (profile.kind === 'melee') return;
-    if (currentMagAmmoRef.current >= profile.magCapacity || reserveAmmoRef.current <= 0) return;
+    if (currentMagAmmoRef.current >= profile.magCapacity) return;
+
+    if (reserveAmmoRef.current <= 0) {
+      const refilled = profile.magCapacity * 4;
+      reserveAmmoRef.current = refilled;
+      setReserveAmmo(refilled);
+    }
 
     isReloadingRef.current = true;
     setIsReloading(true);
@@ -546,79 +256,108 @@ export default function CharacterController() {
     setStatus(`🔄 正在快速换弹 [${profile.name}]...`);
   }, []);
 
+  // 释放职业主动技能 (与正式游戏 Gameplay.tsx 完全一致的技能管线)
+  const castSandboxSkill = useCallback((slotIndex: number) => {
+    const skillEffect = skillEffectsRef.current;
+    const player = playerRef.current;
+    const load = activeSkillsRef.current[slotIndex];
+    if (!skillEffect || !player || !player.isAlive || !load) return;
+
+    if (noCooldownRef.current) {
+      skillEffect.resetCooldowns();
+    }
+
+    const cd = skillEffect.cast(slotIndex, load);
+    if (cd !== null) {
+      if (load.skill.id !== 'latent') {
+        skillEffect.breakStealth();
+      }
+      if (noCooldownRef.current) {
+        skillEffect.resetCooldowns();
+      }
+      setStatus(`✨ 释放职业技能: [${load.skill.name} Lv.${load.level}]！`);
+    } else {
+      setStatus(`⏳ 技能 [${load.skill.name}] 正在冷却中...`);
+    }
+  }, []);
+
   // 核心开火与受击判定
   const fireWeapon = useCallback(() => {
     const player = playerRef.current;
     const scene = sceneRef.current;
     const camera = cameraRef.current;
     const tpsCamera = cameraControllerRef.current;
+    const botManager = botManagerRef.current;
+    const combatEffects = combatEffectsRef.current;
     if (!player || !scene || !camera || !player.isAlive) return;
 
     const currentSuite = WEAPON_SUITES.find(s => s.id === activeSuiteIdRef.current) || WEAPON_SUITES[0];
-    const profile = WEAPON_COMBAT_PROFILES[currentSuite.id] || WEAPON_COMBAT_PROFILES['smg_01'];
+    const profile = getWeaponCombatProfile(currentSuite.id);
 
     if (isReloadingRef.current) return;
 
-    // 检查射速 CD
+    // 检查射速 CD (无CD模式下允许极速射击)
     const now = performance.now();
-    if (now - lastFireTimeRef.current < profile.fireDelay * 1000) return;
+    const effectiveDelay = noCooldownRef.current ? Math.min(0.07, profile.fireDelay) : profile.fireDelay;
+    if (now - lastFireTimeRef.current < effectiveDelay * 1000) return;
 
-    // 检查弹药
+    // 检查弹药 (无限弹药模式下不消耗弹夹)
     if (profile.kind !== 'melee') {
       if (currentMagAmmoRef.current <= 0) {
         reloadWeapon();
         return;
       }
-      currentMagAmmoRef.current -= 1;
-      setCurrentMagAmmo(currentMagAmmoRef.current);
+      if (!infiniteAmmoRef.current) {
+        currentMagAmmoRef.current -= 1;
+        setCurrentMagAmmo(currentMagAmmoRef.current);
+      }
     }
 
     lastFireTimeRef.current = now;
+    skillEffectsRef.current?.breakStealth();
 
-    // TPS 模式开火瞬间，人物模型朝向对齐摄像机视线
+    // TPS 模式开火瞬间，人物模型朝向对齐摄像机准星视线
     if (cameraModeRef.current === 'tps' && tpsCamera) {
-      player.modelGroup.rotation.y = tpsCamera.yaw;
+      player.syncFacingToCamera(tpsCamera.yaw);
     }
 
-    // 播放攻击动作与枪声
+    // 播放攻击动作与枪声 (近战自动触发三段连击动作)
     player.attack();
     battleAudioRef.current?.play(profile.fireAudio, 0.7);
 
     // 枪口亮光与火花
     const muzzlePos = player.getMuzzlePosition();
-    if (muzzleLightRef.current) {
-      muzzleLightRef.current.position.copy(muzzlePos);
-      muzzleLightRef.current.intensity = 5.0;
+    if (profile.kind !== 'melee') {
+      combatEffects?.triggerMuzzleFlash(muzzlePos, 0.06);
     }
-    if (muzzleFlashMeshRef.current) {
-      muzzleFlashMeshRef.current.position.copy(muzzlePos);
-      muzzleFlashMeshRef.current.material.opacity = 0.95;
-    }
-    muzzleTimerRef.current = 0.06;
 
     // 准星后坐力扩散
     setRecoilSpread(prev => Math.min(22, prev + 5));
 
-    // 1. 近战攻击 (Melee Fan Arc)
+    // 1. 近战攻击 (Melee Fan Arc + 3D 刀光剑气)
     if (profile.kind === 'melee') {
       const playerPos = player.modelGroup.position;
       const yaw = player.modelGroup.rotation.y;
-      const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+      const forward = cameraModeRef.current === 'tps' && tpsCamera
+        ? tpsCamera.getForwardDirection().clone()
+        : new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+      combatEffects?.spawnMeleeSlash(playerPos, forward, Math.floor(now / 150) % 3 + 1);
       let hitAny = false;
 
-      botsRef.current.forEach(bot => {
+      botManager?.bots.forEach(bot => {
         if (bot.hp <= 0) return;
         const botPos = bot.entity.modelGroup.position;
         const toBot = botPos.clone().sub(playerPos);
         const dist = toBot.length();
-        if (dist < 2.8) {
+        if (dist < 3.2) {
           toBot.normalize();
           const dot = forward.dot(toBot);
-          if (dot > 0.35) {
+          if (dot > 0.2) {
             hitAny = true;
             const dmg = Math.floor(profile.damage * (0.9 + Math.random() * 0.25));
             bot.entity.takeDamage(dmg);
-            spawnFloatingDamage(scene, botPos.clone().add(new THREE.Vector3(0, 1.8, 0)), dmg, false);
+            combatEffects?.spawnFloatingDamage(botPos.clone().add(new THREE.Vector3(0, 1.8, 0)), dmg, false);
+            combatEffects?.spawnImpactSpark(botPos.clone().add(new THREE.Vector3(0, 1.0, 0)), 0xef4444);
             triggerHitmarker(false);
             setStatus(`⚔️ 命中 [${bot.name}]！造成 ${dmg} 物理伤害`);
           }
@@ -639,39 +378,46 @@ export default function CharacterController() {
       aimDir.set(Math.sin(player.modelGroup.rotation.y), 0, Math.cos(player.modelGroup.rotation.y));
     }
 
-    // 3. 投射物武器 (RPG / Bow / Grenade)
-    if (profile.kind === 'rocket') {
-      projectileSystemRef.current?.spawn('rocket', muzzlePos, aimDir);
-      return;
-    }
-    if (profile.kind === 'arrow') {
-      projectileSystemRef.current?.spawn('arrow', muzzlePos, aimDir);
-      return;
-    }
-    if (profile.kind === 'grenade') {
-      projectileSystemRef.current?.spawn('grenade', muzzlePos, aimDir);
-      return;
-    }
-
-    // 4. 实时射线检定枪弹 (SMG, Pistol, Shotgun, Sniper, Machinegun, Sprayer)
-    const targets: any[] = [];
-    botsRef.current.forEach(b => {
-      if (b.hp > 0 && b.entity?.hitbox) targets.push(b.entity.hitbox);
-    });
-    if (mapColliderRef.current?.collisionMeshes) {
-      targets.push(...mapColliderRef.current.collisionMeshes);
-    }
-
-    const pelletsCount = profile.pellets;
+    const targets: any[] = [
+      ...(botManager?.getAliveHitboxes() ?? []),
+      ...(mapColliderRef.current?.collisionMeshes ?? [])
+    ];
     const raycaster = new THREE.Raycaster();
 
+    // 3. 投射物武器 (RPG / Bow / Grenade) —— 从枪口朝准星落点汇聚发射
+    if (profile.kind === 'rocket' || profile.kind === 'arrow' || profile.kind === 'grenade') {
+      let launchDir = aimDir.clone();
+      if (cameraModeRef.current === 'tps') {
+        raycaster.set(camera.position, aimDir);
+        raycaster.far = 120;
+        const hits = raycaster.intersectObjects(targets, true);
+        const targetPoint = hits.length > 0
+          ? hits[0].point
+          : camera.position.clone().addScaledVector(aimDir, 85);
+        launchDir = targetPoint.clone().sub(muzzlePos).normalize();
+      }
+      projectileSystemRef.current?.spawn(profile.kind, muzzlePos, launchDir);
+      if (currentMagAmmoRef.current <= 0) reloadWeapon();
+      return;
+    }
+
+    // 4. 实时射线检定枪弹 (SMG, Pistol, Shotgun, Sniper, Machinegun, Sprayer) + 3D 曳光弹轨
+    const pelletsCount = profile.pellets;
+    const family = currentSuite.id.split('_')[0];
+    const tracerColor = family === 'sprayer'
+      ? 0x34d399
+      : family === 'sniperrifle'
+        ? 0x38bdf8
+        : family === 'machinegun'
+          ? 0xfb923c
+          : 0xfde047;
+
     for (let p = 0; p < pelletsCount; p++) {
-      let pelletDir = aimDir.clone();
+      const pelletDir = aimDir.clone();
       if (profile.spread > 0) {
-        const spreadX = (Math.random() - 0.5) * profile.spread;
-        const spreadY = (Math.random() - 0.5) * profile.spread;
-        pelletDir.x += spreadX;
-        pelletDir.y += spreadY;
+        pelletDir.x += (Math.random() - 0.5) * profile.spread;
+        pelletDir.y += (Math.random() - 0.5) * profile.spread;
+        pelletDir.z += (Math.random() - 0.5) * profile.spread;
         pelletDir.normalize();
       }
 
@@ -683,90 +429,113 @@ export default function CharacterController() {
       raycaster.far = 120;
 
       const hits = raycaster.intersectObjects(targets, true);
+      const targetPoint = hits.length > 0
+        ? hits[0].point
+        : (cameraModeRef.current === 'tps' ? camera.position : muzzlePos).clone().addScaledVector(pelletDir, 85);
+      const bulletDir = targetPoint.clone().sub(muzzlePos).normalize();
+
+      if (p === 0 || p % 2 === 0) {
+        projectileSystemRef.current?.spawn('bullet', muzzlePos, bulletDir);
+      }
+      combatEffects?.spawnBulletTracer(muzzlePos, targetPoint, tracerColor);
+
       if (hits.length > 0) {
         const hit = hits[0];
         if (hit.object.userData?.isPlayer && hit.object.userData.entity) {
-          const targetBot = botsRef.current.find(b => b.entity === hit.object.userData.entity);
+          const targetBot = botManager?.findByEntity(hit.object.userData.entity);
           if (targetBot && targetBot.hp > 0) {
             const hitY = hit.point.y;
             const botY = targetBot.entity.modelGroup.position.y;
             const isHeadshot = (hitY - botY) >= 1.35;
             const dmg = Math.floor(profile.damage * (isHeadshot ? profile.headshotMultiplier : 1.0) * (0.92 + Math.random() * 0.16));
             targetBot.entity.takeDamage(dmg);
-            battleAudioRef.current?.play('hit_body', 0.85);
+            battleAudioRef.current?.play(isHeadshot ? 'critical_hit' : 'hit_body', 0.85);
             triggerHitmarker(isHeadshot);
-            spawnFloatingDamage(scene, hit.point, dmg, isHeadshot);
+            combatEffects?.spawnFloatingDamage(hit.point, dmg, isHeadshot);
             setStatus(`🎯 命中 [${targetBot.name}]！${isHeadshot ? '💥 爆头暴击!' : ''} 造成 ${dmg} 点伤害`);
           }
         } else {
-          // 墙体与掩体阻挡
           battleAudioRef.current?.play('hit_wall', 0.6);
-          spawnImpactSpark(scene, hit.point);
+          combatEffects?.spawnImpactSpark(hit.point);
         }
       }
     }
 
     // 弹夹打空自动触发换弹
-    if (currentMagAmmoRef.current === 0 && reserveAmmoRef.current > 0) {
+    if (currentMagAmmoRef.current <= 0) {
       reloadWeapon();
     }
   }, [reloadWeapon, triggerHitmarker]);
 
-  // 地图加载与随时切换核心逻辑
+  // 地图加载与随时切换核心逻辑 (同时支持原版地图与沙盒自制自定义地图)
   const switchMap = async (newMapId: string) => {
     const scene = sceneRef.current;
     const player = playerRef.current;
     if (!scene || !player) return;
 
     setSelectedMapId(newMapId);
-    const targetPreset = MAP_PRESETS.find(m => m.id === newMapId);
-    setStatus(`正在切换地图为 [${targetPreset?.name || newMapId}]...`);
+    const customMap = getCustomMapById(newMapId);
+    const targetPreset = MAP_PRESETS.find(m => m.id === (customMap ? customMap.baseMapId : newMapId));
+    const displayMapName = customMap ? customMap.name : (targetPreset?.name || newMapId);
+    setStatus(`正在切换地图为 [${displayMapName}]...`);
 
-    // 1. 彻底卸载上一张地图的 GPU 网格
+    if (customMapGroupRef.current) {
+      scene.remove(customMapGroupRef.current);
+      customMapGroupRef.current = null;
+    }
+
     if (currentMapSessionRef.current) {
       unloadMapFromScene(currentMapSessionRef.current, scene, mapColliderRef.current);
       currentMapSessionRef.current = null;
     }
 
     try {
-      // 2. 异步下载并挂载新地图三维模型与物理碰撞体
-      const session = await loadMapIntoScene(newMapId, scene, mapColliderRef.current, msg => setStatus(msg));
+      const baseId = customMap ? customMap.baseMapId : newMapId;
+      const session = await loadMapIntoScene(baseId, scene, mapColliderRef.current, msg => setStatus(msg));
       currentMapSessionRef.current = session;
 
-      // 3. 仅平地沙盒显示网格
       if (gridHelperRef.current) {
-        gridHelperRef.current.visible = newMapId === 'flat';
+        gridHelperRef.current.visible = baseId === 'flat';
       }
 
-      // 4. 重置玩家碰撞环境并瞬移至新地图出生点
-      player.setCollisionEnvironment(mapColliderRef.current.toCollisionEnvironment());
+      if (customMap) {
+        session.spawnPoint.set(customMap.spawnPoint[0], customMap.spawnPoint[1], customMap.spawnPoint[2]);
+        session.preset = {
+          ...session.preset,
+          id: customMap.id,
+          name: customMap.name,
+          category: '创意工坊与沙盒自制'
+        };
+        botManagerRef.current?.clearAllBots();
+        customMapGroupRef.current = await mountCustomMapNodesIntoScene(
+          customMap,
+          scene,
+          mapColliderRef.current,
+          botManagerRef.current,
+          lobbyAssetsRef.current
+        );
+      }
+
+      const env = mapColliderRef.current.toCollisionEnvironment();
+      player.setCollisionEnvironment(env);
       player.modelGroup.position.copy(session.spawnPoint);
       player.isGrounded = true;
 
-      // 同步轨道相机聚焦点至出生点
       if (orbitControlsRef.current && cameraRef.current) {
         orbitControlsRef.current.target.set(session.spawnPoint.x, session.spawnPoint.y + 0.95, session.spawnPoint.z);
         cameraRef.current.position.set(session.spawnPoint.x, session.spawnPoint.y + 1.8, session.spawnPoint.z + 3.2);
         orbitControlsRef.current.update();
       }
 
-      // 5. 将已有 Bots 也瞬移至新地图玩家周围有效地面
-      for (const bot of botsRef.current) {
-        bot.entity.setCollisionEnvironment(mapColliderRef.current.toCollisionEnvironment());
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 3.5 + Math.random() * 2.5;
-        const bx = session.spawnPoint.x + Math.sin(angle) * dist;
-        const bz = session.spawnPoint.z + Math.cos(angle) * dist;
-        const by = mapColliderRef.current.floorAt(bx, bz, 90) ?? session.spawnPoint.y;
-        bot.entity.modelGroup.position.set(bx, by, bz);
+      if (!customMap) {
+        botManagerRef.current?.relocateAllBots(session.spawnPoint, env);
       }
 
-      // 6. 更新 HUD 标签
       if (mapNameRef.current) {
-        mapNameRef.current.textContent = session.preset.name;
+        mapNameRef.current.textContent = displayMapName;
       }
 
-      setStatus(`地图 [${session.preset.name}] 加载就绪！出生点: (${session.spawnPoint.x.toFixed(1)}, ${session.spawnPoint.y.toFixed(1)}, ${session.spawnPoint.z.toFixed(1)})`);
+      setStatus(`地图 [${displayMapName}] 加载就绪！出生点: (${session.spawnPoint.x.toFixed(1)}, ${session.spawnPoint.y.toFixed(1)}, ${session.spawnPoint.z.toFixed(1)})`);
     } catch (err: any) {
       console.error('[CharacterController] 地图切换失败:', err);
       setStatus(`地图切换失败: ${err.message || err}`);
@@ -779,8 +548,8 @@ export default function CharacterController() {
     if (!player) return;
     const sp = currentMapSessionRef.current?.spawnPoint || new THREE.Vector3(0, 0, 0);
     player.modelGroup.position.copy(sp);
-    player.revive();
-    setHealth(3200);
+    player.revive(maxHealthRef.current);
+    setHealth(maxHealthRef.current);
     if (orbitControlsRef.current && cameraRef.current) {
       orbitControlsRef.current.target.set(sp.x, sp.y + 0.95, sp.z);
       cameraRef.current.position.set(sp.x, sp.y + 1.8, sp.z + 3.2);
@@ -790,110 +559,94 @@ export default function CharacterController() {
   };
 
   // 部署假人
-  const spawnBot = async (customMode?: 'dummy' | 'patrol' | 'chase') => {
+  const spawnBot = async (customMode?: BotBehaviorMode) => {
+    const player = playerRef.current;
+    const botManager = botManagerRef.current;
+    if (!player || !botManager) return;
+    await botManager.spawnBot({
+      mode: customMode,
+      originPosition: player.modelGroup.position,
+      collisionEnv: mapColliderRef.current.toCollisionEnvironment()
+    });
+  };
+
+  const clearAllBots = () => botManagerRef.current?.clearAllBots();
+  const reviveAllBots = () => botManagerRef.current?.reviveAllBots();
+  const setBotMode = (id: string, mode: BotBehaviorMode) => botManagerRef.current?.setBotMode(id, mode);
+
+  // 切换角色职业、性别或 157 款原版造型卡皮肤
+  const handleAvatarChange = async (newJobId: CreationJob, newGender: number, cardIdOverride?: string) => {
+    setSelectedJobId(newJobId);
+    selectedJobIdRef.current = newJobId;
+    setSelectedGender(newGender);
+    selectedGenderRef.current = newGender;
+
+    const targetCardId = cardIdOverride !== undefined ? cardIdOverride : selectedAvatarCardIdRef.current;
+    setSelectedAvatarCardId(targetCardId);
+    selectedAvatarCardIdRef.current = targetCardId;
+
+    const player = playerRef.current;
     const scene = sceneRef.current;
-    if (!scene || !playerRef.current) return;
+    if (!player || !scene) return;
 
-    const id = 'bot_' + Math.random().toString(36).substring(2, 7);
-    const num = botsRef.current.length + 1;
-    const botName = `假人 #${num}`;
-    setStatus(`正在部署 ${botName}...`);
+    const cardItem = targetCardId !== 'default'
+      ? lobbyAssetsRef.current?.items.find(i => i.category === 'avatars' && i.id === targetCardId)?.avatarCard
+      : undefined;
 
+    const displayName = cardItem
+      ? `造型卡 [${cardItem.name}]`
+      : `[${CREATION_JOBS[newJobId].name} · ${newGender === 0 ? '男' : '女'}]`;
+
+    setStatus(`正在切换角色为 ${displayName}...`);
     try {
-      const bot = new PlayerEntity(scene);
-      await bot.loadFullAvatar({ jobId: 'guardian', gender: 0 });
+      player.clearWeapons();
+      if (modelRef.current && modelRef.current.parent) {
+        modelRef.current.parent.remove(modelRef.current);
+      }
+      if (skeletonHelperRef.current) {
+        scene.remove(skeletonHelperRef.current);
+        skeletonHelperRef.current = null;
+      }
 
-      // 给 Bot 装配近战军刀套件
-      const suite = WEAPON_SUITES.find(s => s.id === 'knives_01') || WEAPON_SUITES[0];
+      const built = await player.loadFullAvatar({
+        jobId: newJobId,
+        gender: newGender,
+        preset: cardItem?.preset
+      });
+      const rootBone = built.skeleton?.bones?.[0] || built.root;
+      const skeleton = new THREE.SkeletonHelper(rootBone);
+      skeletonHelperRef.current = skeleton;
+      skeleton.visible = showSkeleton;
+      scene.add(skeleton);
+      modelRef.current = built.root;
+      built.root.visible = showMesh;
+
+      const skinWeapon = selectedWeaponSkinIdRef.current
+        ? lobbyAssetsRef.current?.weapons[selectedWeaponSkinIdRef.current]
+        : undefined;
+      const suite = WEAPON_SUITES.find(s => s.id === activeSuiteIdRef.current) || WEAPON_SUITES[0];
+      const partsToEquip = skinWeapon
+        ? skinWeapon.parts.map(p => ({
+            model: assetUrl(p.model),
+            texture: p.texture ? assetUrl(p.texture) : null,
+            bone: p.bone
+          }))
+        : suite.parts;
+
       await Promise.all([
-        bot.loadAnimations(suite.actions),
-        suite.parts ? bot.equipWeaponParts(suite.parts) : Promise.resolve([])
+        player.loadAnimations(suite.actions),
+        partsToEquip ? player.equipWeaponParts(partsToEquip, 0, skinWeapon?.id || suite.id) : Promise.resolve([])
       ]);
-
-      const hpBar = createHpBar(botName);
-      bot.modelGroup.add(hpBar.sprite);
-
-      // 在玩家前方 3~5 米生成，并探测当前地图地面高程
-      const pPos = playerRef.current.modelGroup.position;
-      const angle = (num * 1.2) + Math.random() * 0.8;
-      const dist = 3.2 + Math.random() * 1.5;
-      const spawnX = pPos.x + Math.sin(angle) * dist;
-      const spawnZ = pPos.z + Math.cos(angle) * dist;
-      const floorY = mapColliderRef.current.floorAt(spawnX, spawnZ, 90) ?? pPos.y;
-
-      bot.setTransform(spawnX, floorY, spawnZ, Math.random() * Math.PI * 2);
-      bot.setCollisionEnvironment(mapColliderRef.current.toCollisionEnvironment());
-      bot.setHitboxVisible(showHitbox);
-
-      const botEntry: BotItem = {
-        id,
-        entity: bot,
-        name: botName,
-        hp: 3200,
-        maxHp: 3200,
-        mode: customMode || globalBotMode,
-        patrolTimer: 2.0,
-        patrolDir: new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize(),
-        attackCooldown: 1.0,
-        hpBar
-      };
-
-      bot.events = {
-        onDamage: (_amount, currentHp) => {
-          botEntry.hp = currentHp;
-          hpBar.updateHp(currentHp, botEntry.maxHp);
-          syncBotListState();
-        },
-        onDeath: () => {
-          botEntry.hp = 0;
-          hpBar.updateHp(0, botEntry.maxHp);
-          syncBotListState();
-          setStatus(`💀 [${botName}] 已阵亡倒地！`);
-        }
-      };
-
-      botsRef.current.push(botEntry);
-      syncBotListState();
-      setStatus(`🤖 已成功生成 ${botName}！当前模式: ${botEntry.mode === 'chase' ? '追击玩家' : botEntry.mode === 'patrol' ? '随机巡逻' : '静止木桩'}`);
+      setStatus(`✅ 已切换角色为 ${displayName}`);
     } catch (err) {
-      console.error('Bot spawn error:', err);
-      setStatus(`生成假人失败: ${err}`);
-    }
-  };
-
-  const clearAllBots = () => {
-    botsRef.current.forEach(b => {
-      b.entity.dispose();
-      if (b.hpBar.sprite.parent) b.hpBar.sprite.parent.remove(b.hpBar.sprite);
-    });
-    botsRef.current = [];
-    syncBotListState();
-    setStatus('已清除所有假人实体');
-  };
-
-  const reviveAllBots = () => {
-    botsRef.current.forEach(b => {
-      b.entity.revive(3200);
-      b.hp = 3200;
-      b.hpBar.updateHp(3200, 3200);
-    });
-    syncBotListState();
-    setStatus('已复活全部假人！');
-  };
-
-  const setBotMode = (id: string, mode: 'dummy' | 'patrol' | 'chase') => {
-    const target = botsRef.current.find(b => b.id === id);
-    if (target) {
-      target.mode = mode;
-      syncBotListState();
-      setStatus(`已将 [${target.name}] 切换为: ${mode === 'chase' ? '主动追击' : mode === 'patrol' ? '自由巡逻' : '静止靶子'}`);
+      console.error('Avatar switch error:', err);
+      setStatus(`角色切换失败: ${err}`);
     }
   };
 
   useEffect(() => {
     if (!mountRef.current) return;
 
-    // 1. 初始化纯场景
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#0f172a');
     sceneRef.current = scene;
@@ -915,7 +668,6 @@ export default function CharacterController() {
     controls.dampingFactor = 0.05;
     orbitControlsRef.current = controls;
 
-    // 初始化第三人称 TPS 摄像机控制器
     const tpsCamera = new CameraController(camera, {
       distance: 3.2,
       heightOffset: 1.25,
@@ -923,36 +675,46 @@ export default function CharacterController() {
     });
     cameraControllerRef.current = tpsCamera;
 
-    // 初始化真实战斗音效模块
     const battleAudio = createBattleAudio();
     battleAudioRef.current = battleAudio;
 
-    // 初始化投射物与范围爆炸系统 (RPG, Bow)
+    // 实例化共用 3D 战斗特效管理器
+    const combatEffects = new CombatEffectsManager(scene);
+    combatEffectsRef.current = combatEffects;
+
+    // 实例化共用 Bot 管理器
+    const botManager = new BotManager(scene, {
+      onStateChange: (snapshots) => setBotList(snapshots),
+      onStatus: (msg) => setStatus(msg),
+      playAudio: (name, vol) => battleAudio.play(name, vol),
+      onPlayerAttacked: (dmg) => triggerPlayerHurt(dmg)
+    });
+    botManagerRef.current = botManager;
+
+    // 初始化投射物与范围爆炸系统 (RPG, Bow, Grenade)
     const projectileSystem = createProjectileSystem(
       scene,
-      () => {
-        const targets: any[] = [];
-        botsRef.current.forEach(b => {
-          if (b.hp > 0 && b.entity?.hitbox) targets.push(b.entity.hitbox);
-        });
-        if (mapColliderRef.current?.collisionMeshes) {
-          targets.push(...mapColliderRef.current.collisionMeshes);
-        }
-        return targets;
-      },
+      () => [
+        ...botManager.getAliveHitboxes(),
+        ...(mapColliderRef.current?.collisionMeshes ?? [])
+      ],
       (point, radius) => {
-        // RPG 爆炸范围震荡与范围伤害
         battleAudio.play('explosion_rpg', 0.85);
-        spawnExplosionEffect(scene, point);
+        combatEffects.spawnExplosionEffect(point);
 
-        botsRef.current.forEach(bot => {
+        botManager.bots.forEach(bot => {
           if (bot.hp <= 0) return;
           const dist = bot.entity.modelGroup.position.distanceTo(point);
           if (dist <= radius) {
             const falloff = 1 - (dist / radius);
             const dmg = Math.floor(1500 * Math.max(0.25, falloff));
             bot.entity.takeDamage(dmg);
-            spawnFloatingDamage(scene, bot.entity.modelGroup.position.clone().add(new THREE.Vector3(0, 1.8, 0)), dmg, false);
+            combatEffects.spawnFloatingDamage(
+              bot.entity.modelGroup.position.clone().add(new THREE.Vector3(0, 1.8, 0)),
+              dmg,
+              false
+            );
+            triggerHitmarker(false);
           }
         });
 
@@ -961,46 +723,32 @@ export default function CharacterController() {
           if (pDist <= radius) {
             const falloff = 1 - (pDist / radius);
             const pDmg = Math.floor(900 * Math.max(0.2, falloff));
-            playerRef.current.takeDamage(pDmg);
             triggerPlayerHurt(pDmg);
           }
         }
       },
       (hit, kind) => {
-        // 箭矢等飞行碰撞直接命中回调
         if (hit?.object?.userData?.isPlayer && hit.object.userData.entity) {
-          const bot = botsRef.current.find(b => b.entity === hit.object.userData.entity);
+          const bot = botManager.findByEntity(hit.object.userData.entity);
           if (bot && bot.hp > 0) {
             const hitY = hit.point.y;
             const botY = bot.entity.modelGroup.position.y;
             const isHeadshot = (hitY - botY) >= 1.35;
             const dmg = Math.floor((kind === 'arrow' ? 780 : 350) * (isHeadshot ? 2.4 : 1.0));
             bot.entity.takeDamage(dmg);
-            battleAudio.play('hit_body', 0.85);
+            battleAudio.play(isHeadshot ? 'critical_hit' : 'hit_body', 0.85);
             triggerHitmarker(isHeadshot);
-            spawnFloatingDamage(scene, hit.point, dmg, isHeadshot);
+            combatEffects.spawnFloatingDamage(hit.point, dmg, isHeadshot);
           }
-        } else {
+        } else if (hit?.point) {
           battleAudio.play('hit_wall', 0.6);
-          spawnImpactSpark(scene, hit.point);
+          combatEffects.spawnImpactSpark(hit.point);
         }
       }
     );
     projectileSystemRef.current = projectileSystem;
 
-    // 枪口火焰与动态光源
-    const muzzleLight = new THREE.PointLight(0xffb03a, 0, 9);
-    scene.add(muzzleLight);
-    muzzleLightRef.current = muzzleLight;
-
-    const flashMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(0.14, 8, 8),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 })
-    );
-    scene.add(flashMesh);
-    muzzleFlashMeshRef.current = flashMesh;
-
-    // 添加摄影棚灯光系统
+    // 灯光系统
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.3);
     scene.add(ambientLight);
 
@@ -1020,22 +768,71 @@ export default function CharacterController() {
     scene.add(grid);
     gridHelperRef.current = grid;
 
-    // 2. 引入游戏底层引擎实体类
+    // 实例化主玩家实体
     const player = new PlayerEntity(scene);
     playerRef.current = player;
     tpsCamera.setTarget(player.modelGroup);
 
-    // 挂接引擎事件监听
+    // 实例化共用职业技能运行时引擎 (与 Gameplay.tsx 完全同源)
+    const skillEffects = createSkillEffects({
+      scene,
+      position: () => player.modelGroup.position,
+      aim: () => cameraModeRef.current === 'tps'
+        ? tpsCamera.getForwardDirection()
+        : new THREE.Vector3(Math.sin(player.modelGroup.rotation.y), 0, Math.cos(player.modelGroup.rotation.y)),
+      spawnProjectile: (kind, origin, aim) => projectileSystem.spawn(kind, origin, aim),
+      playSound: (name, volume) => battleAudio.play(name, volume),
+      getMaxHealth: () => maxHealthRef.current,
+      heal: (amount) => {
+        const nextHp = player.heal(amount);
+        setHealth(nextHp);
+        combatEffects.spawnFloatingHeal(
+          player.modelGroup.position.clone().add(new THREE.Vector3(0, 1.9, 0)),
+          amount
+        );
+      },
+      hurt: (amount) => triggerPlayerHurt(amount),
+      enemies: () => botManager.getAliveTargets(),
+      hitEnemy: (userId, damage) => {
+        const bot = botManager.damageBotById(userId, damage);
+        if (bot) {
+          triggerHitmarker(false);
+          combatEffects.spawnFloatingDamage(
+            bot.entity.modelGroup.position.clone().add(new THREE.Vector3(0, 1.8, 0)),
+            damage,
+            false
+          );
+        }
+      },
+      setGhost: (on) => player.setGhost(on),
+      onSpurt: () => player.spurt(),
+      onExplosion: (point) => {
+        battleAudio.play('explosion_rpg', 0.8);
+        combatEffects.spawnExplosionEffect(point);
+      },
+      log: (msg) => setStatus(`✨ 技能触发: ${msg}`)
+    });
+    skillEffectsRef.current = skillEffects;
+
     player.events = {
-      onFootstep: () => {},
-      onJump: () => setStatus('实体触发起跳事件 (onJump)'),
-      onLand: () => setStatus('实体平稳着地 (onLand)'),
-      onRoll: () => setStatus('实体执行战术翻滚 (onRoll)'),
+      onFootstep: (idx) => battleAudio.play(`step${idx}`, 0.3),
+      onJump: () => {
+        battleAudio.play('jump', 0.45);
+        setStatus('实体触发起跳事件 (onJump)');
+      },
+      onLand: () => {
+        battleAudio.play('land', 0.35);
+        setStatus('实体平稳着地 (onLand)');
+      },
+      onRoll: () => {
+        battleAudio.play('roll', 0.5);
+        setStatus('实体执行战术翻滚 (onRoll)');
+      },
       onAttack: () => {},
       onReload: () => {},
       onDamage: (amount, currentHp) => {
         setHealth(currentHp);
-        setStatus(`受到 ${amount} 点伤害，剩余血量: ${currentHp}`);
+        if (amount > 0) setStatus(`受到 ${amount} 点伤害，剩余血量: ${currentHp}`);
       },
       onDeath: () => {
         setHealth(0);
@@ -1063,19 +860,23 @@ export default function CharacterController() {
         const initialSuite = WEAPON_SUITES[0];
         await Promise.all([
           player.loadAnimations(initialSuite.actions),
-          initialSuite.parts ? player.equipWeaponParts(initialSuite.parts) : Promise.resolve([])
+          initialSuite.parts ? player.equipWeaponParts(initialSuite.parts, 0, initialSuite.id) : Promise.resolve([])
         ]);
         setAvailableActions(Object.keys(initialSuite.actions));
 
-        // 默认初始化加载关卡地图 (钟楼小镇 Level 1)
-        await switchMap('level1');
-
-        // 生成初始测试假人
-        spawnBot('dummy');
+        const startMapId = initialMapId || 'level1';
+        await switchMap(startMapId);
+        if (!getCustomMapById(startMapId)) {
+          await botManager.spawnBot({
+            mode: 'dummy',
+            originPosition: player.modelGroup.position,
+            collisionEnv: mapColliderRef.current.toCollisionEnvironment()
+          });
+        }
       })
       .catch(err => setStatus(`引擎加载失败: ${err}`));
 
-    // 3. 键盘与鼠标事件
+    // 键盘与鼠标事件
     const keys = { w: false, a: false, s: false, d: false, space: false };
     const direction = new THREE.Vector3();
 
@@ -1089,6 +890,7 @@ export default function CharacterController() {
       if (e.code === 'Space') {
         e.preventDefault();
         keys.space = true;
+        player.jump();
       }
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
         player.roll();
@@ -1101,6 +903,11 @@ export default function CharacterController() {
       }
       if (e.code === 'KeyP') {
         handleRespawn();
+      }
+      // 数字键 1~4 快捷释放职业技能
+      if (!e.repeat && ['Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(e.code)) {
+        const idx = Number(e.code.replace('Digit', '')) - 1;
+        castSandboxSkill(idx);
       }
     };
 
@@ -1127,6 +934,8 @@ export default function CharacterController() {
             renderer.domElement.requestPointerLock?.();
           }
           fireWeapon();
+        } else if (e.button === 2) {
+          tpsCamera.setAiming(true);
         }
       }
     };
@@ -1134,6 +943,9 @@ export default function CharacterController() {
     const onPointerUp = (e: PointerEvent) => {
       if (e.button === 0) {
         isMouseDownRef.current = false;
+      }
+      if (e.button === 2) {
+        tpsCamera.setAiming(false);
       }
       isDragging = false;
     };
@@ -1166,17 +978,36 @@ export default function CharacterController() {
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('wheel', onWheel);
 
-    // 4. 引擎主帧循环
+    // 引擎主帧循环
     const clock = new THREE.Clock();
     let animationId: number;
     let frameCount = 0;
     let lastFpsTime = performance.now();
+    let lastSkillSync = 0;
 
     const animate = () => {
       animationId = requestAnimationFrame(animate);
       const delta = Math.min(clock.getDelta(), 0.1);
 
-      // 把本帧的物理输入意图打包发送给引擎处理
+      // 更新技能运行时与移动加速
+      skillEffects.update(delta);
+      player.setSpeed(skillEffects.speed(player.getBaseSpeed()));
+
+      if (performance.now() - lastSkillSync > 100) {
+        lastSkillSync = performance.now();
+        const snap = skillEffects.snapshot();
+        const bySlot = skillEffects.bySlot();
+        setShieldValue(Math.ceil(snap.shield));
+        setIsStealthed(skillEffects.isStealthed());
+        const scaledMax = Math.round(3200 * (snap.maxHealthScale || 1));
+        if (scaledMax !== maxHealthRef.current) {
+          maxHealthRef.current = scaledMax;
+          player.maxHealth = scaledMax;
+          setMaxHealth(scaledMax);
+        }
+        setSkillCooldowns(activeSkillsRef.current.map((_, idx) => bySlot.get(idx) ?? 0));
+      }
+
       direction.set(0, 0, 0);
       if (keys.w) direction.z += 1;
       if (keys.s) direction.z -= 1;
@@ -1194,21 +1025,19 @@ export default function CharacterController() {
       player.setInput(direction, cameraYaw, keys.space);
       player.update(delta);
 
-      // 掉出地图下界自动救援复位
       if (player.modelGroup.position.y < -35) {
         const sp = currentMapSessionRef.current?.spawnPoint || new THREE.Vector3(0, 0, 0);
         player.modelGroup.position.copy(sp);
-        player.revive();
+        player.revive(maxHealthRef.current);
         setStatus('⚠️ 掉出地图边界，已自动重生回出生点！');
       }
 
-      // 实时更新当前动作状态徽标
       if (actionBadgeRef.current) {
         const cur = player.getCurrentAction();
         actionBadgeRef.current.textContent = cur ? (ACTION_LABELS[cur] || cur) : 'idle';
       }
 
-      // 5. 换弹计时器更新
+      // 换弹计时器更新
       if (isReloadingRef.current) {
         reloadTimerRef.current -= delta;
         const prog = Math.max(0, Math.min(1, 1 - (reloadTimerRef.current / maxReloadTimeRef.current)));
@@ -1216,13 +1045,15 @@ export default function CharacterController() {
 
         if (reloadTimerRef.current <= 0) {
           const suite = WEAPON_SUITES.find(s => s.id === activeSuiteIdRef.current) || WEAPON_SUITES[0];
-          const prof = WEAPON_COMBAT_PROFILES[suite.id] || WEAPON_COMBAT_PROFILES['smg_01'];
+          const prof = getWeaponCombatProfile(suite.id);
           const needed = prof.magCapacity - currentMagAmmoRef.current;
-          const toAdd = Math.min(needed, reserveAmmoRef.current);
+          const toAdd = infiniteAmmoRef.current ? needed : Math.min(needed, reserveAmmoRef.current);
           currentMagAmmoRef.current += toAdd;
-          reserveAmmoRef.current -= toAdd;
+          if (!infiniteAmmoRef.current) {
+            reserveAmmoRef.current -= toAdd;
+            setReserveAmmo(reserveAmmoRef.current);
+          }
           setCurrentMagAmmo(currentMagAmmoRef.current);
-          setReserveAmmo(reserveAmmoRef.current);
           isReloadingRef.current = false;
           setIsReloading(false);
           setReloadProgress(0);
@@ -1230,134 +1061,31 @@ export default function CharacterController() {
         }
       }
 
-      // 6. 持续按住鼠标连发 (Auto-fire)
+      // 持续按住鼠标连发 (Auto-fire)
       if (isMouseDownRef.current && cameraModeRef.current === 'tps') {
         const suite = WEAPON_SUITES.find(s => s.id === activeSuiteIdRef.current) || WEAPON_SUITES[0];
-        const prof = WEAPON_COMBAT_PROFILES[suite.id] || WEAPON_COMBAT_PROFILES['smg_01'];
+        const prof = getWeaponCombatProfile(suite.id);
         if (prof.isAutomatic && !isReloadingRef.current) {
           fireWeapon();
         }
       }
 
-      // 7. 准星后坐力平滑回缩
+      // 准星后坐力平滑回缩
       setRecoilSpread(prev => Math.max(0, prev - delta * 30));
 
-      // 8. 枪口火焰淡化
-      if (muzzleTimerRef.current > 0) {
-        muzzleTimerRef.current -= delta;
-        if (muzzleTimerRef.current <= 0) {
-          if (muzzleLightRef.current) muzzleLightRef.current.intensity = 0;
-          if (muzzleFlashMeshRef.current) muzzleFlashMeshRef.current.material.opacity = 0;
-        }
-      }
-
-      // 9. 更新投射物系统 (飞行火箭与箭矢)
+      // 更新投射物、3D 战斗特效、AI 假人
       projectileSystem.update(delta);
+      combatEffects.update(delta);
+      botManager.update(delta, player, skillEffects.isStealthed());
 
-      // 10. 更新浮动伤害文字跳字
-      for (let i = floatingTextsRef.current.length - 1; i >= 0; i--) {
-        const ft = floatingTextsRef.current[i];
-        ft.lifetime -= delta;
-        ft.position.addScaledVector(ft.velocity, delta);
-        ft.velocity.y = Math.max(0.4, ft.velocity.y - delta * 1.8);
-        ft.sprite.material.opacity = Math.max(0, ft.lifetime / ft.maxLifetime);
-
-        if (ft.lifetime <= 0) {
-          scene.remove(ft.sprite);
-          ft.sprite.material.map?.dispose();
-          ft.sprite.material.dispose();
-          floatingTextsRef.current.splice(i, 1);
-        }
-      }
-
-      // 11. 更新火花粒子
-      for (let i = sparksRef.current.length - 1; i >= 0; i--) {
-        const sp = sparksRef.current[i];
-        sp.lifetime -= delta;
-        sp.mesh.material.opacity = Math.max(0, sp.lifetime / sp.maxLifetime);
-        if (sp.lifetime <= 0) {
-          scene.remove(sp.mesh);
-          sp.mesh.geometry.dispose();
-          sp.mesh.material.dispose();
-          sparksRef.current.splice(i, 1);
-        }
-      }
-
-      // 12. 更新爆炸气浪特效
-      for (let i = explosionsRef.current.length - 1; i >= 0; i--) {
-        const exp = explosionsRef.current[i];
-        exp.lifetime -= delta;
-        const scaleInc = 1 + exp.scaleSpeed * delta;
-        exp.mesh.scale.multiplyScalar(scaleInc);
-        exp.mesh.material.opacity = Math.max(0, exp.lifetime / exp.maxLifetime);
-        if (exp.lifetime <= 0) {
-          scene.remove(exp.mesh);
-          exp.mesh.geometry.dispose();
-          exp.mesh.material.dispose();
-          explosionsRef.current.splice(i, 1);
-        }
-      }
-
-      // 13. 驱动所有 Bot 假人实体 AI 与反击判定
-      const pPos = player.modelGroup.position;
-      botsRef.current.forEach(bot => {
-        if (!bot.entity.isAlive) {
-          bot.entity.update(delta);
-          return;
-        }
-
-        const bPos = bot.entity.modelGroup.position;
-        const toPlayer = pPos.clone().sub(bPos);
-        const distToPlayer = toPlayer.length();
-
-        if (bot.mode === 'dummy') {
-          bot.entity.setInput(new THREE.Vector3(0, 0, 0), bot.entity.modelGroup.rotation.y, false);
-        } else if (bot.mode === 'patrol') {
-          bot.patrolTimer -= delta;
-          if (bot.patrolTimer <= 0) {
-            bot.patrolTimer = 2.0 + Math.random() * 2.5;
-            bot.patrolDir.set(Math.random() - 0.5, 0, Math.random() - 0.5).normalize();
-          }
-          const yaw = Math.atan2(bot.patrolDir.x, bot.patrolDir.z);
-          bot.entity.setInput(new THREE.Vector3(0, 0, 1), yaw, false);
-        } else if (bot.mode === 'chase') {
-          if (distToPlayer > 1.8) {
-            toPlayer.y = 0;
-            toPlayer.normalize();
-            const yaw = Math.atan2(toPlayer.x, toPlayer.z);
-            bot.entity.setInput(new THREE.Vector3(0, 0, 1), yaw, false);
-          } else {
-            // 贴身反击：面向玩家并挥刀攻击
-            toPlayer.y = 0;
-            toPlayer.normalize();
-            const yaw = Math.atan2(toPlayer.x, toPlayer.z);
-            bot.entity.setInput(new THREE.Vector3(0, 0, 0), yaw, false);
-            bot.entity.modelGroup.rotation.y = yaw;
-            bot.attackCooldown -= delta;
-
-            if (bot.attackCooldown <= 0) {
-              bot.attackCooldown = 1.3 + Math.random() * 0.4;
-              bot.entity.attack();
-              battleAudio.play('fire-knives', 0.65);
-              const dmg = Math.floor(180 + Math.random() * 90);
-              player.takeDamage(dmg);
-              triggerPlayerHurt(dmg);
-              setStatus(`⚠️ [${bot.name}] 挥刀反击命中玩家！造成 ${dmg} 伤害`);
-            }
-          }
-        }
-
-        bot.entity.update(delta);
-      });
-
-      // 14. 相机驱动
+      // 相机驱动
       if (cameraModeRef.current === 'tps') {
         tpsCamera.update(delta, mapColliderRef.current.collisionMeshes);
       } else {
         controls.update();
       }
 
-      // 15. 更新 HUD 坐标卡片
+      // 更新 HUD 坐标卡片
       if (posXRef.current) posXRef.current.textContent = player.modelGroup.position.x.toFixed(2);
       if (posYRef.current) posYRef.current.textContent = player.modelGroup.position.y.toFixed(2);
       if (posZRef.current) posZRef.current.textContent = player.modelGroup.position.z.toFixed(2);
@@ -1413,20 +1141,24 @@ export default function CharacterController() {
         skeletonHelperRef.current = null;
       }
 
+      skillEffects.dispose();
       projectileSystem.dispose();
+      combatEffects.dispose();
+      botManager.dispose();
       battleAudio.dispose();
 
-      clearAllBots();
       player.dispose();
       renderer.dispose();
       mountRef.current?.removeChild(renderer.domElement);
     };
-  }, [fireWeapon, reloadWeapon, triggerPlayerHurt]);
+  }, [fireWeapon, reloadWeapon, triggerPlayerHurt, castSandboxSkill, triggerHitmarker]);
 
   // 武器套件切换
   const handleSuiteChange = async (suiteId: string) => {
     setActiveSuiteId(suiteId);
     activeSuiteIdRef.current = suiteId;
+    setSelectedWeaponSkinId('');
+    selectedWeaponSkinIdRef.current = '';
     setActionOption('auto');
     const player = playerRef.current;
     if (!player) return;
@@ -1434,7 +1166,7 @@ export default function CharacterController() {
     const suite = WEAPON_SUITES.find(s => s.id === suiteId);
     if (!suite) return;
 
-    const prof = WEAPON_COMBAT_PROFILES[suite.id] || WEAPON_COMBAT_PROFILES['smg_01'];
+    const prof = getWeaponCombatProfile(suite.id);
     setCurrentMagAmmo(prof.magCapacity);
     currentMagAmmoRef.current = prof.magCapacity;
     setReserveAmmo(prof.magCapacity * 4);
@@ -1447,11 +1179,54 @@ export default function CharacterController() {
 
     await Promise.all([
       player.loadAnimations(suite.actions),
-      suite.parts ? player.equipWeaponParts(suite.parts) : Promise.resolve([])
+      suite.parts ? player.equipWeaponParts(suite.parts, 0, suite.id) : Promise.resolve([])
     ]);
 
     setAvailableActions(Object.keys(suite.actions));
     setStatus(`已成功装备: ${suite.name} (弹药: ${prof.magCapacity})`);
+  };
+
+  // 484 把原版武器全量模型库任意切换
+  const handleWeaponSkinChange = async (weaponId: string) => {
+    if (!weaponId) {
+      await handleSuiteChange(activeSuiteIdRef.current);
+      return;
+    }
+    const weapon: CreationWeapon | undefined = lobbyAssetsRef.current?.weapons[weaponId];
+    const player = playerRef.current;
+    if (!weapon || !player) return;
+
+    setSelectedWeaponSkinId(weaponId);
+    selectedWeaponSkinIdRef.current = weaponId;
+    const matchedSuite = getWeaponActionSuite(weapon.id);
+    setActiveSuiteId(matchedSuite.id);
+    activeSuiteIdRef.current = matchedSuite.id;
+    setActionOption('auto');
+
+    const prof = getWeaponCombatProfile(weapon.id);
+    setCurrentMagAmmo(prof.magCapacity);
+    currentMagAmmoRef.current = prof.magCapacity;
+    setReserveAmmo(prof.magCapacity * 4);
+    reserveAmmoRef.current = prof.magCapacity * 4;
+    setIsReloading(false);
+    isReloadingRef.current = false;
+
+    setStatus(`正在挂载原版武器模型: ${weapon.label} (${weapon.id})...`);
+    player.clearWeapons();
+
+    const mappedParts = (weapon.parts || []).map(p => ({
+      model: assetUrl(p.model),
+      texture: p.texture ? assetUrl(p.texture) : null,
+      bone: p.bone
+    }));
+
+    await Promise.all([
+      player.loadAnimations(matchedSuite.actions),
+      player.equipWeaponParts(mappedParts, 0, weapon.id)
+    ]);
+
+    setAvailableActions(Object.keys(matchedSuite.actions));
+    setStatus(`✅ 已装备原版武器: ${weapon.label} [${weapon.id}]`);
   };
 
   const handleActionOptionChange = (option: string) => {
@@ -1469,13 +1244,10 @@ export default function CharacterController() {
 
   const triggerJump = () => playerRef.current?.jump();
   const triggerRoll = () => playerRef.current?.roll();
-  const triggerDamage = () => {
-    playerRef.current?.takeDamage(600);
-    triggerPlayerHurt(600);
-  };
+  const triggerDamage = () => triggerPlayerHurt(600);
   const triggerRevive = () => {
-    playerRef.current?.revive(3200);
-    setHealth(3200);
+    playerRef.current?.revive(maxHealthRef.current);
+    setHealth(maxHealthRef.current);
   };
 
   useEffect(() => {
@@ -1488,10 +1260,18 @@ export default function CharacterController() {
 
   useEffect(() => {
     playerRef.current?.setHitboxVisible(showHitbox);
-    botsRef.current.forEach(b => b.entity?.setHitboxVisible(showHitbox));
+    botManagerRef.current?.setHitboxVisible(showHitbox);
   }, [showHitbox]);
 
-  const activeProfile = WEAPON_COMBAT_PROFILES[activeSuiteId] || WEAPON_COMBAT_PROFILES['smg_01'];
+  useEffect(() => {
+    if (playerRef.current) playerRef.current.godMode = godMode;
+  }, [godMode]);
+
+  useEffect(() => {
+    if (botManagerRef.current) botManagerRef.current.autoRespawn = autoRespawnBots;
+  }, [autoRespawnBots]);
+
+  const activeProfile = getWeaponCombatProfile(activeSuiteId);
 
   const btnStyle = {
     padding: '6px 10px',
@@ -1538,7 +1318,6 @@ export default function CharacterController() {
         pointerEvents: 'none',
         zIndex: 20
       }}>
-        {/* 中心准星圆点 */}
         <div style={{
           width: '4px',
           height: '4px',
@@ -1551,7 +1330,6 @@ export default function CharacterController() {
           boxShadow: '0 0 4px #38bdf8'
         }} />
 
-        {/* 四向准星刻度线 (带后坐力动态开合扩散) */}
         <div style={{
           position: 'absolute',
           top: `-${10 + recoilSpread}px`,
@@ -1585,7 +1363,6 @@ export default function CharacterController() {
           backgroundColor: 'rgba(255, 255, 255, 0.88)'
         }} />
 
-        {/* 击中标记 (Hitmarker ✕) */}
         {hitmarkerVisible && (
           <div style={{
             position: 'absolute',
@@ -1620,6 +1397,72 @@ export default function CharacterController() {
         )}
       </div>
 
+      {/* 底部中央：职业主动技能快捷栏 (1~4 键) */}
+      {activeSkillsUI.length > 0 && (
+        <div style={{
+          position: 'absolute',
+          bottom: 24,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          gap: '10px',
+          background: 'rgba(15, 23, 42, 0.92)',
+          padding: '10px 14px',
+          borderRadius: '12px',
+          border: '1px solid #334155',
+          backdropFilter: 'blur(8px)',
+          zIndex: 10
+        }}>
+          {activeSkillsUI.map((load, idx) => {
+            const cd = skillCooldowns[idx] ?? 0;
+            return (
+              <button
+                key={load.skill.id}
+                onClick={() => castSandboxSkill(idx)}
+                title={`按数字键 ${idx + 1} 释放: ${load.skill.name} (Lv.${load.level})`}
+                style={{
+                  position: 'relative',
+                  width: '54px',
+                  height: '54px',
+                  borderRadius: '8px',
+                  border: cd > 0 ? '1px solid #475569' : '1px solid #38bdf8',
+                  background: '#1e293b',
+                  cursor: 'pointer',
+                  padding: 0,
+                  overflow: 'hidden'
+                }}>
+                <img
+                  src={`${LOBBY_ASSET_BASE}${load.skill.icon}`}
+                  alt={load.skill.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: cd > 0 ? 0.4 : 1 }}
+                />
+                <span style={{
+                  position: 'absolute', top: 2, left: 4, fontSize: '10px',
+                  fontWeight: 'bold', color: '#f8fafc', textShadow: '0 1px 2px #000'
+                }}>
+                  {idx + 1}
+                </span>
+                <span style={{
+                  position: 'absolute', bottom: 2, left: 0, right: 0, fontSize: '9px',
+                  color: '#e2e8f0', background: 'rgba(15,23,42,0.75)', textAlign: 'center'
+                }}>
+                  {load.skill.name}
+                </span>
+                {cd > 0 && (
+                  <div style={{
+                    position: 'absolute', inset: 0, background: 'rgba(15, 23, 42, 0.72)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#fbbf24', fontWeight: 'bold', fontSize: '14px'
+                  }}>
+                    {Math.ceil(cd)}s
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* 右下角 武器与弹药战斗 HUD */}
       <div style={{
         position: 'absolute',
@@ -1651,7 +1494,6 @@ export default function CharacterController() {
           )}
         </div>
 
-        {/* 弹药数 */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '4px 0' }}>
           <span 
             id="hud-current-ammo"
@@ -1665,23 +1507,21 @@ export default function CharacterController() {
           </span>
           {activeProfile.kind !== 'melee' && (
             <span id="hud-reserve-ammo" style={{ fontSize: '15px', color: '#94a3b8', fontFamily: 'monospace' }}>
-              / {reserveAmmo}
+              / {infiniteAmmo ? '∞' : reserveAmmo}
             </span>
           )}
         </div>
 
-        {/* 换弹进度条 */}
         {isReloading && (
           <div style={{ width: '100%', height: '4px', background: '#334155', borderRadius: '2px', overflow: 'hidden', marginBottom: '6px' }}>
             <div style={{ width: `${reloadProgress * 100}%`, height: '100%', background: '#f59e0b', transition: 'width 0.05s linear' }} />
           </div>
         )}
 
-        {/* 战斗快捷指引 */}
         <div style={{ fontSize: '10px', color: '#64748b', display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
           <span><b>左键 / J</b> 开火</span>
           <span><b>R</b> 换弹</span>
-          <span><b>Shift</b> 翻滚</span>
+          <span><b>1~4</b> 技能</span>
         </div>
       </div>
 
@@ -1689,8 +1529,8 @@ export default function CharacterController() {
       <div style={{
         position: 'absolute', top: 20, left: 20, 
         background: 'rgba(15, 23, 42, 0.94)', color: '#f8fafc',
-        padding: '20px', borderRadius: '12px', 
-        fontFamily: 'sans-serif', width: '330px',
+        padding: '18px', borderRadius: '12px', 
+        fontFamily: 'sans-serif', width: '340px',
         boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)',
         border: '1px solid #334155',
         backdropFilter: 'blur(8px)',
@@ -1698,13 +1538,13 @@ export default function CharacterController() {
         overflowY: 'auto',
         zIndex: 10
       }}>
-        <h3 style={{ margin: '0 0 15px 0', borderBottom: '1px solid #334155', paddingBottom: '10px', color: '#37f4d3', fontSize: '16px' }}>
-          🎮 跑跳控制器 & 战场射击沙盒
+        <h3 style={{ margin: '0 0 12px 0', borderBottom: '1px solid #334155', paddingBottom: '8px', color: '#37f4d3', fontSize: '15px' }}>
+          🎮 全功能战斗沙盒 (与正式战场同源)
         </h3>
 
         {/* 1. 相机视图模式切换 */}
-        <div style={{ marginBottom: '14px' }}>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', marginBottom: '6px', color: '#cbd5e1' }}>
+        <div style={{ marginBottom: '12px' }}>
+          <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', color: '#cbd5e1' }}>
             🎥 摄像机控制模式：
           </label>
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -1712,10 +1552,11 @@ export default function CharacterController() {
               onClick={() => {
                 setCameraMode('orbit');
                 cameraModeRef.current = 'orbit';
+                playerRef.current?.setAimAtCrosshair(false);
                 document.exitPointerLock?.();
               }}
               style={{
-                flex: 1, padding: '7px 0',
+                flex: 1, padding: '6px 0',
                 background: cameraMode === 'orbit' ? '#0284c7' : '#1e293b',
                 color: cameraMode === 'orbit' ? '#ffffff' : '#94a3b8',
                 border: `1px solid ${cameraMode === 'orbit' ? '#38bdf8' : '#475569'}`,
@@ -1727,9 +1568,10 @@ export default function CharacterController() {
               onClick={() => {
                 setCameraMode('tps');
                 cameraModeRef.current = 'tps';
+                playerRef.current?.setAimAtCrosshair(true);
               }}
               style={{
-                flex: 1, padding: '7px 0',
+                flex: 1, padding: '6px 0',
                 background: cameraMode === 'tps' ? '#0284c7' : '#1e293b',
                 color: cameraMode === 'tps' ? '#ffffff' : '#94a3b8',
                 border: `1px solid ${cameraMode === 'tps' ? '#38bdf8' : '#475569'}`,
@@ -1740,16 +1582,68 @@ export default function CharacterController() {
           </div>
         </div>
 
-        {/* 2. 战场地图选择与切换 */}
+        {/* 2. 角色职业与性别切换 */}
+        <div style={{ marginBottom: '10px', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px', color: '#cbd5e1' }}>
+              🎭 角色职业 (含专属技能)：
+            </label>
+            <select
+              value={selectedJobId}
+              onChange={e => handleAvatarChange(e.target.value as CreationJob, selectedGender)}
+              style={{ width: '100%', padding: '6px 8px', background: '#0f172a', color: 'white', border: '1px solid #475569', borderRadius: '6px', fontSize: '12px' }}>
+              {(Object.keys(CREATION_JOBS) as CreationJob[]).map(jobKey => (
+                <option key={jobKey} value={jobKey}>
+                  {CREATION_JOBS[jobKey].name} ({jobKey})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px', color: '#cbd5e1' }}>
+              🚻 性别：
+            </label>
+            <select
+              value={selectedGender}
+              onChange={e => handleAvatarChange(selectedJobId, Number(e.target.value))}
+              style={{ width: '100%', padding: '6px 8px', background: '#0f172a', color: 'white', border: '1px solid #475569', borderRadius: '6px', fontSize: '12px' }}>
+              <option value={0}>男 (Male)</option>
+              <option value={1}>女 (Female)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* 2b. 157 款原版造型卡全量皮肤选择 */}
+        <div style={{ marginBottom: '12px' }}>
+          <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px', color: '#f472b6' }}>
+            🃏 157 款原版角色造型卡皮肤库：
+          </label>
+          <select
+            id="avatar-card-select"
+            value={selectedAvatarCardId}
+            onChange={e => handleAvatarChange(selectedJobId, selectedGender, e.target.value)}
+            style={{ width: '100%', padding: '6px 8px', background: '#0f172a', color: 'white', border: '1px solid #ec4899', borderRadius: '6px', fontSize: '12px' }}>
+            <option value="default">👤 默认职业基础造型 ({CREATION_JOBS[selectedJobId].name})</option>
+            {lobbyAssets?.items
+              .filter(item => item.category === 'avatars' && item.avatarCard)
+              .map(item => (
+                <option key={item.id} value={item.id}>
+                  🃏 {item.name} ({item.id})
+                </option>
+              ))}
+          </select>
+        </div>
+
+        {/* 3. 战场地图选择与切换 */}
         <div style={{ 
-          marginBottom: '14px', 
+          marginBottom: '12px', 
           background: 'rgba(30, 41, 59, 0.7)', 
-          padding: '12px', 
+          padding: '10px', 
           borderRadius: '10px', 
           border: '1px solid #0284c7' 
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#38bdf8' }}>
+            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#38bdf8' }}>
               🗺️ 战场地图加载与切换：
             </label>
             <button
@@ -1763,9 +1657,16 @@ export default function CharacterController() {
             </button>
           </div>
           <select 
-            style={{ width: '100%', padding: '8px 10px', background: '#0f172a', color: 'white', border: '1px solid #475569', borderRadius: '6px', fontSize: '13px', outline: 'none' }}
+            style={{ width: '100%', padding: '7px 10px', background: '#0f172a', color: 'white', border: '1px solid #475569', borderRadius: '6px', fontSize: '12px', outline: 'none' }}
             value={selectedMapId} 
             onChange={e => switchMap(e.target.value)}>
+            <optgroup label="── 🛠️ 创意工坊与沙盒自制地图 ──">
+              {getSavedCustomMaps().map(cm => (
+                <option key={cm.id} value={cm.id}>
+                  🛠️ {cm.name} ({cm.nodes.length}节点)
+                </option>
+              ))}
+            </optgroup>
             {Array.from(new Set(MAP_PRESETS.map(m => m.category))).map(cat => (
               <optgroup key={cat} label={`── ${cat} ──`}>
                 {MAP_PRESETS.filter(m => m.category === cat).map(m => (
@@ -1778,14 +1679,14 @@ export default function CharacterController() {
           </select>
         </div>
 
-        {/* 3. 武器套件切换 */}
-        <div style={{ marginBottom: '14px' }}>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', marginBottom: '5px', color: '#cbd5e1' }}>
-            🔫 挂载武器 3D 模型与动作套件：
+        {/* 4. 武器套件切换 */}
+        <div style={{ marginBottom: '10px' }}>
+          <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px', color: '#cbd5e1' }}>
+            🔫 14 类武器家族与动作套件：
           </label>
           <select 
             id="weapon-suite-select"
-            style={{ width: '100%', padding: '8px 10px', background: '#0f172a', color: 'white', border: '1px solid #475569', borderRadius: '6px', fontSize: '13px' }}
+            style={{ width: '100%', padding: '7px 10px', background: '#0f172a', color: 'white', border: '1px solid #475569', borderRadius: '6px', fontSize: '12px' }}
             value={activeSuiteId} 
             onChange={e => handleSuiteChange(e.target.value)}>
             {WEAPON_SUITES.map(suite => (
@@ -1796,13 +1697,32 @@ export default function CharacterController() {
           </select>
         </div>
 
-        {/* 4. 动作选项模式 */}
-        <div style={{ marginBottom: '14px' }}>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', marginBottom: '5px', color: '#cbd5e1' }}>
+        {/* 4b. 484 把原版武器全量模型库任意切换 */}
+        <div style={{ marginBottom: '12px' }}>
+          <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px', color: '#fbbf24' }}>
+            ✨ 484 把原版武器全量模型库 ({lobbyAssets ? Object.keys(lobbyAssets.weapons).length : 484}把)：
+          </label>
+          <select
+            id="weapon-skin-select"
+            style={{ width: '100%', padding: '7px 10px', background: '#0f172a', color: 'white', border: '1px solid #f59e0b', borderRadius: '6px', fontSize: '12px' }}
+            value={selectedWeaponSkinId}
+            onChange={e => handleWeaponSkinChange(e.target.value)}>
+            <option value="">🔧 使用当前套件默认武器模型 ({activeSuiteId})</option>
+            {lobbyAssets && Object.values(lobbyAssets.weapons).map(w => (
+              <option key={w.id} value={w.id}>
+                {w.label} [{w.id}]
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* 5. 动作选项模式 */}
+        <div style={{ marginBottom: '12px' }}>
+          <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px', color: '#cbd5e1' }}>
             🎬 动作选项 / 运行模式：
           </label>
           <select 
-            style={{ width: '100%', padding: '8px 10px', background: '#0f172a', color: 'white', border: '1px solid #475569', borderRadius: '6px', fontSize: '13px' }}
+            style={{ width: '100%', padding: '7px 10px', background: '#0f172a', color: 'white', border: '1px solid #475569', borderRadius: '6px', fontSize: '12px' }}
             value={actionOption} 
             onChange={e => handleActionOptionChange(e.target.value)}>
             <option value="auto">🎮 自由移动模式 (根据按键状态机过渡)</option>
@@ -1814,8 +1734,8 @@ export default function CharacterController() {
           </select>
         </div>
 
-        {/* 5. 动作与战斗测试按钮组 */}
-        <div style={{ marginBottom: '14px' }}>
+        {/* 6. 动作与战斗测试按钮组 */}
+        <div style={{ marginBottom: '12px' }}>
           <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>⚡ 动作与战斗快捷测试：</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginBottom: '6px' }}>
             <button onClick={triggerJump} style={btnStyle} title="按空格键 Space 亦可触发">
@@ -1849,12 +1769,36 @@ export default function CharacterController() {
           </div>
         </div>
 
-        {/* 6. 实时动作与按键指引 */}
+        {/* 7. 沙盒规则开关 (无限弹药 / 技能无CD / 无敌 / 自动复活) */}
+        <div style={{
+          background: '#0f172a', padding: '10px', borderRadius: '8px',
+          border: '1px solid #334155', marginBottom: '12px',
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '12px'
+        }}>
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: infiniteAmmo ? '#38bdf8' : '#cbd5e1' }}>
+            <input type="checkbox" checked={infiniteAmmo} onChange={e => setInfiniteAmmo(e.target.checked)} style={{ marginRight: '5px' }} />
+            ♾️ 无限弹药
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: noCooldown ? '#38bdf8' : '#cbd5e1' }}>
+            <input type="checkbox" checked={noCooldown} onChange={e => setNoCooldown(e.target.checked)} style={{ marginRight: '5px' }} />
+            ⚡ 技能/射速无CD
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: godMode ? '#4ade80' : '#cbd5e1' }}>
+            <input type="checkbox" checked={godMode} onChange={e => setGodMode(e.target.checked)} style={{ marginRight: '5px' }} />
+            🛡️ 玩家无敌
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: autoRespawnBots ? '#fbbf24' : '#cbd5e1' }}>
+            <input type="checkbox" checked={autoRespawnBots} onChange={e => setAutoRespawnBots(e.target.checked)} style={{ marginRight: '5px' }} />
+            🔄 假人自动复活
+          </label>
+        </div>
+
+        {/* 8. 实时动作与按键指引 */}
         <div style={{ 
           background: '#0f172a', padding: '10px', borderRadius: '8px', 
-          border: '1px solid #334155', marginBottom: '12px' 
+          border: '1px solid #334155', marginBottom: '10px' 
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '13px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '12px' }}>
             <span style={{ color: '#94a3b8' }}>当前动作：</span>
             <span 
               ref={actionBadgeRef} 
@@ -1865,16 +1809,15 @@ export default function CharacterController() {
               idle
             </span>
           </div>
-          <div style={{ fontSize: '12px', color: '#64748b', lineHeight: '1.6' }}>
-            <b>W A S D</b> : 移动 &nbsp;|&nbsp; <b>Space</b> : 跳跃<br/>
-            <b>Shift</b> : 战术翻滚 &nbsp;|&nbsp; <b>鼠标左键 / J</b> : 开火/攻击<br/>
-            <b>R</b> : 快速换弹 &nbsp;|&nbsp; <b>P</b> : 瞬移出生点<br/>
-            <b>滚轮</b> : 调节视距
+          <div style={{ fontSize: '11px', color: '#64748b', lineHeight: '1.5' }}>
+            <b>W A S D</b> : 移动 &nbsp;|&nbsp; <b>Space</b> : 跳跃 &nbsp;|&nbsp; <b>Shift</b> : 翻滚<br/>
+            <b>左键 / J</b> : 开火/三连击 &nbsp;|&nbsp; <b>右键</b> : 越肩瞄准 &nbsp;|&nbsp; <b>R</b> : 换弹<br/>
+            <b>1 ~ 4</b> : 释放职业技能 &nbsp;|&nbsp; <b>P</b> : 复位出生点
           </div>
         </div>
         
-        {/* 7. 视图辅助选项 */}
-        <div style={{ display: 'flex', gap: '12px', fontSize: '12px', borderTop: '1px solid #334155', paddingTop: '10px' }}>
+        {/* 9. 视图辅助选项 */}
+        <div style={{ display: 'flex', gap: '12px', fontSize: '12px', borderTop: '1px solid #334155', paddingTop: '8px' }}>
           <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
             <input type="checkbox" checked={showSkeleton} onChange={e => setShowSkeleton(e.target.checked)} style={{ marginRight: '4px' }}/>
             骨骼连线
@@ -1889,8 +1832,7 @@ export default function CharacterController() {
           </label>
         </div>
 
-        {/* 8. 状态提示 */}
-        <p style={{ margin: '10px 0 0 0', fontSize: '11px', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <p style={{ margin: '8px 0 0 0', fontSize: '11px', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           ℹ️ {status}
         </p>
       </div>
@@ -1937,9 +1879,9 @@ export default function CharacterController() {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: '#94a3b8', borderTop: '1px solid #1e293b', paddingTop: '6px' }}>
-            <span>玩家生命值：</span>
+            <span>玩家生命值 {isStealthed ? '👻(隐身中)' : ''}：</span>
             <span style={{ fontWeight: 'bold', color: health > 1000 ? '#4ade80' : '#ef4444' }}>
-              {health} / 3200
+              {health} / {maxHealth} {shieldValue > 0 ? `(🛡️+${shieldValue})` : ''}
             </span>
           </div>
         </div>
@@ -1959,7 +1901,6 @@ export default function CharacterController() {
             </span>
           </div>
 
-          {/* 操作按钮 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
             <button 
               onClick={() => spawnBot()}
@@ -1985,7 +1926,11 @@ export default function CharacterController() {
             <span>全局战术模式：</span>
             <select 
               value={globalBotMode}
-              onChange={e => setGlobalBotMode(e.target.value as any)}
+              onChange={e => {
+                const m = e.target.value as BotBehaviorMode;
+                setGlobalBotMode(m);
+                botManagerRef.current?.setAllBotsMode(m);
+              }}
               style={{ background: '#0f172a', color: 'white', border: '1px solid #475569', borderRadius: '4px', padding: '3px 6px', fontSize: '11px' }}>
               <option value="dummy">静止木桩</option>
               <option value="patrol">随机巡逻</option>
@@ -1993,7 +1938,6 @@ export default function CharacterController() {
             </select>
           </div>
 
-          {/* 假人列表 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {botList.length === 0 ? (
               <div style={{ fontSize: '12px', color: '#64748b', textAlign: 'center', padding: '12px 0' }}>
@@ -2050,13 +1994,13 @@ export default function CharacterController() {
 
                     <button 
                       onClick={() => {
-                        const target = botsRef.current.find(item => item.id === b.id);
-                        if (target && target.hp > 0) {
-                          target.entity.takeDamage(600);
-                          const scene = sceneRef.current;
-                          if (scene) {
-                            spawnFloatingDamage(scene, target.entity.modelGroup.position.clone().add(new THREE.Vector3(0, 1.8, 0)), 600, false);
-                          }
+                        const target = botManagerRef.current?.damageBotById(b.id, 600);
+                        if (target) {
+                          combatEffectsRef.current?.spawnFloatingDamage(
+                            target.entity.modelGroup.position.clone().add(new THREE.Vector3(0, 1.8, 0)),
+                            600,
+                            false
+                          );
                         }
                       }}
                       style={{

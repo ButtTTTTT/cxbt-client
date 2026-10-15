@@ -10,7 +10,13 @@ export type SavedCharacter = {
   level?: number; 
   exp?: number; 
   coins?: number; 
+  cash?: number;
+  gems?: number;
   rating?: number; 
+  power?: number;
+  signInStreak?: number;
+  lastSignInDate?: string;
+  onlineClaimCount?: number;
 };
 
 export const CHARACTER_KEY = 'avatarstar.character';
@@ -21,20 +27,30 @@ export function readCharacter(): SavedCharacter | null {
   return localCharacterCache;
 }
 
+export function mapServerCharacter(data: any): SavedCharacter {
+  return {
+    version: 1,
+    name: data.name,
+    jobId: (data.jobId || 'guardian') as CreationJob,
+    appearance: data.appearance ?? { gender: 0, hair: 0, eyes: 0, mouth: 0, accessory: 0 },
+    userId: data.userId ?? 0,
+    level: data.level ?? 1,
+    exp: data.exp ?? 0,
+    coins: data.coins ?? 100000,
+    cash: data.cash ?? 5000,
+    gems: data.gems ?? 200,
+    rating: data.rating ?? 1200,
+    power: data.power ?? 1500,
+    signInStreak: data.signInStreak ?? 0,
+    lastSignInDate: data.lastSignInDate ?? '',
+    onlineClaimCount: data.onlineClaimCount ?? 0,
+  };
+}
+
 export async function fetchCharacterFromServer(): Promise<SavedCharacter | null> {
   try {
     const data = await apiFetch('/character');
-    localCharacterCache = {
-      version: 1,
-      name: data.name,
-      jobId: data.jobId,
-      appearance: data.appearance,
-      userId: data.userId ?? 0,
-      level: data.level,
-      exp: data.exp,
-      coins: data.coins,
-      rating: data.rating,
-    };
+    localCharacterCache = mapServerCharacter(data);
     return localCharacterCache;
   } catch (_e) {
     return null;
@@ -47,16 +63,6 @@ export async function saveCharacter(name: string, jobId: CreationJob, appearance
     body: JSON.stringify({ name, jobId, appearance }),
   });
   
-  localCharacterCache = {
-    version: 1,
-    name: data.name,
-    jobId: data.jobId as CreationJob,
-    appearance: data.appearance,
-    userId: data.userId ?? 0,
-    level: data.level,
-    exp: data.exp,
-    coins: data.coins,
-    rating: data.rating,
-  };
-  return localCharacterCache as SavedCharacter;
+  localCharacterCache = mapServerCharacter(data);
+  return localCharacterCache;
 }

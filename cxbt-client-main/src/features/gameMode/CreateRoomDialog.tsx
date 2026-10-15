@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { LobbyAssets } from '../lobby/assets';
 import { lobbyUrl } from '../lobby/assets';
+import { getSavedCustomMaps } from '../gameplay/engine';
 import './CreateRoomDialog.css';
 
 type CreateRoomDialogProps = {
@@ -68,7 +69,7 @@ function buttonArt(assets: LobbyAssets, key: string): CSSProperties {
 }
 
 function buildMaps(mode: Mode, assets: LobbyAssets): MapChoice[] {
-  return assets.maps.map((map) => ({
+  const baseChoices: MapChoice[] = assets.maps.map((map) => ({
     id: `${mode.id}-${map.id}`,
     mapId: map.id,
     name: map.name,
@@ -76,6 +77,21 @@ function buildMaps(mode: Mode, assets: LobbyAssets): MapChoice[] {
     coverCard: Boolean(map.coverCard),
     mode,
   }));
+  const customChoices: MapChoice[] = getSavedCustomMaps().map((cm) => {
+    const baseAsset = assets.maps.find((m) => m.id === cm.baseMapId) ?? assets.maps[1] ?? assets.maps[0];
+    return {
+      id: `${mode.id}-${cm.id}`,
+      mapId: cm.id,
+      name: cm.name,
+      cover: baseAsset?.cover ?? null,
+      coverCard: false,
+      mode,
+    };
+  });
+  if (baseChoices.length > 0) {
+    return [baseChoices[0], ...customChoices, ...baseChoices.slice(1)];
+  }
+  return [...customChoices, ...baseChoices];
 }
 
 export default function CreateRoomDialog({ assets, onClose, onCreate, initialRoom }: CreateRoomDialogProps) {

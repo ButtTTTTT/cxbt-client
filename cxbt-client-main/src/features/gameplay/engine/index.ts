@@ -10,3 +10,7 @@ export * from './WeaponSystem';
 export * from './configs/weaponSuites';
 export * from './avatarBuilder';
 export * from './MapManager';
+export * from './CombatEffectsManager';
+export * from './BotManager';
+export * from './ProceduralWeaponBuilder';
+export * from './CustomMapStore';

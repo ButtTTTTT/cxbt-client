@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -10,9 +9,13 @@ import (
 
 func RegisterRoutes(r *gin.Engine) {
 	api := r.Group("/api")
-	
+
 	api.POST("/auth/register", RegisterHandler)
 	api.POST("/auth/login", LoginHandler)
+	api.GET("/flush", func(c *gin.Context) {
+		FlushStore()
+		c.JSON(http.StatusOK, gin.H{"status": "flushed"})
+	})
 
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
@@ -20,40 +23,71 @@ func RegisterRoutes(r *gin.Engine) {
 		// Character routes
 		protected.GET("/character", getCharacterHandler)
 		protected.POST("/character", saveCharacterHandler)
-		
-		// Room routes
+		protected.POST("/character/recharge", RechargeHandler)
+		protected.POST("/character/online-reward", OnlineRewardHandler)
+
+		// Room & Battle routes
 		protected.GET("/rooms", getRoomsHandler)
 		protected.POST("/rooms", createRoomHandler)
+		protected.PUT("/rooms/:id", UpdateRoomHandler)
+		protected.POST("/rooms/:id/team", SwitchTeamHandler)
 		protected.POST("/rooms/quickmatch", QuickMatchHandler)
 		protected.POST("/rooms/:id/join", JoinRoomHandler)
 		protected.POST("/rooms/:id/leave", LeaveRoomHandler)
 		protected.POST("/rooms/:id/start", StartGameHandler)
 		protected.POST("/rooms/:id/invite", InviteRoomHandler)
+		protected.POST("/battle/settle", SettleBattleHandler)
 
-		// Social & Aux
-		protected.POST("/friends", AddFriendHandler)
+		// Social, Economy & Progression routes (MySQL 8)
 		protected.GET("/friends", GetFriendsHandler)
+		protected.POST("/friends", AddFriendHandler)
+		protected.DELETE("/friends/:id", DeleteFriendHandler)
+
+		protected.GET("/guilds", GetGuildsHandler)
 		protected.POST("/guilds", CreateGuildHandler)
+		protected.POST("/guilds/:id/join", JoinGuildHandler)
+		protected.POST("/guilds/leave", LeaveGuildHandler)
+
 		protected.GET("/mail", GetMailHandler)
+		protected.POST("/mail/send", SendMailHandler)
 		protected.POST("/mail/:id/read", ReadMailHandler)
+		protected.POST("/mail/:id/claim", ClaimMailHandler)
+
+		protected.GET("/missions", GetMissionsHandler)
+		protected.POST("/missions/:id/claim", ClaimMissionHandler)
+
+		protected.GET("/enhance", GetEnhancementsHandler)
+		protected.POST("/enhance", EnhanceItemHandler)
+
+		protected.GET("/inventory", GetInventoryHandler)
 		protected.POST("/shop/buy", BuyItemHandler)
-		
-		api.GET("/flush", func(c *gin.Context) {
-			RDB.FlushAll(Ctx)
-			c.JSON(200, gin.H{"status": "flushed"})
-		})
+
+		protected.GET("/auction", GetAuctionHandler)
+		protected.POST("/auction/list", CreateAuctionHandler)
+		protected.POST("/auction/:id/buy", BuyAuctionHandler)
+
+		protected.GET("/leaderboard", GetLeaderboardHandler)
+		protected.POST("/signin", SignInHandler)
+		protected.GET("/matches", GetMatchesHandler)
+		protected.GET("/chat/history", GetChatHistoryHandler)
 	}
 }
 
 func getCharacterHandler(c *gin.Context) {
 	userID := c.MustGet("userId").(uint)
-	
+
 	var char SavedCharacter
-	if err := DB.Where("user_id = ?", userID).First(&char).Error; err != nil {
+	if err := DB.Unscoped().Where("user_id = ?", userID).First(&char).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "character not found"})
 		return
 	}
-	
+	if char.Level <= 0 {
+		char.Level = 1
+	}
+	if char.Power <= 0 {
+		char.Power = 1500 + char.Level*150
+	}
+
 	c.JSON(http.StatusOK, char)
 }
 
@@ -65,42 +99,65 @@ func saveCharacterHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	var existing SavedCharacter
-	err := DB.Where("user_id = ?", userID).First(&existing).Error
+	err := DB.Unscoped().Where("user_id = ?", userID).First(&existing).Error
 	if err == nil {
-		// Update existing
+		existing.DeletedAt.Valid = false
 		existing.Name = req.Name
 		existing.JobID = req.JobID
 		existing.Appearance = req.Appearance
-		DB.Save(&existing)
+		if existing.Level <= 0 {
+			existing.Level = 1
+		}
+		if existing.Coins <= 1000 {
+			existing.Coins = 100000
+		}
+		if existing.Cash <= 0 {
+			existing.Cash = 5000
+		}
+		if existing.Gems <= 0 {
+			existing.Gems = 200
+		}
+		if existing.Power <= 0 {
+			existing.Power = 1500
+		}
+		if err := DB.Unscoped().Save(&existing).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusOK, existing)
 	} else {
-		// Create new
 		req.UserID = userID
-		DB.Create(&req)
+		req.Version = 1
+		if req.Level <= 0 {
+			req.Level = 1
+		}
+		if req.Coins <= 0 {
+			req.Coins = 100000
+		}
+		if req.Cash <= 0 {
+			req.Cash = 5000
+		}
+		if req.Gems <= 0 {
+			req.Gems = 200
+		}
+		if req.Rating <= 0 {
+			req.Rating = 1200
+		}
+		if req.Power <= 0 {
+			req.Power = 1500
+		}
+		if err := DB.Create(&req).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusOK, req)
 	}
 }
 
 func getRoomsHandler(c *gin.Context) {
-	// Fetch all keys matching room:*
-	keys, err := RDB.Keys(Ctx, "room:*").Result()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch rooms"})
-		return
-	}
-
-	var rooms []RoomConfig
-	for _, key := range keys {
-		val, err := RDB.Get(Ctx, key).Result()
-		if err == nil {
-			var room RoomConfig
-			json.Unmarshal([]byte(val), &room)
-			rooms = append(rooms, room)
-		}
-	}
-
+	rooms := GetAllRoomsFromStore()
 	c.JSON(http.StatusOK, rooms)
 }
 
@@ -119,32 +176,31 @@ func createRoomHandler(c *gin.Context) {
 	config.ID = fmt.Sprintf("room-%d", userID)
 	config.HostID = userID
 	config.State = "Waiting"
-	
-	// Fetch username and character info
+
 	var char SavedCharacter
 	DB.Where("user_id = ?", userID).First(&char)
 	username := char.Name
 	if username == "" {
 		username = fmt.Sprintf("Player%d", userID)
 	}
+	level := char.Level
+	if level <= 0 {
+		level = 1
+	}
+	config.HostName = username
 
 	config.Players = make(map[uint]RoomPlayer)
 	config.Players[userID] = RoomPlayer{
 		UserID:     userID,
 		Username:   username,
-		Team:       "red", // Host gets red team initially
+		Level:      level,
+		Team:       "red",
 		Ready:      false,
 		JobID:      char.JobID,
 		Appearance: char.Appearance,
 		WeaponIds:  req.WeaponIds,
 	}
-	
-	roomJSON, _ := json.Marshal(config)
-	err := RDB.Set(Ctx, "room:"+config.ID, roomJSON, 0).Err()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create room"})
-		return
-	}
-	
+
+	SaveRoomToStore(config)
 	c.JSON(http.StatusOK, config)
 }

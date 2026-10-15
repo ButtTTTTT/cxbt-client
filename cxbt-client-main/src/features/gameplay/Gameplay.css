@@ -1,13 +1,16 @@
 .battle-root { position: fixed; inset: 0; overflow: hidden; color: #fff; background: #839eaa; font-family: AvatarHei, 'Microsoft YaHei', sans-serif; user-select: none; cursor: none; }
-.battle-root.paused { cursor: default; }
+.battle-root.paused, .battle-root.sandbox-open { cursor: default; }
 .battle-canvas { position: absolute; inset: 0; touch-action: none; }
 .battle-canvas canvas { display: block; width: 100%; height: 100%; }
 .battle-loading { position: absolute; inset: 0; display: grid; place-items: center; background: #25353c; font-size: 20px; z-index: 4; }
-.battle-reticle { position: absolute; left: 50%; top: 50%; width: 62px; height: 62px; transform: translate(-50%, -50%); pointer-events: none; filter: drop-shadow(0 1px 2px #18212b); }
+.battle-reticle { position: absolute; left: 50%; top: 50%; width: 62px; height: 62px; transform: translate(-50%, -50%); pointer-events: none; filter: drop-shadow(0 1px 2px #18212b); transition: transform 0.05s ease-out; }
 .battle-reticle::before { content: ''; position: absolute; inset: 2px; border: 2px solid #f5f5ee; border-radius: 50%; clip-path: polygon(0 0, 42% 0, 42% 18%, 58% 18%, 58% 0, 100% 0, 100% 100%, 58% 100%, 58% 82%, 42% 82%, 42% 100%, 0 100%); }
 .battle-reticle i { position: absolute; background: #fff; }
 .battle-reticle i:nth-child(1) { left: 30px; top: 29px; width: 2px; height: 15px; }
 .battle-reticle i:nth-child(n+2) { display: none; }
+.battle-hitmarker { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; font-size: 26px; font-weight: bold; color: #fff; text-shadow: 0 0 6px #ff4d4f; z-index: 3; }
+.battle-hitmarker.crit { font-size: 32px; color: #ffd700; text-shadow: 0 0 12px #ff3b30; }
+.battle-hurt-vignette { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 95px rgba(255, 25, 25, 0.72); z-index: 2; }
 .battle-abilities { position: absolute; top: 14px; left: 17px; display: grid; grid-template-columns: repeat(4, 58px); gap: 10px; filter: drop-shadow(0 2px 3px #08151d); }
 .battle-abilities span { width: 58px; height: 58px; padding: 4px; background: url('/assets/gameplay/ui/skin_ingame_skill_bg.png') center / 100% 100%; }
 .battle-abilities img { width: 100%; height: 100%; object-fit: contain; }
@@ -18,8 +21,19 @@
 .battle-map-marker { position: absolute; z-index: 1; color: #fff87d; font-size: 24px; text-shadow: 0 0 4px #132a39, 1px 2px #10242b; }
 .battle-map-name { position: absolute; z-index: 2; bottom: 10px; left: 15%; right: 15%; text-align: center; font-size: 12px; text-shadow: 0 2px 3px #081c28; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .battle-touch-controls { display: none; }
-.battle-menu-button { position: absolute; top: 88px; left: 17px; width: 34px; height: 34px; color: #fff; font-size: 21px; border: 1px solid #ced7d0; border-radius: 3px; background: #233b43aa; cursor: pointer; opacity: .15; }
+.battle-menu-button { position: absolute; top: 88px; left: 17px; width: 34px; height: 34px; color: #fff; font-size: 21px; border: 1px solid #ced7d0; border-radius: 3px; background: #233b43aa; cursor: pointer; opacity: .35; z-index: 4; }
 .battle-menu-button:hover, .battle-menu-button:focus-visible { opacity: 1; }
+.battle-sandbox-button { position: absolute; top: 88px; left: 58px; height: 34px; padding: 0 10px; color: #e2e8f0; font-size: 12px; font-weight: bold; border: 1px solid #60a5fa; border-radius: 4px; background: rgba(15, 23, 42, 0.78); cursor: pointer; opacity: .65; z-index: 4; transition: opacity 0.15s, background 0.15s; }
+.battle-sandbox-button:hover, .battle-sandbox-button.active { opacity: 1; background: rgba(37, 99, 235, 0.88); color: #fff; }
+.battle-sandbox-drawer { position: absolute; top: 130px; left: 17px; width: 310px; max-height: calc(100vh - 250px); overflow-y: auto; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(96, 165, 250, 0.45); background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(8px); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65); z-index: 6; color: #e2e8f0; font-size: 12px; }
+.battle-sandbox-drawer h3 { margin: 0 0 8px; font-size: 13px; color: #fbbf24; display: flex; justify-content: space-between; align-items: center; }
+.battle-sandbox-rules { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px; border-radius: 6px; background: rgba(30, 41, 59, 0.75); margin-bottom: 10px; }
+.battle-sandbox-rules label { display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 11px; color: #cbd5e1; }
+.battle-sandbox-bots-bar { display: flex; gap: 6px; margin-bottom: 8px; }
+.battle-sandbox-bots-bar button, .battle-sandbox-modes button { flex: 1; padding: 5px 6px; border-radius: 5px; border: 1px solid #475569; background: #1e293b; color: #e2e8f0; font-size: 11px; font-weight: bold; cursor: pointer; }
+.battle-sandbox-modes { display: flex; gap: 4px; margin-bottom: 8px; }
+.battle-sandbox-modes button.active { background: #2563eb; border-color: #60a5fa; color: #fff; }
+.battle-sandbox-bot-item { padding: 6px 8px; border-radius: 6px; background: rgba(30, 41, 59, 0.85); border: 1px solid #334155; margin-bottom: 6px; }
 .battle-pause-shade { position: absolute; inset: 0; display: grid; place-items: center; background: #0c1822ad; z-index: 5; }
 .battle-pause { width: min(340px, 90vw); display: grid; gap: 14px; padding: 25px; text-align: center; border: 2px solid #d1b76c; background: #23383c; box-shadow: 0 10px 40px #0008; }
 .battle-pause h2 { margin: 0 0 10px; font-size: 23px; }
@@ -34,6 +48,7 @@
   .battle-abilities { transform: scale(.52); }
   .battle-minimap { top: 55px; right: 12px; width: 115px; }
   .battle-menu-button { top: 52px; }
+  .battle-sandbox-button { top: 52px; }
   .battle-touch-controls { position: absolute; right: 15px; bottom: 92px; display: flex; gap: 8px; }
   .battle-touch-controls button { width: 55px; height: 55px; border: 2px solid #e3d9ab; border-radius: 50%; color: white; background: #304849b8; font-size: 13px; }
 }
@@ -44,3 +59,4 @@
 .battle-abilities span.cooling img { opacity: .35; }
 .battle-debug { position: absolute; left: 12px; bottom: 132px; z-index: 6; max-width: 46vw; font-size: 11px; color: #cfe6f2; pointer-events: none; }
 .battle-debug p { margin: 2px 0; }
+

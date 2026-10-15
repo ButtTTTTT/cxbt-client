@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { assetUrl, type Appearance, type CreationAssets, type CreationPreset, type CreationWeapon } from '../characterCreation/assets';
+import { assetUrl, type Appearance, type CreationAssets, type CreationAttachment, type CreationPreset, type CreationWeapon } from '../characterCreation/assets';
+import { createStylizedWeaponMesh, enhanceLoadedWeaponModel } from './engine/ProceduralWeaponBuilder';
 
 type ClipData = {
   fps: number;
@@ -8,8 +9,22 @@ type ClipData = {
   tracks: { name: string; positions: number[][]; rotations: number[][] }[];
 };
 
+const LOWER_BODY_BONES = new Set([
+  'root', 'pelvis', 'hip_l', 'leg_l', 'foot_l', 'toe_l', 'hip_r', 'leg_r', 'foot_r', 'toe_r'
+]);
+
+function makeUpperBodyClip(clip: any): any {
+  if (!clip) return null;
+  const upperTracks = clip.tracks.filter((track: any) => {
+    const boneName = String(track.name || '').split('.')[0].toLowerCase();
+    return !LOWER_BODY_BONES.has(boneName);
+  });
+  return new THREE.AnimationClip(`${clip.name}_upper`, clip.duration, upperTracks);
+}
+
 export type BattleAvatar = {
   root: any;
+  skeleton?: any;
   update: (delta: number) => void;
   setMoving: (moving: boolean) => void;
   setWeapon: (index: number) => void;
@@ -23,11 +38,17 @@ export type BattleAvatar = {
   /** Freezes or resumes the animation mixer (影像调整 · 播放角色动作). */
   setMotion: (on: boolean) => void;
   reload: () => void;
+  getMuzzlePosition?: (outTarget?: any) => any;
+  setAttachment?: (attachment?: CreationAttachment | null) => Promise<void>;
+  playGesture?: (animationPath: string) => Promise<void>;
   dispose: () => void;
 };
 
 export async function createBattleAvatar(assets: CreationAssets, preset: CreationPreset,
   appearance: Appearance, weapons: CreationWeapon[]): Promise<BattleAvatar> {
+  const effectiveWeapons = weapons && weapons.length > 0
+    ? weapons
+    : (assets.jobs.guardian?.weapons ?? []);
   const loader = new GLTFLoader();
   const textureLoader = new THREE.TextureLoader();
   const textures: any[] = [];
@@ -51,7 +72,9 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
   let skeleton: any;
   root.traverse((object: any) => {
     if (!(object instanceof THREE.SkinnedMesh)) return;
-    skeleton = object.skeleton;
+    if (!skeleton || (object.skeleton?.bones?.length ?? 0) > (skeleton?.bones?.length ?? 0)) {
+      skeleton = object.skeleton;
+    }
     object.material = material(bodyMap);
     object.frustumCulled = false;
   });
@@ -116,59 +139,90 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
     }),
   ]);
 
-  const makeClip = (data: ClipData, name: string) => new THREE.AnimationClip(name, data.duration ?? -1,
-    data.tracks.flatMap((track) => {
-      if (!boneIndices.has(track.name)) return [];
-      const positionTimes = track.positions.map((_, index) => index / data.fps);
-      const rotationTimes = track.rotations.map((_, index) => index / data.fps);
-      return [new THREE.VectorKeyframeTrack(`${track.name}.position`, positionTimes, track.positions.flat()),
-        new THREE.QuaternionKeyframeTrack(`${track.name}.quaternion`, rotationTimes, track.rotations.flat())];
-    }));
+  const makeClip = (data: ClipData, name: string, boneNameSet: { has: (name: string) => boolean } = boneIndices) =>
+    new THREE.AnimationClip(name, data.duration ?? -1,
+      data.tracks.flatMap((track) => {
+        if (!boneNameSet.has(track.name)) return [];
+        const positionTimes = track.positions.map((_, index) => index / data.fps);
+        const rotationTimes = track.rotations.map((_, index) => index / data.fps);
+        return [new THREE.VectorKeyframeTrack(`${track.name}.position`, positionTimes, track.positions.flat()),
+          new THREE.QuaternionKeyframeTrack(`${track.name}.quaternion`, rotationTimes, track.rotations.flat())];
+      }));
   const fetchClip = async (path: string, name: string) => {
     const response = await fetch(path.startsWith('gameplay:')
       ? `${import.meta.env.BASE_URL}assets/gameplay/animations/${path.slice(9)}` : assetUrl(path));
     if (!response.ok) throw new Error(`动画加载失败: ${name}`);
     return makeClip(await response.json() as ClipData, name);
   };
-  const entries = await Promise.all(weapons.map(async (weapon) => {
+  const entries = await Promise.all(effectiveWeapons.map(async (weapon) => {
     const set = weapon.animation.match(/thirdperson-male-(.+)-stdidle/)?.[1] ?? weapon.id;
     // Melee sets ship stdshoot1/2/3 as the -attack/-attack2/-attack3 combo clips.
     const attackSources = [weapon.actions?.attack ?? `gameplay:${set}-attack.json`,
       `gameplay:${set}-attack2.json`, `gameplay:${set}-attack3.json`];
     const [idle, run, jump, roll, spurt, reload] = await Promise.all([
       fetchClip(weapon.animation, `${weapon.id}-idle`),
-      fetchClip(`gameplay:${set}-run.json`, `${weapon.id}-run`),
+      fetchClip(`gameplay:${set}-run.json`, `${weapon.id}-run`).catch(() => fetchClip(weapon.animation, `${weapon.id}-run-fallback`)),
       fetchClip(`gameplay:${set}-jump.json`, `${weapon.id}-jump`).catch(() => null),
       fetchClip(`gameplay:${set}-roll.json`, `${weapon.id}-roll`).catch(() => null),
       fetchClip(`gameplay:${set}-spurt.json`, `${weapon.id}-spurt`).catch(() => null),
-      weapon.actions?.reload ? fetchClip(weapon.actions.reload, `${weapon.id}-reload`) : Promise.resolve(null),
+      weapon.actions?.reload ? fetchClip(weapon.actions.reload, `${weapon.id}-reload`).catch(() => null) : Promise.resolve(null),
     ]);
     const attacks = (await Promise.all(attackSources.map((path, index) =>
       fetchClip(path, `${weapon.id}-attack${index + 1}`).catch(() => null))))
       .filter((clip) => Boolean(clip));
-    const parts = await Promise.all(weapon.parts.map(async (part) => {
-      const model = await loadModel(part.model);
-      const map = part.texture ? await loadTexture(part.texture) : null;
-      const partMaterial = material(map);
-      model.traverse((object: any) => {
-        if (!(object instanceof THREE.Mesh)) return;
-        object.material = partMaterial;
-        object.frustumCulled = false;
-      });
-      const bone = bones.bones[boneIndices.get(part.bone) ?? -1];
-      if (!bone) throw new Error(`武器挂点缺失: ${part.bone}`);
-      bone.add(model);
-      return model;
-    }));
-    return { idle, run, jump, roll, reload, spurt, attacks, parts };
+    const upperAttacks = attacks.map(makeUpperBodyClip);
+    const upperReload = makeUpperBodyClip(reload);
+
+    const parts: any[] = [];
+    for (const part of weapon.parts ?? []) {
+      try {
+        const model = await loadModel(part.model);
+        const map = part.texture ? await loadTexture(part.texture).catch(() => null) : null;
+        const partMaterial = material(map);
+        model.traverse((object: any) => {
+          if (!(object instanceof THREE.Mesh)) return;
+          object.material = partMaterial;
+          object.frustumCulled = false;
+        });
+        enhanceLoadedWeaponModel(model, weapon.id);
+        const bone = bones.bones[boneIndices.get(part.bone) ?? -1];
+        if (!bone) throw new Error(`武器挂点缺失: ${part.bone}`);
+        bone.add(model);
+        parts.push(model);
+      } catch {
+        // Fallback handled below
+      }
+    }
+    if (parts.length === 0) {
+      const fallbackBoneName = weapon.id.startsWith('shield') ? 'handweapon_l' : 'handweapon_r';
+      const bone = bones.bones[boneIndices.get(fallbackBoneName) ?? -1];
+      if (bone) {
+        const stylized = createStylizedWeaponMesh(weapon.id);
+        bone.add(stylized);
+        parts.push(stylized);
+      }
+    }
+    return { idle, run, jump, roll, reload, spurt, attacks, upperAttacks, upperReload, parts };
   }));
   const ghostState = new Map<any, { transparent: boolean; opacity: number; depthWrite: boolean }>();
   const mixer = new THREE.AnimationMixer(root);
+  let attachmentGroup: any = null;
+  let attachmentMixer: any = null;
   let selected = 0;
   let moving = false;
   let action: any = null;
+  let upperAction: any = null;
   let transient = 0;
+
+  const stopUpper = () => {
+    if (upperAction) {
+      upperAction.fadeOut(0.1);
+      upperAction = null;
+    }
+  };
+
   const play = (clip: any, once = false) => {
+    if (!clip) return;
     const next = mixer.clipAction(clip);
     if (action === next && !once) return;
     next.reset();
@@ -179,17 +233,73 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
     action = next;
     transient = once ? clip.duration : 0;
   };
-  const base = () => play(moving ? entries[selected].run : entries[selected].idle);
+
+  const playUpper = (upperClip: any, fullClip: any) => {
+    if (moving && upperClip) {
+      // 保持下半身播放 run，上半身叠加攻击/换弹动作 (边走路边射击)
+      const runClip = entries[selected].run;
+      const runAct = mixer.clipAction(runClip);
+      if (action !== runAct) {
+        runAct.reset();
+        runAct.setLoop(THREE.LoopRepeat, Infinity);
+        runAct.play();
+        if (action) runAct.crossFadeFrom(action, 0.1, true);
+        action = runAct;
+      }
+      const nextUpper = mixer.clipAction(upperClip);
+      if (upperAction && upperAction !== nextUpper) {
+        upperAction.stop();
+      }
+      nextUpper.reset();
+      nextUpper.setLoop(THREE.LoopOnce, 1);
+      nextUpper.clampWhenFinished = true;
+      nextUpper.play();
+      upperAction = nextUpper;
+      transient = upperClip.duration;
+    } else {
+      stopUpper();
+      play(fullClip, true);
+    }
+  };
+
+  const base = () => {
+    stopUpper();
+    play(moving ? entries[selected].run : entries[selected].idle);
+  };
+
   const avatar: BattleAvatar = {
     root,
+    skeleton: bones,
     update(delta) {
       mixer.update(delta);
+      if (attachmentMixer) attachmentMixer.update(delta);
       if (transient > 0) {
         transient -= delta;
-        if (transient <= 0) { transient = 0; base(); }
+        if (transient <= 0) {
+          transient = 0;
+          base();
+        }
       }
     },
-    setMoving(value) { if (moving !== value) { moving = value; if (!transient) base(); } },
+    setMoving(value) {
+      if (moving !== value) {
+        moving = value;
+        if (!transient) {
+          base();
+        } else if (upperAction) {
+          // 在上半身开火/换弹过程中切换下半身移动/待机
+          const legClip = moving ? entries[selected].run : entries[selected].idle;
+          const legAct = mixer.clipAction(legClip);
+          if (action !== legAct) {
+            legAct.reset();
+            legAct.setLoop(THREE.LoopRepeat, Infinity);
+            legAct.play();
+            if (action) legAct.crossFadeFrom(action, 0.1, true);
+            action = legAct;
+          }
+        }
+      }
+    },
     setWeapon(index) {
       selected = Math.max(0, Math.min(index, entries.length - 1));
       entries.forEach((entry, slot) => entry.parts.forEach((part) => { part.visible = slot === selected; }));
@@ -197,31 +307,126 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
       base();
     },
     attack(step = 0) {
-      const clips = entries[selected].attacks;
-      play(clips.length ? clips[step % clips.length] : entries[selected].idle, true);
+      const entry = entries[selected];
+      const clips = entry.attacks;
+      const upperClips = entry.upperAttacks;
+      const idx = clips.length ? step % clips.length : -1;
+      if (idx >= 0) {
+        playUpper(upperClips[idx], clips[idx]);
+      } else {
+        play(entry.idle, true);
+      }
     },
-    spurt() { const clip = entries[selected].spurt; if (clip) play(clip, true); },
+    spurt() { const clip = entries[selected].spurt; if (clip) { stopUpper(); play(clip, true); } },
     setMotion(on) { mixer.timeScale = on ? 1 : 0; },
     setGhost(on) {
       root.traverse((object: any) => {
         if (!(object instanceof THREE.Mesh) || !object.material) return;
-        const material = object.material;
-        let base = ghostState.get(material);
-        if (!base) {
-          base = { transparent: material.transparent, opacity: material.opacity, depthWrite: material.depthWrite };
-          ghostState.set(material, base);
+        const mat = object.material;
+        let saved = ghostState.get(mat);
+        if (!saved) {
+          saved = { transparent: mat.transparent, opacity: mat.opacity, depthWrite: mat.depthWrite };
+          ghostState.set(mat, saved);
         }
-        material.transparent = on || base.transparent;
-        material.opacity = on ? 0.32 : base.opacity;
-        material.depthWrite = on ? false : base.depthWrite;
-        material.needsUpdate = true;
+        mat.transparent = on || saved.transparent;
+        mat.opacity = on ? 0.32 : saved.opacity;
+        mat.depthWrite = on ? false : saved.depthWrite;
+        mat.needsUpdate = true;
       });
     },
-    reload() { if (entries[selected].reload) play(entries[selected].reload, true); },
-    jump() { if (entries[selected].jump) play(entries[selected].jump, true); },
-    roll() { if (entries[selected].roll) play(entries[selected].roll, true); },
+    reload() {
+      const entry = entries[selected];
+      if (entry.reload) {
+        playUpper(entry.upperReload, entry.reload);
+      }
+    },
+    jump() { if (entries[selected].jump) { stopUpper(); play(entries[selected].jump, true); } },
+    roll() { if (entries[selected].roll) { stopUpper(); play(entries[selected].roll, true); } },
+    getMuzzlePosition(outTarget = new THREE.Vector3()) {
+      root.updateMatrixWorld(true);
+      const activeParts = entries[selected]?.parts ?? [];
+      for (const part of activeParts) {
+        const fireNode = part.getObjectByName('Gun_Fire') || part.getObjectByName('gun_fire');
+        if (fireNode) {
+          fireNode.getWorldPosition(outTarget);
+          return outTarget;
+        }
+      }
+      const handBone = bones.bones[boneIndices.get('handweapon_r') ?? -1];
+      if (handBone) {
+        handBone.getWorldPosition(outTarget);
+        return outTarget;
+      }
+      root.getWorldPosition(outTarget);
+      outTarget.y += 1.15;
+      return outTarget;
+    },
+    async setAttachment(attachment) {
+      if (attachmentGroup && attachmentGroup.parent) {
+        attachmentGroup.parent.remove(attachmentGroup);
+        attachmentGroup = null;
+      }
+      if (attachmentMixer) {
+        attachmentMixer.stopAllAction();
+        attachmentMixer = null;
+      }
+      if (!attachment) return;
+      try {
+        const [model, map] = await Promise.all([
+          loadModel(attachment.model),
+          attachment.texture ? loadTexture(attachment.texture).catch(() => null) : Promise.resolve(null),
+        ]);
+        const attMat = material(map);
+        attMat.side = THREE.DoubleSide;
+        attMat.alphaTest = 0.1;
+        model.traverse((object: any) => {
+          if (!object.isMesh) return;
+          object.material.dispose();
+          object.material = attMat;
+          object.frustumCulled = false;
+        });
+        const anchor = model.getObjectByName(attachment.bone);
+        const parentIndex = boneIndices.get(attachment.bone);
+        if (!anchor || parentIndex === undefined) return;
+        anchor.position.set(0, 0, 0);
+        anchor.quaternion.identity();
+        anchor.scale.set(1, 1, 1);
+        root.updateMatrixWorld(true);
+        const host = bones.bones[parentIndex];
+        const offset = new THREE.Group();
+        host.getWorldQuaternion(offset.quaternion).invert();
+        offset.add(model);
+        host.add(offset);
+        attachmentGroup = offset;
+        if (attachment.animation) {
+          const response = await fetch(assetUrl(attachment.animation));
+          if (response.ok) {
+            const data: ClipData = await response.json();
+            const names = new Set<string>();
+            model.traverse((object: any) => { if (object.isBone && object !== anchor) names.add(object.name); });
+            const clip = makeClip(data, attachment.id, names);
+            if (clip.tracks.length) {
+              attachmentMixer = new THREE.AnimationMixer(model);
+              attachmentMixer.clipAction(clip).play();
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[BattleAvatar] attachment load warning:', err);
+      }
+    },
+    async playGesture(animationPath: string) {
+      try {
+        const clip = await fetchClip(animationPath, `gesture-${animationPath}`);
+        stopUpper();
+        play(clip, true);
+      } catch (err) {
+        console.warn('[BattleAvatar] gesture load warning:', err);
+      }
+    },
     dispose() {
       mixer.stopAllAction();
+      attachmentMixer?.stopAllAction();
       root.traverse((object: any) => { if (object instanceof THREE.Mesh) object.geometry.dispose(); });
       materials.forEach((entry) => entry.dispose());
       textures.forEach((entry) => entry.dispose());

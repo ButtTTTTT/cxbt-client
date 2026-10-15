@@ -24,23 +24,30 @@ func CORSMiddleware() gin.HandlerFunc {
 }
 
 func main() {
-	log.Println("Starting cxbt-server on port 8080...")
+	log.Println("Starting cxbt-server (MySQL 8 + Redis) on ports :8081 and :8080...")
 
-	// Initialize Database (SQLite & Redis)
+	// Initialize Database (MySQL 8 & Redis)
 	InitDB()
 
 	r := gin.Default()
 	r.Use(CORSMiddleware())
 
 	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "pong"})
+		c.JSON(http.StatusOK, gin.H{"message": "pong", "db": "MySQL 8"})
 	})
 
 	RegisterRoutes(r)
 	r.GET("/ws", ServeWs)
 	r.GET("/webrtc", ServeWebRTC)
 
-	if err := r.Run(":8080"); err != nil {
-		log.Fatalf("Failed to run server: %v", err)
+	// Also listen on :8080 for backwards compatibility
+	go func() {
+		if err := r.Run(":8080"); err != nil {
+			log.Printf("Note: secondary port :8080 listener stopped: %v", err)
+		}
+	}()
+
+	if err := r.Run(":8081"); err != nil {
+		log.Fatalf("Failed to run server on :8081: %v", err)
 	}
 }

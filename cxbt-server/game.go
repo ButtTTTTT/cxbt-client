@@ -2,15 +2,15 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 )
 
 type Position struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-	Z float64 `json:"z"`
+	X   float64 `json:"x"`
+	Y   float64 `json:"y"`
+	Z   float64 `json:"z"`
 	Yaw float64 `json:"yaw"`
 }
 
@@ -21,48 +21,62 @@ type PlayerState struct {
 	MaxHP    int      `json:"maxHp"`
 	Ammo     int      `json:"ammo"`
 	IsAlive  bool     `json:"isAlive"`
+	Kills    int      `json:"kills"`
+	Deaths   int      `json:"deaths"`
 	Position Position `json:"position"`
 }
 
 type GameState struct {
-	RoomID    string                  `json:"roomId"`
-	ScoreRed  int                     `json:"scoreRed"`
-	ScoreBlue int                     `json:"scoreBlue"`
-	StartTime time.Time               `json:"startTime"`
-	Duration  time.Duration           `json:"duration"`
+	RoomID    string               `json:"roomId"`
+	ScoreRed  int                  `json:"scoreRed"`
+	ScoreBlue int                  `json:"scoreBlue"`
+	StartTime time.Time            `json:"startTime"`
+	Duration  time.Duration        `json:"duration"`
 	Players   map[uint]*PlayerState `json:"players"`
-	Over      bool                    `json:"over"`
+	Over      bool                 `json:"over"`
 }
 
-// Global active game loops tracker (in-memory)
-var activeGames = make(map[string]context.CancelFunc)
+var (
+	activeGamesMu sync.Mutex
+	activeGames   = make(map[string]context.CancelFunc)
+)
 
 // StartGameLoop ticks 20 times per second for game state auth
 func StartGameLoop(roomID string) {
+	activeGamesMu.Lock()
+	if prevCancel, exists := activeGames[roomID]; exists {
+		prevCancel()
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	activeGames[roomID] = cancel
-	defer delete(activeGames, roomID)
+	activeGamesMu.Unlock()
+
+	defer func() {
+		activeGamesMu.Lock()
+		delete(activeGames, roomID)
+		activeGamesMu.Unlock()
+	}()
 
 	ticker := time.NewTicker(50 * time.Millisecond) // 20 tick/s
 	defer ticker.Stop()
+
+	lastBroadcastSec := -1
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			val, err := RDB.Get(Ctx, "game:"+roomID).Result()
-			if err != nil { return } // Game deleted
-
-			var state GameState
-			json.Unmarshal([]byte(val), &state)
+			state, ok := GetGameFromStore(roomID)
+			if !ok {
+				return
+			}
 
 			if state.Over {
 				cancel()
 				return
 			}
 
-			// Check timer
 			elapsed := time.Since(state.StartTime)
 			remaining := state.Duration - elapsed
 			if remaining <= 0 {
@@ -71,101 +85,139 @@ func StartGameLoop(roomID string) {
 				return
 			}
 
-			// Broadcast tick state
-			// In a real optimized system, we'd only broadcast delta states. 
-			// For this MVP, broadcast timer and score every second (or 1 tick).
-			if elapsed.Milliseconds()%1000 < 50 {
-				msg := map[string]interface{}{
-					"type": "tick",
-					"time_left": int(remaining.Seconds()),
-					"score_red": state.ScoreRed,
+			remSec := int(remaining.Seconds())
+			if remSec != lastBroadcastSec {
+				lastBroadcastSec = remSec
+				PublishChannelJSON("room_channel:"+roomID, map[string]interface{}{
+					"type":       "tick",
+					"time_left":  remSec,
+					"score_red":  state.ScoreRed,
 					"score_blue": state.ScoreBlue,
-				}
-				msgBytes, _ := json.Marshal(msg)
-				RDB.Publish(Ctx, "room_channel:"+roomID, msgBytes)
+				})
 			}
 		}
 	}
 }
 
-// EndGame processes results, gives EXP/Coins, and cleans up Redis
+// EndGame processes results, gives EXP/Coins, records MatchRecord in MySQL 8, and cleans up
 func EndGame(roomID string, state *GameState) {
-	// Calculate winners
 	winner := "draw"
-	if state.ScoreRed > state.ScoreBlue { winner = "red" }
-	if state.ScoreBlue > state.ScoreRed { winner = "blue" }
+	if state.ScoreRed > state.ScoreBlue {
+		winner = "red"
+	} else if state.ScoreBlue > state.ScoreRed {
+		winner = "blue"
+	}
 
-	// Give rewards via DB
+	room, hasRoom := GetRoomFromStore(roomID)
+	modeName := "团队竞技"
+	mapName := "训练场"
+	if hasRoom {
+		if room.ModeName != "" {
+			modeName = room.ModeName
+		}
+		if room.MapName != "" {
+			mapName = room.MapName
+		}
+	}
+
 	for _, p := range state.Players {
 		var char SavedCharacter
 		if err := DB.Where("user_id = ?", p.UserID).First(&char).Error; err == nil {
-			expGain := 50
-			coinGain := 100
+			expGain := 120 + p.Kills*30
+			coinGain := 500 + p.Kills*100
+			ratingDelta := 5
+			resultStr := "Draw"
+
 			if winner == p.Team {
-				expGain = 150
-				coinGain = 300
-				char.Rating += 20
+				expGain += 180
+				coinGain += 700
+				ratingDelta = 25
+				resultStr = "Victory"
 			} else if winner != "draw" {
-				char.Rating -= 10
+				ratingDelta = -10
+				resultStr = "Defeat"
 			}
+
 			char.Exp += expGain
 			char.Coins += coinGain
-			// Basic level up logic
-			for char.Exp >= char.Level * 1000 {
-				char.Exp -= char.Level * 1000
+			char.Rating += ratingDelta
+			if char.Rating < 100 {
+				char.Rating = 100
+			}
+			for char.Exp >= char.Level*100 {
+				char.Exp -= char.Level * 100
 				char.Level++
+				char.Power += 150
 			}
 			DB.Save(&char)
+
+			DB.Create(&MatchRecord{
+				UserID:      p.UserID,
+				Username:    char.Name,
+				RoomID:      roomID,
+				ModeName:    modeName,
+				MapName:     mapName,
+				Result:      resultStr,
+				Kills:       p.Kills,
+				Deaths:      p.Deaths,
+				RewardCoins: coinGain,
+				RewardExp:   expGain,
+				RatingDelta: ratingDelta,
+			})
+
+			advanceMissionProgress(p.UserID, "daily_battle", 1)
+			if p.Kills > 0 {
+				advanceMissionProgress(p.UserID, "daily_kills", p.Kills)
+			}
 		}
 	}
 
-	// Notify players
-	msg := map[string]interface{}{
-		"type": "game_over",
-		"winner": winner,
-		"score_red": state.ScoreRed,
+	PublishChannelJSON("room_channel:"+roomID, map[string]interface{}{
+		"type":       "game_over",
+		"winner":     winner,
+		"score_red":  state.ScoreRed,
 		"score_blue": state.ScoreBlue,
-	}
-	msgBytes, _ := json.Marshal(msg)
-	RDB.Publish(Ctx, "room_channel:"+roomID, msgBytes)
+	})
 
-	// Change room state back to Waiting
-	val, err := RDB.Get(Ctx, "room:"+roomID).Result()
-	if err == nil {
-		var room RoomConfig
-		json.Unmarshal([]byte(val), &room)
+	if hasRoom {
 		room.State = "Waiting"
-		roomJSON, _ := json.Marshal(room)
-		RDB.Set(Ctx, "room:"+roomID, roomJSON, 0)
+		SaveRoomToStore(room)
 	}
 
-	RDB.Del(Ctx, "game:"+roomID)
+	DeleteGameFromStore(roomID)
 }
 
-// HandleHit Processes a shot from an attacker to a target
-func HandleHit(roomID string, attackerID uint, targetID uint, damage int) {
-	fmt.Printf("[HandleHit] room:%s attacker:%d target:%d damage:%d\n", roomID, attackerID, targetID, damage)
-	val, err := RDB.Get(Ctx, "game:"+roomID).Result()
-	if err != nil {
-		fmt.Println("[HandleHit] game not found:", err)
+func HandleBotKill(roomID string, team string) {
+	state, ok := GetGameFromStore(roomID)
+	if !ok || state.Over {
 		return
 	}
-	var state GameState
-	json.Unmarshal([]byte(val), &state)
+	if team == "blue" {
+		state.ScoreBlue++
+	} else {
+		state.ScoreRed++
+	}
+	SaveGameToStore(roomID, state)
+
+	PublishChannelJSON("room_channel:"+roomID, map[string]interface{}{
+		"type":       "tick",
+		"time_left":  int((state.Duration - time.Since(state.StartTime)).Seconds()),
+		"score_red":  state.ScoreRed,
+		"score_blue": state.ScoreBlue,
+	})
+}
+
+// HandleHit processes a shot from an attacker to a target
+func HandleHit(roomID string, attackerID uint, targetID uint, damage int) {
+	state, ok := GetGameFromStore(roomID)
+	if !ok {
+		return
+	}
 
 	target, exists := state.Players[targetID]
 	attacker, aExists := state.Players[attackerID]
-	
-	fmt.Printf("[HandleHit] exists:%v aExists:%v\n", exists, aExists)
-	if exists {
-		fmt.Printf("[HandleHit] target isAlive:%v team:%s hp:%d\n", target.IsAlive, target.Team, target.HP)
-	}
-	if aExists {
-		fmt.Printf("[HandleHit] attacker isAlive:%v team:%s\n", attacker.IsAlive, attacker.Team)
-	}
 
 	if !exists || !aExists || !target.IsAlive || target.Team == attacker.Team {
-		fmt.Println("[HandleHit] rejected. same team or dead or missing.")
 		return
 	}
 
@@ -173,53 +225,52 @@ func HandleHit(roomID string, attackerID uint, targetID uint, damage int) {
 	if target.HP <= 0 {
 		target.HP = 0
 	}
-	
-	hitMsg := map[string]interface{}{
-		"type": "health_update",
+
+	PublishChannelJSON("room_channel:"+roomID, map[string]interface{}{
+		"type":   "health_update",
 		"userId": targetID,
-		"hp": target.HP,
-	}
-	hitBytes, _ := json.Marshal(hitMsg)
-	RDB.Publish(Ctx, "room_channel:"+roomID, hitBytes)
+		"hp":     target.HP,
+	})
 
 	if target.HP <= 0 {
 		target.IsAlive = false
-		
-		// Update score based on mode (assuming TDM here)
-		if attacker.Team == "red" { state.ScoreRed++ } else { state.ScoreBlue++ }
-		
-		msg := map[string]interface{}{
-			"type": "kill",
-			"killer": attackerID,
-			"victim": targetID,
+		target.Deaths++
+		attacker.Kills++
+
+		if attacker.Team == "red" {
+			state.ScoreRed++
+		} else {
+			state.ScoreBlue++
 		}
-		msgBytes, _ := json.Marshal(msg)
-		RDB.Publish(Ctx, "room_channel:"+roomID, msgBytes)
-		
-		// Setup Respawn routines
+
+		PublishChannelJSON("room_channel:"+roomID, map[string]interface{}{
+			"type":   "kill",
+			"killer": fmt.Sprint(attackerID),
+			"victim": fmt.Sprint(targetID),
+		})
+
 		go func(rID string, uID uint) {
-			time.Sleep(5 * time.Second) // 5s respawn
-			
-			val2, err2 := RDB.Get(Ctx, "game:"+rID).Result()
-			if err2 != nil { return }
-			var st GameState
-			json.Unmarshal([]byte(val2), &st)
-			
-			if p, ok := st.Players[uID]; ok {
+			time.Sleep(5 * time.Second)
+			st, ok2 := GetGameFromStore(rID)
+			if !ok2 {
+				return
+			}
+			if p, ok3 := st.Players[uID]; ok3 {
+				if p.MaxHP <= 0 {
+					p.MaxHP = 3201
+				}
 				p.HP = p.MaxHP
 				p.IsAlive = true
-				p.Ammo = 30 // Reset ammo
-				
-				stJSON, _ := json.Marshal(st)
-				RDB.Set(Ctx, "game:"+rID, stJSON, 0)
-				
-				respawnMsg := map[string]interface{}{"type": "respawn", "userId": uID}
-				rBytes, _ := json.Marshal(respawnMsg)
-				RDB.Publish(Ctx, "room_channel:"+rID, rBytes)
+				p.Ammo = 30
+				SaveGameToStore(rID, st)
+				PublishChannelJSON("room_channel:"+rID, map[string]interface{}{
+					"type":   "respawn",
+					"userId": uID,
+					"hp":     p.HP,
+				})
 			}
 		}(roomID, targetID)
 	}
 
-	stateJSON, _ := json.Marshal(state)
-	RDB.Set(Ctx, "game:"+roomID, stateJSON, 0)
+	SaveGameToStore(roomID, state)
 }

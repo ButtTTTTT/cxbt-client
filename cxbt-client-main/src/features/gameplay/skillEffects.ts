@@ -1,4 +1,4 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 import type { LoadedSkill } from './skills';
 
 export type SkillTarget = { userId: string; position: any };
@@ -19,6 +19,8 @@ export type SkillEffectHost = {
   /** Toggles the stealth look on the player avatar. */
   setGhost: (on: boolean) => void;
   log: (message: string) => void;
+  onSpurt?: () => void;
+  onExplosion?: (point: any, radius: number) => void;
 };
 
 export type SkillSnapshot = {
@@ -157,6 +159,7 @@ export function createSkillEffects(host: SkillEffectHost) {
         dash = 0.4;
         speed = 8.5;
         speedTime = Math.max(speedTime, 0.4 + optional(p.sprintDuration, 1));
+        host.onSpurt?.();
         pulse(host.position(), 2.5, 0xffd0d0);
         for (const enemy of host.enemies()) {
           if (enemy.position.distanceTo(host.position()) <= 2.6) host.hitEnemy(enemy.userId, 220);
@@ -164,7 +167,8 @@ export function createSkillEffects(host: SkillEffectHost) {
         break;
       }
       case 'snare': {
-        const point = target(10);
+        const point = target(4.5);
+        point.y = host.position().y + 0.15;
         const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8),
           new THREE.MeshBasicMaterial({ color: 0xd8c14a }));
         mesh.position.copy(point);
@@ -228,6 +232,7 @@ export function createSkillEffects(host: SkillEffectHost) {
       const armed = host.enemies().some((enemy) => enemy.position.distanceTo(mine.point) <= mine.trigger);
       if (!armed) continue;
       pulse(mine.point, mine.radius, 0xffa04d);
+      host.onExplosion?.(mine.point, mine.radius);
       for (const enemy of host.enemies()) {
         if (enemy.position.distanceTo(mine.point) <= mine.radius) host.hitEnemy(enemy.userId, mine.damage);
       }
@@ -240,6 +245,10 @@ export function createSkillEffects(host: SkillEffectHost) {
     cast,
     update,
     breakStealth,
+    resetCooldowns() {
+      slotCooldowns.clear();
+      slotTotals.clear();
+    },
     /** Sends damage through the active shield and returns what is left for the health bar. */
     absorb(amount: number) {
       if (shield <= 0) return amount;
@@ -258,3 +267,4 @@ export function createSkillEffects(host: SkillEffectHost) {
     dispose() { breakStealth(); release(); }
   };
 }
+

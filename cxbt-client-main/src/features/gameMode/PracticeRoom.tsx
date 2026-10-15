@@ -10,11 +10,12 @@ type PracticeRoomProps = {
   hostName: string;
   hostIcon: string;
   weaponIds: string[];
+  initialJoinedRoom?: ApiRoom;
   onBack: () => void;
   onStart: (room: RoomConfig) => void;
   onStatus: (message: string) => void;
 };
-type ApiRoom = RoomConfig & {
+export type ApiRoom = RoomConfig & {
   id: string;
   hostId: number;
   hostName?: string;
@@ -52,16 +53,20 @@ function ActionButton({ assets, icon, label, className, onClick, disabled = fals
   </button>;
 }
 
-export default function PracticeRoom({ assets, hostName, hostIcon, weaponIds, onBack, onStart, onStatus }: PracticeRoomProps) {
+export default function PracticeRoom({ assets, hostName, hostIcon, weaponIds, initialJoinedRoom, onBack, onStart, onStatus }: PracticeRoomProps) {
   const [mode, setMode] = useState<(typeof MODES)[number]['id']>('all');
   const [selectedId, setSelectedId] = useState<string>();
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
-  const [createdRoom, setCreatedRoom] = useState<ApiRoom>();
+  const [createdRoom, setCreatedRoom] = useState<ApiRoom | undefined>(initialJoinedRoom);
   const [roomList, setRoomList] = useState<ApiRoom[]>([]);
   const [sortColumn, setSortColumn] = useState(5);
   const [ascending, setAscending] = useState(true);
   const [scrollPosition, setScrollPosition] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (initialJoinedRoom) setCreatedRoom(initialJoinedRoom);
+  }, [initialJoinedRoom]);
 
   const fetchRooms = useCallback(async () => {
     try {
@@ -84,8 +89,8 @@ export default function PracticeRoom({ assets, hostName, hostIcon, weaponIds, on
   const selectedRoom = roomList.find(room => room.id === selectedId);
   const joinRoom = async (room: ApiRoom) => {
     try {
-      await apiFetch(`/rooms/${room.id}/join`, { method: 'POST', body: JSON.stringify({ password: '', weaponIds }) });
-      setCreatedRoom(room);
+      const joined: ApiRoom = await apiFetch(`/rooms/${room.id}/join`, { method: 'POST', body: JSON.stringify({ password: '', weaponIds }) });
+      setCreatedRoom(joined ?? room);
       onStatus(`已进入房间 · ${room.name}`);
     } catch (error) { onStatus(error instanceof Error ? error.message : '进入失败'); }
   };
@@ -99,6 +104,7 @@ export default function PracticeRoom({ assets, hostName, hostIcon, weaponIds, on
   return <section className="practice-room-layer" aria-label="练习赛房间列表" data-practice-room-ready="true">
     {createdRoom ? <RoomSettings assets={assets} room={createdRoom} hostName={hostName} hostIcon={hostIcon}
       onLeave={() => { setCreatedRoom(undefined); onStatus(''); }} onSettings={() => setCreateRoomOpen(true)}
+      onRoomUpdate={updated => setCreatedRoom(updated as ApiRoom)}
       onStart={room => onStart(room || createdRoom)} onStatus={onStatus} /> :
       <div className="practice-room-root">
         <div className="practice-room-content" style={art(assets, 'content')}>
@@ -154,8 +160,8 @@ export default function PracticeRoom({ assets, hostName, hostIcon, weaponIds, on
             </div>
             <div className="practice-actions">
               <ActionButton assets={assets} icon="practiceIconBack" label="返回" ariaLabel="返回凌云要塞" className="practice-back" onClick={onBack} />
-              <ActionButton assets={assets} icon="practiceIconWatch" label="观战" className="practice-watch" disabled={!selectedRoom || selectedRoom.state !== 'Playing'}
-                onClick={() => onStatus('当前服务器尚未开放观战')} />
+              <ActionButton assets={assets} icon="practiceIconWatch" label="观战" className="practice-watch" disabled={!selectedRoom}
+                onClick={() => selectedRoom ? onStart(selectedRoom) : onStatus('请选择一个房间观战')} />
               <ActionButton assets={assets} icon="practiceIconCreate" label="创建战场" className="practice-create" onClick={() => setCreateRoomOpen(true)} />
               <button className="practice-action practice-enter lobby-art-button" aria-label="进入战场" style={buttonArt(assets, 'practiceStart')}
                 onClick={() => selectedRoom ? void joinRoom(selectedRoom) : onStatus('请选择一个房间后再进入')}>
@@ -169,9 +175,14 @@ export default function PracticeRoom({ assets, hostName, hostIcon, weaponIds, on
     {createRoomOpen && <CreateRoomDialog assets={assets} initialRoom={createdRoom} onClose={() => setCreateRoomOpen(false)}
       onCreate={async room => {
         try {
-          const newRoom: ApiRoom = await apiFetch('/rooms', { method: 'POST', body: JSON.stringify({ ...room, weaponIds }) });
-          setCreatedRoom(newRoom); setCreateRoomOpen(false); onStatus('');
-        } catch (error) { onStatus(error instanceof Error ? error.message : '房间创建失败'); }
+          if (createdRoom?.id) {
+            const updated: ApiRoom = await apiFetch(`/rooms/${createdRoom.id}`, { method: 'PUT', body: JSON.stringify(room) });
+            setCreatedRoom(updated); setCreateRoomOpen(false); onStatus('房间设置已更新');
+          } else {
+            const newRoom: ApiRoom = await apiFetch('/rooms', { method: 'POST', body: JSON.stringify({ ...room, weaponIds }) });
+            setCreatedRoom(newRoom); setCreateRoomOpen(false); onStatus('');
+          }
+        } catch (error) { onStatus(error instanceof Error ? error.message : '房间保存失败'); }
       }} />}
   </section>;
 }

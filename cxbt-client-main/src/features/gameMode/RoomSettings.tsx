@@ -1,10 +1,9 @@
-import { useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import type { LobbyAssets } from '../lobby/assets';
 import { lobbyUrl } from '../lobby/assets';
 import type { RoomConfig } from './CreateRoomDialog';
 import './RoomSettings.css';
 import { apiFetch, WS_BASE } from '../../api';
-import { useEffect } from 'react';
 
 type RoomSettingsProps = {
   assets: LobbyAssets;
@@ -13,6 +12,7 @@ type RoomSettingsProps = {
   hostIcon: string;
   onLeave: () => void;
   onSettings: () => void;
+  onRoomUpdate?: (room: RoomConfig) => void;
   onStart: (room?: any) => void;
   onStatus: (message: string) => void;
 };
@@ -31,8 +31,7 @@ function buttonArt(assets: LobbyAssets, key: string): CSSProperties {
   } as CSSProperties;
 }
 
-export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave, onSettings, onStart, onStatus }: RoomSettingsProps) {
-  const [, setTeam] = useState<'red' | 'blue'>('red');
+export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave, onSettings, onRoomUpdate, onStart, onStatus }: RoomSettingsProps) {
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<string[]>([`进入房间: ${room.name}`]);
   const map = assets.maps.find((entry) => entry.id === room.mapId);
@@ -43,10 +42,10 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
   const bluePlayers = players.filter(p => p.team === 'blue');
   const startedRef = useRef(false);
   const startRef = useRef(onStart);
+  const updateRef = useRef(onRoomUpdate);
   useEffect(() => { startRef.current = onStart; }, [onStart]);
+  useEffect(() => { updateRef.current = onRoomUpdate; }, [onRoomUpdate]);
 
-  /** Hands the round over once. The start event travels through Redis pub/sub, so it
-   * can arrive late, twice, or not at all when it races the room subscription. */
   const enterBattle = (roomId: string) => {
     if (startedRef.current) return;
     startedRef.current = true;
@@ -57,14 +56,29 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
     }).catch(() => startRef.current());
   };
 
+  const switchTeam = async (side: 'red' | 'blue') => {
+    if (!room.id) return;
+    try {
+      const updated = await apiFetch(`/rooms/${room.id}/team`, {
+        method: 'POST',
+        body: JSON.stringify({ team: side }),
+      });
+      if (updated) updateRef.current?.(updated);
+      onStatus(`已切换至${side === 'red' ? '红队' : '蓝队'}`);
+    } catch {
+      // ignore if same team
+    }
+  };
+
   const sendMessage = (event: FormEvent) => {
     event.preventDefault();
     const message = draft.trim();
     if (!message) return;
-    // Send to WS instead of just local
     const ws = (window as any)._roomWs;
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'chat', message, userId: hostName }));
+    } else {
+      setMessages((current) => [...current.slice(-47), `${hostName}: ${message}`]);
     }
     setDraft('');
   };
@@ -72,16 +86,23 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
   useEffect(() => {
     if (!room.id) return;
     const roomId = room.id;
-    const ws = new WebSocket(`${WS_BASE}?roomId=${roomId}&playerId=${hostName}`);
+    const ws = new WebSocket(`${WS_BASE}?roomId=${roomId}&playerId=${encodeURIComponent(hostName)}`);
     (window as any)._roomWs = ws;
     ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if (msg.type === 'start_game') {
-        enterBattle(roomId);
-      } else if (msg.type === 'join' || msg.type === 'leave') {
-        setMessages((current) => [...current.slice(-47), `系统: 玩家 ${msg.userId} ${msg.type === 'join' ? '进入' : '离开'}了房间`]);
-      } else if (msg.type === 'chat') {
-        setMessages((current) => [...current.slice(-47), `${msg.userId}: ${msg.message}`]);
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.room) {
+          updateRef.current?.(msg.room);
+        }
+        if (msg.type === 'start_game') {
+          enterBattle(roomId);
+        } else if (msg.type === 'join' || msg.type === 'leave') {
+          setMessages((current) => [...current.slice(-47), `系统: 玩家 ${msg.userId} ${msg.type === 'join' ? '进入' : '离开'}了房间`]);
+        } else if (msg.type === 'chat') {
+          setMessages((current) => [...current.slice(-47), `${msg.userId}: ${msg.message}`]);
+        }
+      } catch {
+        // ignore malformed message
       }
     };
     return () => ws.close();
@@ -137,12 +158,12 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
                 return <button key={slot} className={`room-player-row${occupied ? ' occupied' : ''}`}
                   style={art(assets, side === 'red' ? 'roomRedRow' : 'roomBlueRow')}
                   aria-label={occupied ? `${player.username}，${isHost ? '房主' : '玩家'}，${side === 'red' ? '红队' : '蓝队'}` : `${side === 'red' ? '红队' : '蓝队'}空位 ${slot + 1}`}
-                  disabled={!available || occupied} onClick={() => setTeam(side)}>
-                  {occupied && <><img className="room-player-job" src={hostIcon} alt="" /><span className="room-player-name">LV 1 {player.username}</span>
+                  disabled={!available || occupied} onClick={() => void switchTeam(side)}>
+                  {occupied && <><img className="room-player-job" src={hostIcon} alt="" /><span className="room-player-name">LV {player.level || 1} {player.username}</span>
                     {isHost && <img className="room-player-host" src={lobbyUrl(assets.ui.roomHost)} alt="房主" />}</>}
                 </button>;
               })}
-            </div>
+            </div>;
           })}
         </div>
         <div className="room-actions">
@@ -150,7 +171,7 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
             try {
               if (room.id) await apiFetch(`/rooms/${room.id}/leave`, { method: 'POST' });
               onLeave();
-            } catch (e) {
+            } catch (_e) {
               onLeave();
             }
           }}>
@@ -177,8 +198,6 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
               try {
                 if (room.id) {
                   await apiFetch(`/rooms/${room.id}/start`, { method: 'POST' });
-                  // onStart() is handled by the 'start_game' event, so poll the room
-                  // state as a fallback for a lost event.
                   for (let attempt = 0; attempt < 10 && !startedRef.current; attempt += 1) {
                     await new Promise((resolve) => setTimeout(resolve, 750));
                     if (startedRef.current) break;

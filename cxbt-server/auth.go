@@ -31,10 +31,20 @@ func RegisterHandler(c *gin.Context) {
 		return
 	}
 
+	var existing User
+	if err := DB.Where("username = ?", req.Username).First(&existing).Error; err == nil && existing.ID > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "Username already exists"})
+		return
+	}
+
 	user := User{Username: req.Username, Password: string(hashed)}
 	if err := DB.Create(&user).Error; err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Username might already exist"})
-		return
+		// Retry once in case an idle MySQL connection was reset (unexpected EOF)
+		user = User{Username: req.Username, Password: string(hashed)}
+		if retryErr := DB.Create(&user).Error; retryErr != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Username might already exist"})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "User registered successfully", "userId": user.ID})
@@ -49,8 +59,10 @@ func LoginHandler(c *gin.Context) {
 
 	var user User
 	if err := DB.Where("username = ?", req.Username).First(&user).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
-		return
+		if retryErr := DB.Where("username = ?", req.Username).First(&user).Error; retryErr != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
+			return
+		}
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {

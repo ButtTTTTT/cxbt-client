@@ -13,6 +13,7 @@ export interface BuildAvatarOptions {
   gender?: number; // 0: 男, 1: 女
   hairIndex?: number;
   accessorySetIndex?: number;
+  preset?: CreationPreset;
   assets?: CreationAssets;
 }
 
@@ -50,13 +51,13 @@ export async function buildFullAvatar(options: BuildAvatarOptions = {}): Promise
   const gender = options.gender ?? 0;
 
   const jobConfig = assets.jobs[jobId];
-  if (!jobConfig || !jobConfig.presets[gender]) {
+  const preset = options.preset ?? jobConfig?.presets[gender];
+  if (!preset) {
     throw new Error(`[avatarBuilder] 找不到职业 ${jobId} 性别索引 ${gender} 的配置预设`);
   }
 
-  const preset = jobConfig.presets[gender];
   const hairIndex = options.hairIndex ?? preset.defaultHair ?? 0;
-  const accessorySetIndex = options.accessorySetIndex ?? 0;
+  const accessorySetIndex = options.accessorySetIndex ?? Math.max(0, (preset.accessorySets?.length ?? 1) - 1);
 
   const loader = new GLTFLoader();
   const textureLoader = new THREE.TextureLoader();

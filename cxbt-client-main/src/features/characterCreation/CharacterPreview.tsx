@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { disposeCacheScene } from '../cacheAssets/loader';
 import { assetUrl, type Appearance, type CreationAssets, type CreationAttachment, type CreationPreset, type CreationWeapon } from './assets';
+import { createStylizedWeaponMesh, enhanceLoadedWeaponModel } from '../gameplay/engine/ProceduralWeaponBuilder';
 
 type IdleData = { fps: number; duration?: number; tracks: { name: string; positions: number[][]; rotations: number[][] }[] };
 
@@ -254,22 +255,38 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
         const response = await fetch(assetUrl(animation ?? weapon.animation));
         if (!response.ok) throw new Error(`${weapon.label}动作加载失败`);
         const data: IdleData = await response.json();
-        const parts = await Promise.all(weapon.parts.map(async (part) => {
-          const [model, map] = await Promise.all([loadModel(part.model), part.texture ? loadTexture(part.texture) : Promise.resolve(null)]);
-          if (disposed) return model;
-          const partMaterial = material(map);
-          model.traverse((object: any) => {
-            if (!object.isMesh) return;
-            object.material.dispose();
-            object.material = partMaterial;
-            object.frustumCulled = false;
-          });
-          const index = boneIndices.get(part.bone);
-          if (index === undefined) throw new Error(`武器挂点缺失：${part.bone}`);
-          skeleton.bones[index].add(model);
-          model.visible = false;
-          return model;
-        }));
+        const parts: any[] = [];
+        for (const part of weapon.parts ?? []) {
+          try {
+            const [model, map] = await Promise.all([loadModel(part.model), part.texture ? loadTexture(part.texture).catch(() => null) : Promise.resolve(null)]);
+            if (disposed) return { parts, clip: makeClip(data, weapon.id) };
+            const partMaterial = material(map);
+            model.traverse((object: any) => {
+              if (!object.isMesh) return;
+              object.material.dispose();
+              object.material = partMaterial;
+              object.frustumCulled = false;
+            });
+            enhanceLoadedWeaponModel(model, weapon.id);
+            const index = boneIndices.get(part.bone);
+            if (index === undefined) throw new Error(`武器挂点缺失：${part.bone}`);
+            skeleton.bones[index].add(model);
+            model.visible = false;
+            parts.push(model);
+          } catch {
+            // Fallback below
+          }
+        }
+        if (parts.length === 0 && !disposed) {
+          const fallbackBone = weapon.id.startsWith('shield') ? 'handweapon_l' : 'handweapon_r';
+          const index = boneIndices.get(fallbackBone);
+          if (index !== undefined && skeleton.bones[index]) {
+            const stylized = createStylizedWeaponMesh(weapon.id);
+            stylized.visible = false;
+            skeleton.bones[index].add(stylized);
+            parts.push(stylized);
+          }
+        }
         return { parts, clip: makeClip(data, weapon.id) };
       }));
       if (disposed) return;
