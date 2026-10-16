@@ -74,6 +74,8 @@ type BattleControl = {
   fire: () => void; 
   reload: () => void;
   castSkill: (slot: number) => boolean;
+  castSkillById: (skillId: string) => boolean;
+  spawnChatBubbleForUser: (userId: string | number, sender: string, text: string) => void;
   spawnBot: (mode?: BotBehaviorMode) => void;
   setAllBotsMode: (mode: BotBehaviorMode) => void;
   reviveAllBots: () => void;
@@ -82,8 +84,31 @@ type BattleControl = {
   respawnPlayer: () => void;
   interactObjective: () => void;
 };
-type HotbarState = { cooldowns: number[]; shield: number; stealthed: boolean; speed: number; maxHealthScale: number };
+type HotbarState = {
+  cooldowns: number[];
+  byId?: Record<string, number>;
+  shield: number;
+  stealthed: boolean;
+  speed: number;
+  maxHealthScale: number;
+  transferEnergy?: number;
+};
 type SandboxRules = { infiniteAmmo: boolean; noCooldown: boolean; godMode: boolean; autoRespawnBots: boolean };
+export type BattleChatMessage = {
+  id: string;
+  sender: string;
+  channel: 'all' | 'team' | 'world' | 'system';
+  content: string;
+  time: string;
+};
+
+const TACTICAL_VOICE_CALLOUTS = [
+  { key: '1', text: '⚠️ 请求火力支援！敌军正在突进！' },
+  { key: '2', text: '🎯 全体集火前方高危目标！' },
+  { key: '3', text: '👁️ 注意侧翼隐身刺客偷袭！' },
+  { key: '4', text: '🚩 掩护我夺取战旗 / 占领核心据点！' },
+  { key: '5', text: '🏆 干得漂亮！继续保持压制！' },
+];
 
 const BASE = `${import.meta.env.BASE_URL}assets/gameplay/`;
 const LOBBY = `${import.meta.env.BASE_URL}assets/lobby/`;
@@ -103,10 +128,10 @@ function formatTime(seconds: number) {
   return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
 }
 
-function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion, character, creation, assets, avatarPreset, weapons, slots, loads, health, motion,
+function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion, character, creation, assets, avatarPreset, weapons, slots, loads, allLoads, health, motion,
   active, onReady, onPosition, onShot, onHit, onReload, onWeaponChange, onDamage, onHeal, onHotbar,
-  onPause, paused, sandboxOpen, sandboxRules, onBotsChange, onBotKill, onObjectiveScore, onObjectiveState, onHitMarker, onRecoil,
-  otherPlayers, roomPlayers, logDebug }: {
+  onPause, paused, sandboxOpen, chatOpen, sandboxRules, onBotsChange, onBotKill, onObjectiveScore, onObjectiveState, onHitMarker, onRecoil,
+  onScopeChange, onShieldGuardChange, otherPlayers, roomPlayers, logDebug }: {
   map: MapDefinition;
   customMap?: CustomMapBlueprint;
   modeId: string;
@@ -119,11 +144,13 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
   weapons: CreationWeapon[];
   slots: BattleSlot[];
   loads: LoadedSkill[];
+  allLoads: LoadedSkill[];
   health: RefObject<number>;
   motion: RefObject<boolean>;
   active: RefObject<BattleControl | null>;
   paused: RefObject<boolean>;
   sandboxOpen: RefObject<boolean>;
+  chatOpen: RefObject<boolean>;
   sandboxRules: RefObject<SandboxRules>;
   onBotsChange: (bots: BotSnapshot[]) => void;
   onBotKill: (botName?: string, weaponName?: string) => void;
@@ -131,6 +158,8 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
   onObjectiveState: (state: ModeObjectiveState) => void;
   onHitMarker: (crit: boolean) => void;
   onRecoil: (spread: number) => void;
+  onScopeChange: (scoped: boolean, family: string) => void;
+  onShieldGuardChange: (guarding: boolean) => void;
   onReady: () => void;
   onPosition: (x: number, z: number, yaw: number) => void;
   onShot: () => boolean;
@@ -163,7 +192,11 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
   const objectiveStateRef = useRef(onObjectiveState);
   const hitMarkerRef = useRef(onHitMarker);
   const recoilRef = useRef(onRecoil);
+  const scopeChangeRef = useRef(onScopeChange);
+  const shieldGuardChangeRef = useRef(onShieldGuardChange);
   const damageBonusRef = useRef(damageBonusMult);
+  const allLoadsRef = useRef(allLoads);
+  const slotsRef = useRef(slots);
 
   shotRef.current = onShot;
   hitRef.current = onHit;
@@ -182,7 +215,11 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
   objectiveStateRef.current = onObjectiveState;
   hitMarkerRef.current = onHitMarker;
   recoilRef.current = onRecoil;
+  scopeChangeRef.current = onScopeChange;
+  shieldGuardChangeRef.current = onShieldGuardChange;
   damageBonusRef.current = damageBonusMult;
+  allLoadsRef.current = allLoads;
+  slotsRef.current = slots;
 
   useEffect(() => {
     if (mountRef.current) {
@@ -212,6 +249,8 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
     let comboStep = 0;
     let comboTime = 0;
     let holding = false;
+    let isScoped = false;
+    let shieldGuarding = false;
     let lockTimer = 0;
     let lockAttempts = 0;
     let lastHotbar = 0;
@@ -255,14 +294,32 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
 
     const takeDamage = (amount: number) => {
       if (sandboxRules.current.godMode) return;
-      const reduced = amount * (1 - passives.damageReduction / 100);
+      let reduced = amount * (1 - passives.damageReduction / 100);
+      if (shieldGuarding) {
+        reduced *= 0.35; // 战术盾牌右键架盾减免 65% 伤害
+        audio.play('hit_shield', 0.65);
+        if (localPlayer) {
+          combatEffects.spawnStatusText(localPlayer.modelGroup.position, '🛡️ 盾牌格挡 -65%', '#38bdf8');
+        }
+      }
       if (passives.storeEnergy > 0) {
-        transfer.stored += reduced * passives.storeEnergy / 100;
-        if (transfer.stored >= 100 && enemyList().some((enemy) => enemy.position.distanceTo(localPlayer?.modelGroup.position || new THREE.Vector3()) <= 3)) {
+        const prevStored = transfer.stored;
+        transfer.stored = Math.min(150, transfer.stored + reduced * passives.storeEnergy / 100);
+        if (prevStored < 100 && transfer.stored >= 100) {
+          audio.play('skill-transfer-ready', 0.65);
+          if (localPlayer) combatEffects.spawnStatusText(localPlayer.modelGroup.position, '⚡ 能量转化充能完毕！', '#fbbf24');
+        }
+        const releaseRad = passives.releaseRadius || 8;
+        if (transfer.stored >= 100 && enemyList().some((enemy) => enemy.position.distanceTo(localPlayer?.modelGroup.position || new THREE.Vector3()) <= releaseRad)) {
           transfer.stored = 0;
+          audio.play('skill-transfer', 0.8);
+          if (localPlayer) {
+            combatEffects.spawnExplosionEffect(localPlayer.modelGroup.position.clone().add(new THREE.Vector3(0, 1, 0)));
+            combatEffects.spawnStatusText(localPlayer.modelGroup.position, `💥 能量转化震爆 (${passives.releaseDamage || 320})`, '#f59e0b');
+          }
           for (const enemy of enemyList()) {
-            if (localPlayer && enemy.position.distanceTo(localPlayer.modelGroup.position) <= passives.releaseRadius) {
-              damageTargetById(enemy.userId, passives.releaseDamage, false);
+            if (localPlayer && enemy.position.distanceTo(localPlayer.modelGroup.position) <= releaseRad) {
+              damageTargetById(enemy.userId, passives.releaseDamage || 320, true);
             }
           }
         }
@@ -372,7 +429,10 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
     };
 
     const damageTargetById = (userId: string, damage: number, crit = false, hitPoint?: any) => {
-      const scaledDamage = Math.max(1, Math.round(damage * damageBonusRef.current * buffDamageMult));
+      const vulnMult = skillEffects.getDamageMultiplier(userId);
+      const scaledDamage = Math.max(1, Math.round(damage * damageBonusRef.current * buffDamageMult * vulnMult));
+      skillEffects.onEnemyDamaged(userId, scaledDamage);
+
       if (userId === '__boss__' && bossGroup && bossHp > 0) {
         bossHp = Math.max(0, bossHp - scaledDamage);
         const pos = hitPoint ? hitPoint.clone() : bossGroup.position.clone().add(new THREE.Vector3(0, 2.8, 0));
@@ -449,9 +509,12 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
         }
         return meshes;
       },
-      (point, radius) => {
+      (point, radius, subType) => {
         audio.play('grenade-explode', 0.65);
         combatEffects.spawnExplosionEffect(point);
+        if (subType === 'gasbomb' || (passives.gasDamage > 0 && (weapons[selected]?.id ?? '').startsWith('grenadelauncher'))) {
+          skillEffects.spawnToxicGasCloud(point, radius * 1.15, Math.max(85, passives.gasDamage || 95), 35);
+        }
         if (localPlayer && !sandboxRules.current.godMode) {
           const distance = point.distanceTo(localPlayer.modelGroup.position.clone().add(new THREE.Vector3(0, 1, 0)));
           if (distance < radius) takeDamage(Math.ceil(650 * (1 - distance / radius)));
@@ -463,18 +526,32 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
           damageTargetById(enemy.userId, blast, false);
         }
       },
-      (hit, kind) => {
+      (hit, kind, subType) => {
         const target = resolveTargetEntity(hit.object);
         if (target && (target.isBoss || target.entity?.isAlive)) {
           const weaponId = weapons[selected]?.id ?? 'smg_01';
           const profile = getWeaponCombatProfile(weaponId);
+          const targetBasePos = target.entity
+            ? target.entity.modelGroup.position
+            : (bossGroup?.position ?? hit.point);
           if (kind === 'arrow') {
-            const basePos = target.entity ? target.entity.modelGroup.position.y : (bossGroup?.position.y ?? 0);
-            const relY = hit.point.y - basePos;
+            const relY = hit.point.y - targetBasePos.y;
             const isHeadshot = relY >= 1.35;
             let dmg = Math.round(profile.damage * (isHeadshot ? profile.headshotMultiplier : 1));
-            if (weaponId.startsWith('crossbow') && passives.lifesteal > 0) {
-              healRef.current(dmg * passives.lifesteal / 100);
+            if (subType === 'syringe' || weaponId.startsWith('crossbow')) {
+              audio.play('hit_crossbow', 0.65);
+              const leechRatio = Math.max(25, passives.lifesteal);
+              const leechAmount = Math.round((dmg * leechRatio) / 100);
+              healRef.current(leechAmount);
+              if (localPlayer) {
+                combatEffects.spawnFloatingHeal(localPlayer.modelGroup.position, leechAmount);
+                combatEffects.spawnLifeLeechOrb(hit.point, localPlayer.modelGroup.position, 0x10b981);
+              }
+              if (passives.puppetRecover > 0 || passives.lifesteal > 0) {
+                skillEffects.inflictPuppet(target.userId, passives.puppetRecover || 25);
+              }
+            } else {
+              audio.play('hit_bow', 0.65);
             }
             damageTargetById(target.userId, dmg, isHeadshot, hit.point);
           } else if (kind === 'rocket' || kind === 'grenade') {
@@ -490,7 +567,7 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
       scene,
       position: () => localPlayer?.modelGroup.position || new THREE.Vector3(),
       aim: () => cameraController ? cameraController.getForwardDirection() : camera.getWorldDirection(new THREE.Vector3()),
-      spawnProjectile: (kind, origin, aim) => projectiles.spawn(kind, origin, aim),
+      spawnProjectile: (kind, origin, aim, subType) => projectiles.spawn(kind, origin, aim, subType),
       playSound: (name, volume) => audio.play(name, volume),
       getMaxHealth: () => MAX_HEALTH * skillEffects.snapshot().maxHealthScale,
       heal: (amount) => {
@@ -503,8 +580,23 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
       setGhost: (on) => localPlayer?.setGhost(on),
       onSpurt: () => localPlayer?.spurt(),
       onExplosion: (point) => combatEffects.spawnExplosionEffect(point),
+      onStatusEffect: (pos: any, text: string, color: string) => combatEffects.spawnStatusText(pos, text, color),
       log: (message) => logRef.current(message),
     });
+
+    const resetWeaponAltState = () => {
+      if (isScoped) {
+        isScoped = false;
+        camera.fov = 65;
+        camera.updateProjectionMatrix();
+        scopeChangeRef.current(false, '');
+      }
+      if (shieldGuarding) {
+        shieldGuarding = false;
+        skillEffects.setShieldGuard(false);
+        shieldGuardChangeRef.current(false);
+      }
+    };
 
     const fire = () => {
       const weaponId = weapons[selected]?.id ?? 'smg_01';
@@ -515,12 +607,13 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
       const baseDelay = sandboxRules.current.noCooldown ? Math.min(85, fireIntervalMs) : fireIntervalMs;
       const delay = baseDelay * (family === 'machinegun' ? Math.max(0.35, 1 - passives.fireRate / 100) : 1);
       const now = performance.now();
-      if (!ready || !localPlayer || paused.current || sandboxOpen.current || now - lastShot < delay || now < reloadUntil) return;
+      if (!ready || !localPlayer || paused.current || sandboxOpen.current || chatOpen.current || now - lastShot < delay || now < reloadUntil) return;
       if (kind !== 'melee' && !shotRef.current()) {
         active.current?.reload();
         return;
       }
 
+      const wasStealthed = skillEffects.isStealthed();
       skillEffects.breakStealth();
       if (comboTime > 0 && now - comboTime > 1200) comboStep = 0;
       lastShot = now;
@@ -552,22 +645,34 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
         mapCollider.collisionMeshes.push(bossHitboxMesh);
       }
 
+      const aim = cameraController ? cameraController.getForwardDirection() : camera.getWorldDirection(new THREE.Vector3());
+
       if (kind === 'melee') {
-        const aim = cameraController ? cameraController.getForwardDirection() : camera.getWorldDirection(new THREE.Vector3());
         combatEffects.spawnMeleeSlash(localPlayer.modelGroup.position, aim, comboStep);
         const point = localPlayer.modelGroup.position.clone().add(new THREE.Vector3(0, 1, 0));
+        const reach = family === 'shield' ? 3.9 : 3.5;
         for (const enemy of enemyList()) {
           const offset = enemy.position.clone().sub(point);
           const distance = offset.length();
-          if (distance > 3.5 || (distance > 0.01 && offset.normalize().dot(aim) < 0.15)) continue;
-          let damage = profile.damage * 0.25;
-          if (passives.poisonChance > 0 && Math.random() * 100 < passives.poisonChance) damage += passives.dotDamage * 6;
-          damageTargetById(enemy.userId, Math.round(damage), false, enemy.position.clone().add(new THREE.Vector3(0, 1.0, 0)));
+          if (distance > reach || (distance > 0.01 && offset.normalize().dot(aim) < 0.15)) continue;
+          let damage = profile.damage * (family === 'shield' ? 0.34 : 0.25);
+          if (wasStealthed) damage *= 1.65;
+          if (family === 'shield') {
+            audio.play('hit_shield', 0.7);
+            combatEffects.spawnStatusText(enemy.position, '🛡️ 盾击震退！', '#38bdf8');
+            const bot = botManager.findById(enemy.userId);
+            if (bot) {
+              bot.entity.modelGroup.position.addScaledVector(aim, 2.1);
+            }
+          } else if (passives.poisonChance > 0 && Math.random() * 100 < Math.max(45, passives.poisonChance)) {
+            damage += passives.dotDamage * 3;
+            skillEffects.inflictPoison(enemy.userId, Math.max(55, passives.dotDamage), 10);
+          }
+          damageTargetById(enemy.userId, Math.round(damage), wasStealthed, enemy.position.clone().add(new THREE.Vector3(0, 1.0, 0)));
         }
         return;
       }
 
-      const aim = cameraController ? cameraController.getForwardDirection() : camera.getWorldDirection(new THREE.Vector3());
       const muzzle = localPlayer.getMuzzlePosition();
 
       if (kind === 'grenade' || kind === 'rocket' || kind === 'arrow') {
@@ -576,7 +681,12 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
           ? crosshairHit.point
           : camera.position.clone().addScaledVector(aim, 85);
         const launchDir = targetPoint.clone().sub(muzzle).normalize();
-        projectiles.spawn(kind, muzzle, launchDir);
+        const subType = family === 'crossbow'
+          ? 'syringe'
+          : (family === 'grenadelauncher' && passives.gasDamage > 0)
+            ? 'gasbomb'
+            : 'default';
+        projectiles.spawn(kind, muzzle, launchDir, subType);
         if (kind === 'rocket' || kind === 'grenade') {
           shotFlash = 0.08;
           flash.position.copy(muzzle);
@@ -591,20 +701,43 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
       flash.intensity = 6;
       combatEffects.triggerMuzzleFlash(muzzle);
 
-      const tracerColor = family === 'sprayer'
-        ? 0x34d399
-        : family === 'sniperrifle'
-          ? 0x38bdf8
-          : family === 'machinegun'
-            ? 0xfb923c
-            : 0xfde047;
+      // 生化喷射器 (sprayer): 1:1 复刻 vfx_shenghua_atomizing_attack1_3rd.vfx 3D 连续雾化毒雾锥 + 瘟疫感染
+      if (family === 'sprayer') {
+        combatEffects.spawnSprayerMistCone(muzzle, aim);
+        const pPos = localPlayer.modelGroup.position;
+        for (const enemy of enemyList()) {
+          const toEnemy = enemy.position.clone().sub(pPos);
+          const dist = toEnemy.length();
+          if (dist <= 9.8 && (dist < 1.5 || toEnemy.normalize().dot(aim) >= 0.62)) {
+            let sprayDmg = profile.damage * 0.24;
+            if (passives.plagueChance > 0 && Math.random() * 100 < Math.max(40, passives.plagueChance)) {
+              sprayDmg += passives.plagueDamage * 2;
+              skillEffects.inflictPlague(
+                enemy.userId,
+                Math.max(60, passives.plagueDamage || 75),
+                passives.plagueRadius || 5
+              );
+            }
+            damageTargetById(enemy.userId, Math.round(sprayDmg), false, enemy.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
+          }
+        }
+        return;
+      }
+
+      const tracerColor = family === 'sniperrifle'
+        ? 0x38bdf8
+        : family === 'machinegun'
+          ? 0xfb923c
+          : 0xfde047;
+
+      const effectiveSpread = isScoped ? profile.spread * 0.12 : profile.spread;
 
       for (let p = 0; p < profile.pellets; p++) {
         const rayDir = aim.clone();
-        if (profile.spread > 0) {
-          rayDir.x += (Math.random() - 0.5) * profile.spread;
-          rayDir.y += (Math.random() - 0.5) * profile.spread;
-          rayDir.z += (Math.random() - 0.5) * profile.spread;
+        if (effectiveSpread > 0) {
+          rayDir.x += (Math.random() - 0.5) * effectiveSpread;
+          rayDir.y += (Math.random() - 0.5) * effectiveSpread;
+          rayDir.z += (Math.random() - 0.5) * effectiveSpread;
           rayDir.normalize();
         }
         const hit = mapCollider.raycastBullet(camera.position, rayDir, 120);
@@ -616,20 +749,34 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
         if (p === 0 || p % 2 === 0) {
           projectiles.spawn('bullet', muzzle, bulletDir);
         }
-        combatEffects.spawnBulletTracer(muzzle, targetPoint, tracerColor);
+        if (family === 'sniperrifle') {
+          combatEffects.spawnSniperSpiralBeam(muzzle, targetPoint, isScoped || wasStealthed);
+        } else {
+          combatEffects.spawnBulletTracer(muzzle, targetPoint, tracerColor);
+        }
 
         if (hit) {
           const target = resolveTargetEntity(hit.object);
           if (target && (target.isBoss || target.entity?.isAlive)) {
-            const baseY = target.entity ? target.entity.modelGroup.position.y : (bossGroup?.position.y ?? 0);
-            const relY = hit.point.y - baseY;
-            const isHeadshot = relY >= 1.35;
-            let damage = profile.damage * 0.22 * (isHeadshot ? profile.headshotMultiplier : 1);
-            if (family === 'sniperrifle' && Math.random() * 100 < passives.critChance) damage *= 1 + passives.critDamage / 100;
-            if (passives.weakChance > 0 && Math.random() * 100 < passives.weakChance) damage *= 1.2;
-            if (family === 'sprayer' && Math.random() * 100 < passives.plagueChance) damage += passives.plagueDamage * 6;
-            if (family === 'crossbow' && passives.lifesteal > 0) healRef.current(damage * passives.lifesteal / 100);
-            damageTargetById(target.userId, Math.round(damage), isHeadshot, hit.point);
+            const targetBasePos = target.entity
+              ? target.entity.modelGroup.position
+              : (bossGroup?.position ?? hit.point);
+            const relY = hit.point.y - targetBasePos.y;
+            let isCrit = relY >= 1.35 || wasStealthed;
+            let damage = profile.damage * 0.22 * (isCrit ? profile.headshotMultiplier : 1);
+            if (isScoped && family === 'sniperrifle') {
+              damage *= 1.25;
+            }
+            if (family === 'sniperrifle' && Math.random() * 100 < Math.max(30, passives.critChance)) {
+              isCrit = true;
+              damage *= 1 + (passives.critDamage || 50) / 100;
+              combatEffects.spawnStatusText(targetBasePos, '🎯 精准暴击！', '#fde047');
+            }
+            if ((family === 'smg' || family === 'pistol') && passives.weakChance > 0 && Math.random() * 100 < Math.max(35, passives.weakChance)) {
+              damage *= 1.2;
+              skillEffects.inflictWeakness(target.userId, 5);
+            }
+            damageTargetById(target.userId, Math.round(damage), isCrit, hit.point);
           } else {
             combatEffects.spawnImpactSpark(hit.point);
           }
@@ -683,9 +830,29 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
       }
     };
 
+    const syncHotbarNow = () => {
+      const snap = skillEffects.snapshot();
+      const bySlot = skillEffects.bySlot();
+      const byIdObj: Record<string, number> = {};
+      for (const l of allLoadsRef.current) {
+        const cdVal = skillEffects.cooldownOfSkill?.(l.skill.id) ?? 0;
+        if (cdVal > 0) byIdObj[l.skill.id] = cdVal;
+      }
+      hotbarRef.current({
+        cooldowns: BATTLE_QUICK_KEYS.map((_, index) => bySlot.get(index) ?? 0),
+        byId: byIdObj,
+        shield: snap.shield,
+        stealthed: skillEffects.isStealthed(),
+        speed: snap.speed,
+        maxHealthScale: snap.maxHealthScale,
+        transferEnergy: Math.round(transfer.stored),
+      });
+    };
+
     active.current = {
       switchWeapon(index) {
         if (selected === index) return;
+        resetWeaponAltState();
         selected = index;
         reloadUntil = 0;
         comboStep = 0;
@@ -704,13 +871,46 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
       },
       fire,
       castSkill(slot) {
-        const entry = slots[slot];
+        const entry = slotsRef.current[slot];
         if (!entry || entry.kind !== 'skill' || paused.current || entry.load.level <= 0) return false;
         if (sandboxRules.current.noCooldown) skillEffects.resetCooldowns();
         if (skillEffects.cast(slot, entry.load) === null) return false;
         if (sandboxRules.current.noCooldown) skillEffects.resetCooldowns();
         if (entry.load.skill.id !== 'latent') skillEffects.breakStealth();
+        syncHotbarNow();
         return true;
+      },
+      castSkillById(skillId) {
+        if (paused.current) return false;
+        const matchingSlotIdx = slotsRef.current.findIndex((s) => s.kind === 'skill' && s.load.skill.id === skillId);
+        if (matchingSlotIdx >= 0) {
+          const entry = slotsRef.current[matchingSlotIdx];
+          if (entry && entry.kind === 'skill') {
+            if (sandboxRules.current.noCooldown) skillEffects.resetCooldowns();
+            const res = skillEffects.cast(matchingSlotIdx, entry.load);
+            if (sandboxRules.current.noCooldown) skillEffects.resetCooldowns();
+            if (res !== null && skillId !== 'latent') skillEffects.breakStealth();
+            if (res !== null) syncHotbarNow();
+            return res !== null;
+          }
+        }
+        const load = allLoadsRef.current.find((l) => l.skill.id === skillId);
+        if (!load) return false;
+        if (sandboxRules.current.noCooldown) skillEffects.resetCooldowns();
+        const res = skillEffects.castDirect(load);
+        if (sandboxRules.current.noCooldown) skillEffects.resetCooldowns();
+        if (res && skillId !== 'latent') skillEffects.breakStealth();
+        if (res) syncHotbarNow();
+        return Boolean(res);
+      },
+      spawnChatBubbleForUser(userId, sender, text) {
+        const uidStr = String(userId);
+        const remote = otherPlayerEntities.get(uidStr);
+        if (remote?.modelGroup) {
+          combatEffects.spawnChatBubble(remote.modelGroup.position, sender, text);
+        } else if (localPlayer?.modelGroup) {
+          combatEffects.spawnChatBubble(localPlayer.modelGroup.position, sender, text);
+        }
       },
       reload() {
         const weaponId = weapons[selected]?.id ?? '';
@@ -756,13 +956,15 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
     };
 
     const lockPointer = () => {
-      if (cancelled || paused.current || sandboxOpen.current || document.pointerLockElement) return;
+      if (cancelled || paused.current || sandboxOpen.current || chatOpen.current || document.pointerLockElement) return;
+      if (document.activeElement instanceof HTMLButtonElement) document.activeElement.blur();
       const request = document.body.requestPointerLock() as unknown as Promise<void> | undefined;
       if (request && typeof request.catch === 'function') void request.catch(() => undefined);
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLButtonElement) return;
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+      if (chatOpen.current) return;
       if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) event.preventDefault();
       if (paused.current || sandboxOpen.current) return;
       keys.add(event.code);
@@ -778,32 +980,59 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
       if (event.code === 'KeyR' && !event.repeat) active.current?.reload();
       if (event.code === 'KeyE' && !event.repeat) triggerObjectiveAction();
 
+      // 职业主动技能与首领技能战术快捷键 (Q / F / Z / X / C / G)
       if (!event.repeat) {
+        const activeSkillHotkeys = ['KeyQ', 'KeyF', 'KeyZ', 'KeyX', 'KeyC', 'KeyG'];
+        const hkIdx = activeSkillHotkeys.indexOf(event.code);
+        if (hkIdx >= 0) {
+          const castable = allLoadsRef.current.filter((l) => l.skill.kind === 'active');
+          const targetLoad = castable[hkIdx];
+          if (targetLoad) {
+            active.current?.castSkillById(targetLoad.skill.id);
+            return;
+          }
+        }
+
         const index = BATTLE_QUICK_KEYS.indexOf(event.key);
-        const entry = index >= 0 ? slots[index] : undefined;
+        const entry = index >= 0 ? slotsRef.current[index] : undefined;
         if (entry?.kind === 'weapon') active.current?.switchWeapon(entry.weaponIndex);
         else if (entry?.kind === 'skill') active.current?.castSkill(index);
       }
     };
 
     const onKeyUp = (event: KeyboardEvent) => keys.delete(event.code);
-    const onBlur = () => { keys.clear(); holding = false; };
+    const onBlur = () => { keys.clear(); holding = false; resetWeaponAltState(); };
 
     const onMove = (event: PointerEvent) => {
       const locked = document.pointerLockElement === renderer.domElement || document.pointerLockElement === document.body;
       if (!locked && !dragging) return;
-      const dx = locked ? event.movementX : event.clientX - pointerX;
-      const dy = locked ? event.movementY : event.clientY - pointerY;
+      const sensScale = isScoped ? 0.42 : 1.0;
+      const dx = (locked ? event.movementX : event.clientX - pointerX) * sensScale;
+      const dy = (locked ? event.movementY : event.clientY - pointerY) * sensScale;
       pointerX = event.clientX;
       pointerY = event.clientY;
       cameraController?.onMouseMove(dx, dy);
     };
 
     const onDown = (event: PointerEvent) => {
-      if (paused.current || sandboxOpen.current) return;
-      if (event.target instanceof Element && event.target.closest('button, input, .settings-menu, .battle-inventory, .battle-sandbox-drawer')) return;
+      if (paused.current || sandboxOpen.current || chatOpen.current) return;
+      if (event.target instanceof Element && event.target.closest('button, input, .settings-menu, .battle-inventory, .battle-sandbox-drawer, .battle-chat-box, .battle-skill-castbar')) return;
       audio.start();
       if (event.button === 2) {
+        const curWeaponId = weapons[selected]?.id ?? '';
+        const curFamily = curWeaponId.split('_')[0] ?? '';
+        if (curFamily === 'sniperrifle' || curFamily === 'crossbow') {
+          isScoped = !isScoped;
+          camera.fov = isScoped ? (curFamily === 'sniperrifle' ? 22 : 32) : 65;
+          camera.updateProjectionMatrix();
+          audio.play(isScoped ? 'sniperrifle_scope' : 'sniperrifle_scope_out', 0.65);
+          scopeChangeRef.current(isScoped, isScoped ? curFamily : '');
+        } else if (curFamily === 'shield') {
+          shieldGuarding = true;
+          skillEffects.setShieldGuard(true);
+          audio.play('shield', 0.65);
+          shieldGuardChangeRef.current(true);
+        }
         cameraController?.setAiming(true);
         if (!document.pointerLockElement) lockPointer();
         dragging = true;
@@ -822,12 +1051,17 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
       if (event.button === 2) {
         dragging = false;
         cameraController?.setAiming(false);
+        if (shieldGuarding) {
+          shieldGuarding = false;
+          skillEffects.setShieldGuard(false);
+          shieldGuardChangeRef.current(false);
+        }
       }
     };
 
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
-      if (paused.current || sandboxOpen.current || !weapons.length) return;
+      if (paused.current || sandboxOpen.current || chatOpen.current || !weapons.length) return;
       active.current?.switchWeapon((selected + (event.deltaY > 0 ? 1 : weapons.length - 1)) % weapons.length);
     };
 
@@ -838,11 +1072,11 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
       keys.clear();
       holding = false;
       cameraController?.setAiming(false);
-      if (ready && !paused.current && !sandboxOpen.current) pauseRef.current();
+      if (ready && !paused.current && !sandboxOpen.current && !chatOpen.current) pauseRef.current();
     };
 
     const onLockError = () => {
-      if (cancelled || paused.current || sandboxOpen.current || lockAttempts >= 3) return;
+      if (cancelled || paused.current || sandboxOpen.current || chatOpen.current || lockAttempts >= 3) return;
       lockAttempts += 1;
       window.clearTimeout(lockTimer);
       lockTimer = window.setTimeout(lockPointer, 1200);
@@ -1223,14 +1457,21 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
         else audio.start();
       }
 
-      if (holding && ready && !paused.current && !sandboxOpen.current) fire();
+      if (holding && ready && !paused.current && !sandboxOpen.current && !chatOpen.current) fire();
       if (sandboxRules.current.noCooldown) skillEffects.resetCooldowns();
       skillEffects.update(delta);
       if (passives.regenPerTick > 0) {
         regenTimer -= delta;
         if (regenTimer <= 0) {
           regenTimer = 2;
-          if (health.current < MAX_HEALTH * 0.5) healRef.current(passives.regenPerTick);
+          if (health.current < MAX_HEALTH * 0.5) {
+            audio.play('skill-tenacity', 0.45);
+            healRef.current(passives.regenPerTick);
+            if (localPlayer) {
+              combatEffects.spawnFloatingHeal(localPlayer.modelGroup.position, passives.regenPerTick);
+              combatEffects.spawnStatusText(localPlayer.modelGroup.position, `💛 坚韧回血 +${passives.regenPerTick}`, '#facc15');
+            }
+          }
         }
       }
 
@@ -1241,7 +1482,7 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
         localPlayer.setSpeed(skillEffects.speed(localPlayer.getBaseSpeed()) * buffSpeedMult);
 
         const dir = new THREE.Vector3();
-        if (!sandboxOpen.current) {
+        if (!sandboxOpen.current && !chatOpen.current) {
           if (keys.has('KeyW') || keys.has('ArrowUp')) dir.z += 1;
           if (keys.has('KeyS') || keys.has('ArrowDown')) dir.z -= 1;
           if (keys.has('KeyA') || keys.has('ArrowLeft')) dir.x += 1;
@@ -1414,12 +1655,19 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
         lastHotbar = nowMs;
         const snap = skillEffects.snapshot();
         const bySlot = skillEffects.bySlot();
+        const byIdObj: Record<string, number> = {};
+        for (const l of allLoadsRef.current) {
+          const cdVal = skillEffects.cooldownOfSkill?.(l.skill.id) ?? 0;
+          if (cdVal > 0) byIdObj[l.skill.id] = cdVal;
+        }
         hotbarRef.current({
           cooldowns: BATTLE_QUICK_KEYS.map((_, index) => bySlot.get(index) ?? 0),
+          byId: byIdObj,
           shield: snap.shield,
           stealthed: skillEffects.isStealthed(),
           speed: snap.speed,
           maxHealthScale: snap.maxHealthScale,
+          transferEnergy: Math.round(transfer.stored),
         });
       }
 
@@ -1482,12 +1730,12 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
       renderer.forceContextLoss();
       renderer.domElement.remove();
     };
-  }, [map, character, creation, avatarPreset, weapons, active, paused]);
+  }, [map, character.jobId, character.name, creation, assets, avatarPreset, weapons, active, paused]);
 
   return <div className="battle-canvas" ref={mountRef} data-gameplay-canvas />;
 }
 
-export default function Gameplay({ room, character, creation, assets, avatarPreset, quickbar, skills, levels,
+export default function Gameplay({ room, character, creation, assets, avatarPreset, quickbar, skills, levels, bossSkills = [],
   volume, effectsVolume, onVolume, onEffectsVolume, onExit, onQuit = onExit }: {
   room: RoomConfig & { id?: string; players?: Record<string, any> };
   character: SavedCharacter;
@@ -1497,6 +1745,7 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   quickbar: (string | null)[];
   skills: Skill[];
   levels: number[];
+  bossSkills?: Skill[];
   volume: number;
   effectsVolume: number;
   onVolume: (value: number) => void;
@@ -1520,6 +1769,26 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   const [hitMarker, setHitMarker] = useState<{ active: boolean; crit: boolean }>({ active: false, crit: false });
   const [recoilSpread, setRecoilSpread] = useState(0);
   const [hurtFlash, setHurtFlash] = useState(false);
+  const [scopedFamily, setScopedFamily] = useState<string>('');
+  const [shieldGuarding, setShieldGuarding] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatChannel, setChatChannel] = useState<'all' | 'team' | 'world'>('all');
+  const [chatInput, setChatInput] = useState('');
+  const [voiceWheelOpen, setVoiceWheelOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<BattleChatMessage[]>([
+    {
+      id: 'sys-init',
+      sender: '战术指挥部',
+      channel: 'system',
+      content: '按 [Enter] 开启局内聊天，按 [V] 呼出战术快捷语音，按 [Q/F/Z/X] 或点击技能栏释放全职业/首领技能！',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    },
+  ]);
+  const chatOpenRef = useRef(false);
+  const chatInputRef = useRef<HTMLInputElement | null>(null);
+  const chatMessagesEndRef = useRef<HTMLDivElement | null>(null);
+  chatOpenRef.current = chatOpen;
+
   const [remaining, setRemaining] = useState(ROUND_LENGTH);
   const [scoreRed, setScoreRed] = useState(0);
   const [scoreBlue, setScoreBlue] = useState(0);
@@ -1568,7 +1837,7 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   const [health, setHealth] = useState(MAX_HEALTH);
   const [position, setPosition] = useState({ x: 0, z: 0, yaw: 0 });
   const [selectedSlot, setSelectedSlot] = useState(0);
-  const [hotbar, setHotbar] = useState<HotbarState>({ cooldowns: [], shield: 0, stealthed: false, speed: 0, maxHealthScale: 1 });
+  const [hotbar, setHotbar] = useState<HotbarState>({ cooldowns: [], byId: {}, shield: 0, stealthed: false, speed: 0, maxHealthScale: 1 });
   const [motion, setMotion] = useState(true);
   const motionRef = useRef(true);
   const healthRef = useRef(MAX_HEALTH);
@@ -1590,8 +1859,11 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   ammoRef.current = ammo;
   reservesRef.current = reserves;
   const loads = useMemo(() => loadSkills(skills, levels), [skills, levels]);
+  const bossLoads = useMemo(() => loadSkills(bossSkills, bossSkills.map(() => 1)), [bossSkills]);
+  const allLoads = useMemo(() => [...loads, ...bossLoads], [loads, bossLoads]);
   const { slots, weapons } = useMemo(() => resolveLoadout(quickbar, assets.weapons, loads), [quickbar, assets, loads]);
   const current = weapons[selected] ?? weapons[0];
+  const currentFamily = (current?.id ?? '').split('_')[0] ?? '';
   const currentKind = weaponKind(current?.id ?? '');
   const currentMagazine = current ? magazine(current) : 0;
   const maxHealth = Math.round(MAX_HEALTH * (hotbar.maxHealthScale || 1));
@@ -1599,9 +1871,85 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   const chosenMap = (customMap ? mapDefinitions?.[customMap.baseMapId] : mapDefinitions?.[room.mapId]) ?? mapDefinitions?.level1;
   const mapArt = chosenMap?.minimap;
 
+  const reticleVariantClass = useMemo(() => {
+    if (currentFamily === 'shotgun') return ' reticle-shotgun';
+    if (currentFamily === 'sprayer') return ' reticle-sprayer';
+    if (currentFamily === 'sniperrifle' || currentFamily === 'crossbow') return ' reticle-sniper';
+    if (currentFamily === 'shield') return ' reticle-shield';
+    return '';
+  }, [currentFamily]);
+
   useEffect(() => {
-    if ((paused || sandboxOpen || showSettlement) && document.pointerLockElement) document.exitPointerLock();
-  }, [paused, sandboxOpen, showSettlement]);
+    if ((paused || sandboxOpen || showSettlement || chatOpen) && document.pointerLockElement) document.exitPointerLock();
+  }, [paused, sandboxOpen, showSettlement, chatOpen]);
+
+  // Load recent chat history on battle mount
+  useEffect(() => {
+    apiFetch('/chat/history')
+      .then((res) => {
+        const list = Array.isArray(res) ? res : (Array.isArray(res?.messages) ? res.messages : []);
+        if (list.length > 0) {
+          const recent: BattleChatMessage[] = list.slice(-8).map((m: any, idx: number) => ({
+            id: `hist-${idx}-${Date.now()}`,
+            sender: m.sender || '玩家',
+            channel: (m.channel === 'team' || m.channel === 'world' ? m.channel : 'all'),
+            content: m.content || m.message || '',
+            time: m.createdAt ? String(m.createdAt).slice(11, 16) : '刚刚',
+          }));
+          setChatMessages((prev) => [...prev, ...recent].slice(-25));
+        }
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  const sendBattleChat = (overrideText?: string) => {
+    const content = (overrideText ?? chatInput).trim();
+    if (!content) {
+      chatOpenRef.current = false;
+      setChatOpen(false);
+      void document.body.requestPointerLock();
+      return;
+    }
+    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const msgId = `local-${Date.now()}-${Math.random()}`;
+    setChatMessages((prev) => [
+      ...prev.slice(-29),
+      { id: msgId, sender: character.name, channel: chatChannel, content, time: nowTime },
+    ]);
+    control.current?.spawnChatBubbleForUser(myUserId, character.name, content);
+
+    if (wsRef.current) {
+      wsRef.current.sendJSON({
+        type: 'chat',
+        userId: myUserId,
+        sender: character.name,
+        channel: chatChannel,
+        message: content,
+        content,
+      });
+    }
+    void apiFetch('/chat/send', {
+      method: 'POST',
+      body: JSON.stringify({
+        channel: chatChannel,
+        roomId: room.id ?? '',
+        sender: character.name,
+        message: content,
+        content,
+      }),
+    }).catch(() => undefined);
+
+    if (overrideText === undefined) {
+      setChatInput('');
+      chatOpenRef.current = false;
+      setChatOpen(false);
+      void document.body.requestPointerLock();
+    }
+  };
 
   // Respawn countdown when player HP reaches 0
   useEffect(() => {
@@ -1661,6 +2009,23 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
           const buffer = otherPlayersRef.current[msg.userId].buffer;
           buffer.push({ x: msg.x, z: msg.z, yaw: msg.yaw, time: performance.now() });
           if (buffer.length > 20) buffer.shift();
+        } else if (msg.type === 'chat') {
+          const senderName = msg.sender || '战友';
+          const textContent = msg.content || '';
+          if (senderName !== character.name && textContent) {
+            const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            setChatMessages((prev) => [
+              ...prev.slice(-29),
+              {
+                id: `ws-${Date.now()}-${Math.random()}`,
+                sender: senderName,
+                channel: msg.channel === 'team' || msg.channel === 'world' ? msg.channel : 'all',
+                content: textContent,
+                time: nowTime,
+              },
+            ]);
+            control.current?.spawnChatBubbleForUser(msg.userId ?? 0, senderName, textContent);
+          }
         } else if (msg.type === 'respawn' && msg.userId == myUserId) {
           setHealth(maxHealth);
         } else if (msg.type === 'game_over') {
@@ -1673,7 +2038,7 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
       ws.close();
       wsRef.current = null;
     };
-  }, [room.id, myUserId]);
+  }, [room.id, myUserId, character.name]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1699,12 +2064,48 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        if (pausedRef.current || sandboxOpenRef.current) return;
+        if (!chatOpenRef.current) {
+          event.preventDefault();
+          chatOpenRef.current = true;
+          setChatOpen(true);
+          if (document.pointerLockElement) document.exitPointerLock();
+          window.setTimeout(() => chatInputRef.current?.focus(), 20);
+        }
+        return;
+      }
+      if (chatOpenRef.current) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          chatOpenRef.current = false;
+          setChatOpen(false);
+          void document.body.requestPointerLock();
+        }
+        return;
+      }
+      if (event.code === 'KeyV' && !event.repeat && !pausedRef.current && !sandboxOpenRef.current) {
+        event.preventDefault();
+        setVoiceWheelOpen((prev) => !prev);
+        return;
+      }
+      if (voiceWheelOpen && ['1', '2', '3', '4', '5'].includes(event.key)) {
+        event.preventDefault();
+        const found = TACTICAL_VOICE_CALLOUTS.find((c) => c.key === event.key);
+        if (found) {
+          sendBattleChat(found.text);
+          setVoiceWheelOpen(false);
+        }
+        return;
+      }
       if (event.key === 'Tab') {
         event.preventDefault();
         setShowScoreboard((prev) => !prev);
       } else if (event.key === 'Escape') {
         event.preventDefault();
-        if (showScoreboard) {
+        if (voiceWheelOpen) {
+          setVoiceWheelOpen(false);
+        } else if (showScoreboard) {
           setShowScoreboard(false);
         } else if (sandboxOpenRef.current) {
           sandboxOpenRef.current = false;
@@ -1727,7 +2128,7 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
     };
     addEventListener('keydown', onKey);
     return () => removeEventListener('keydown', onKey);
-  }, [showScoreboard]);
+  }, [showScoreboard, voiceWheelOpen, chatChannel]);
 
   const triggerHitMarker = (crit = false) => {
     setHitMarker({ active: true, crit });
@@ -1866,7 +2267,17 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   const markerX = bounds?.length ? 50 + (position.x - bounds[0]) / bounds[2] * 100 : 50;
   const markerY = bounds?.length ? 50 - (position.z - bounds[1]) / bounds[3] * 100 : 50;
 
-  return <main className={`battle-root${paused ? ' paused' : ''}${sandboxOpen ? ' sandbox-open' : ''}`} data-gameplay-ready={ready}>
+  const activeSkillHotkeys = ['Q', 'F', 'Z', 'X', 'C', 'G'];
+  const activeCastableLoads = useMemo(
+    () => allLoads.filter((l) => l.skill.kind === 'active'),
+    [allLoads]
+  );
+  const passiveLoads = useMemo(
+    () => loads.filter((l) => l.skill.kind === 'passive'),
+    [loads]
+  );
+
+  return <main className={`battle-root${paused ? ' paused' : ''}${sandboxOpen ? ' sandbox-open' : ''}${chatOpen ? ' chat-open' : ''}`} data-gameplay-ready={ready}>
     {chosenMap && <BattleScene
       map={chosenMap}
       customMap={customMap}
@@ -1880,11 +2291,13 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
       weapons={weapons}
       slots={slots}
       loads={loads}
+      allLoads={allLoads}
       health={healthRef}
       motion={motionRef}
       active={control}
       paused={pausedRef}
       sandboxOpen={sandboxOpenRef}
+      chatOpen={chatOpenRef}
       sandboxRules={sandboxRulesRef}
       onBotsChange={setBots}
       onBotKill={(botName = '蓝方卫兵', weaponName = '武器') => {
@@ -1905,6 +2318,8 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
       onObjectiveState={setObjectiveState}
       onHitMarker={triggerHitMarker}
       onRecoil={triggerRecoil}
+      onScopeChange={(scoped, fam) => setScopedFamily(scoped ? fam : '')}
+      onShieldGuardChange={setShieldGuarding}
       onReady={() => setReady(true)}
       onPosition={reportPosition}
       otherPlayers={otherPlayersRef}
@@ -1933,6 +2348,30 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
     {!ready && <div className="battle-loading" role="status">{error || `${chosenMap?.name || room.mapName} · 战场加载中…`}</div>}
 
     {hurtFlash && <div className="battle-hurt-vignette" aria-hidden="true" />}
+
+    {/* Sniper / Crossbow Scope Zoom Overlay (创想兵团 狙击步枪/十字弩 右键开镜) */}
+    {scopedFamily && (
+      <div className="battle-scope-overlay" aria-label="狙击开镜视野">
+        <div className="battle-scope-lens">
+          <div className="battle-scope-h" />
+          <div className="battle-scope-v" />
+          <div className="battle-scope-center" />
+          <div className="battle-scope-info">
+            {scopedFamily === 'sniperrifle'
+              ? '🎯 高倍光学狙击镜 (3.0x · 精准射击暴击加成 +25%)'
+              : '💉 战术十字弩瞄准镜 (2.0x · 吸血针剂精准锁定)'}
+            {' · 右键收镜'}
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Tactical Shield Guard HUD (战术盾牌右键架盾力场) */}
+    {shieldGuarding && (
+      <div className="battle-shield-guard-hud">
+        🛡️ 战术能量盾架设中 · 正面伤害减免 65% (左键发动盾击震退)
+      </div>
+    )}
 
     {/* Top Mode Objective Banner & Boss Health Bar */}
     {ready && (
@@ -1970,6 +2409,11 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
           {damageBonusMult > 1 && (
             <span style={{ color: '#fbbf24', fontSize: 11 }}>
               ⚡ 强化加成 +{Math.round((damageBonusMult - 1) * 100)}%
+            </span>
+          )}
+          {(hotbar.transferEnergy ?? 0) > 0 && (
+            <span style={{ color: '#34d399', fontSize: 11 }}>
+              🔋 能量转化 {hotbar.transferEnergy}%
             </span>
           )}
         </div>
@@ -2064,7 +2508,7 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
       </div>
     )}
 
-    <div className="battle-reticle" aria-hidden="true"
+    <div className={`battle-reticle${reticleVariantClass}`} aria-hidden="true"
       style={recoilSpread > 0 ? { transform: `translate(-50%, -50%) scale(${1 + recoilSpread * 0.018})` } : undefined}>
       <i /><i /><i /><i />
     </div>
@@ -2077,6 +2521,204 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
       </span>)}
       <small>{formatTime(remaining)}</small>
     </div>
+
+    {/* Direct Full Profession & Boss Skill Castbar (全职业主动/被动/首领技能战术栏) */}
+    {ready && (activeCastableLoads.length > 0 || passiveLoads.length > 0) && (
+      <div className="battle-skill-castbar" aria-label="职业与首领技能战术栏">
+        {activeCastableLoads.slice(0, 6).map((load, idx) => {
+          const cd = hotbar.byId?.[load.skill.id] ?? 0;
+          const isBossSkill = ['tread', 'shriek', 'result', 'eatfish', 'bombgoon', 'wolfdecelerate'].includes(load.skill.id);
+          const hk = activeSkillHotkeys[idx] || '';
+          return (
+            <button
+              key={load.skill.id}
+              type="button"
+              className={`battle-skill-btn${isBossSkill ? ' boss-skill' : ''}`}
+              title={`${load.skill.name} [${hk}] · ${load.skill.description}`}
+              onClick={() => control.current?.castSkillById(load.skill.id)}
+            >
+              {hk && <span className="battle-skill-hotkey">{hk}</span>}
+              <img src={`${LOBBY}${load.skill.icon}`} alt={load.skill.name} />
+              {cd > 0 && <span className="battle-skill-cd">{Math.ceil(cd)}s</span>}
+            </button>
+          );
+        })}
+        {passiveLoads.map((load) => (
+          <div
+            key={load.skill.id}
+            className="battle-skill-btn passive-skill"
+            title={`${load.skill.name} [被动生效中] · ${load.skill.description}`}
+          >
+            <span className="battle-skill-hotkey">被动</span>
+            <img src={`${LOBBY}${load.skill.icon}`} alt={load.skill.name} />
+          </div>
+        ))}
+      </div>
+    )}
+
+    {/* In-Game Real-Time Battle Chat & Tactical Voice Callouts (局内聊天与战术快捷语音) */}
+    {ready && (
+      <section className="battle-chat-box" aria-label="局内战术聊天">
+        {voiceWheelOpen && (
+          <div className="battle-voice-wheel">
+            <div style={{ fontWeight: 'bold', color: '#fbbf24', marginBottom: 2 }}>
+              📻 战术快捷语音 (按数字键 1-5 立即发送)
+            </div>
+            {TACTICAL_VOICE_CALLOUTS.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => {
+                  sendBattleChat(c.text);
+                  setVoiceWheelOpen(false);
+                }}
+                style={{
+                  textAlign: 'left',
+                  background: 'rgba(30, 41, 59, 0.85)',
+                  border: '1px solid #475569',
+                  borderRadius: 6,
+                  padding: '4px 8px',
+                  color: '#f8fafc',
+                  fontSize: 11,
+                  cursor: 'pointer',
+                }}
+              >
+                <strong style={{ color: '#38bdf8' }}>[{c.key}]</strong> {c.text}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="battle-chat-messages">
+          {chatMessages.slice(-8).map((m) => {
+            const badgeColor =
+              m.channel === 'team'
+                ? '#38bdf8'
+                : m.channel === 'world'
+                  ? '#fbbf24'
+                  : m.channel === 'system'
+                    ? '#f43f5e'
+                    : '#34d399';
+            const badgeLabel =
+              m.channel === 'team'
+                ? '队伍'
+                : m.channel === 'world'
+                  ? '世界'
+                  : m.channel === 'system'
+                    ? '系统'
+                    : '全部';
+            return (
+              <div key={m.id} className="battle-chat-msg">
+                <span style={{ color: badgeColor, fontWeight: 'bold', marginRight: 4 }}>
+                  [{badgeLabel}]
+                </span>
+                <strong style={{ color: '#e2e8f0', marginRight: 5 }}>{m.sender}:</strong>
+                <span style={{ color: '#f8fafc' }}>{m.content}</span>
+              </div>
+            );
+          })}
+          <div ref={chatMessagesEndRef} />
+        </div>
+
+        {chatOpen ? (
+          <div className="battle-chat-input-row">
+            <button
+              type="button"
+              onClick={() =>
+                setChatChannel((prev) =>
+                  prev === 'all' ? 'team' : prev === 'team' ? 'world' : 'all'
+                )
+              }
+              style={{
+                padding: '2px 6px',
+                borderRadius: 4,
+                border: '1px solid #475569',
+                background: '#1e293b',
+                color: '#38bdf8',
+                fontSize: 11,
+                fontWeight: 'bold',
+                cursor: 'pointer',
+              }}
+              title="点击切换频道"
+            >
+              {chatChannel === 'all' ? '全部' : chatChannel === 'team' ? '队伍' : '世界'}
+            </button>
+            <input
+              ref={chatInputRef}
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  sendBattleChat();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  chatOpenRef.current = false;
+                  setChatOpen(false);
+                  void document.body.requestPointerLock();
+                }
+              }}
+              placeholder="输入战术消息，按 Enter 发送..."
+            />
+            <button
+              type="button"
+              onClick={() => sendBattleChat()}
+              style={{
+                padding: '3px 8px',
+                borderRadius: 5,
+                border: 'none',
+                background: '#0284c7',
+                color: '#fff',
+                fontSize: 11,
+                fontWeight: 'bold',
+                cursor: 'pointer',
+              }}
+            >
+              发送
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              type="button"
+              onClick={() => {
+                chatOpenRef.current = true;
+                setChatOpen(true);
+                if (document.pointerLockElement) document.exitPointerLock();
+                window.setTimeout(() => chatInputRef.current?.focus(), 20);
+              }}
+              style={{
+                padding: '4px 10px',
+                borderRadius: 6,
+                border: '1px solid rgba(56, 189, 248, 0.4)',
+                background: 'rgba(9, 13, 22, 0.72)',
+                color: '#94a3b8',
+                fontSize: 11,
+                cursor: 'pointer',
+              }}
+            >
+              💬 按 [Enter] 聊天
+            </button>
+            <button
+              type="button"
+              onClick={() => setVoiceWheelOpen((prev) => !prev)}
+              style={{
+                padding: '4px 10px',
+                borderRadius: 6,
+                border: '1px solid rgba(251, 191, 36, 0.4)',
+                background: 'rgba(9, 13, 22, 0.72)',
+                color: '#fde68a',
+                fontSize: 11,
+                cursor: 'pointer',
+              }}
+            >
+              📻 按 [V] 战术语音
+            </button>
+          </div>
+        )}
+      </section>
+    )}
 
     <BattleHud
       scoreRed={scoreRed}

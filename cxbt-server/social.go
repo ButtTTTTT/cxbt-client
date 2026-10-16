@@ -794,10 +794,86 @@ func GetMatchesHandler(c *gin.Context) {
 func GetChatHistoryHandler(c *gin.Context) {
 	channel := c.DefaultQuery("channel", "global")
 	var msgs []ChatMessage
-	DB.Where("channel = ?", channel).Order("id desc").Limit(40).Find(&msgs)
+	if channel == "all" || channel == "" {
+		DB.Order("id desc").Limit(40).Find(&msgs)
+	} else {
+		DB.Where("channel = ? OR channel = 'global'", channel).Order("id desc").Limit(40).Find(&msgs)
+	}
 	// Reverse to chronological order
 	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
 		msgs[i], msgs[j] = msgs[j], msgs[i]
 	}
 	c.JSON(http.StatusOK, msgs)
 }
+
+func SendChatMessageHandler(c *gin.Context) {
+	userID := c.MustGet("userId").(uint)
+	var req struct {
+		Channel string `json:"channel"`
+		RoomID  string `json:"roomId"`
+		Message string `json:"message"`
+		Content string `json:"content"`
+		Sender  string `json:"sender"`
+		Team    string `json:"team"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "消息格式错误"})
+		return
+	}
+	msgText := req.Message
+	if msgText == "" {
+		msgText = req.Content
+	}
+	if msgText == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "消息内容不能为空"})
+		return
+	}
+
+	char := getOrCreateCharacter(userID)
+	senderName := req.Sender
+	if senderName == "" {
+		senderName = char.Name
+	}
+	chName := req.Channel
+	if chName == "" {
+		if req.RoomID != "" {
+			chName = req.RoomID
+		} else {
+			chName = "global"
+		}
+	}
+
+	chatRow := ChatMessage{
+		Channel: chName,
+		Sender:  senderName,
+		Message: msgText,
+		MsgType: "chat",
+	}
+	DB.Create(&chatRow)
+
+	payload := gin.H{
+		"type":    "chat",
+		"userId":  senderName,
+		"sender":  senderName,
+		"channel": chName,
+		"roomId":  req.RoomID,
+		"team":    req.Team,
+		"message": msgText,
+		"content": msgText,
+		"time":    time.Now().Format("15:04:05"),
+	}
+
+	// Broadcast to global channel and room channel if applicable
+	PublishChannelJSON("global_channel", payload)
+	if req.RoomID != "" {
+		PublishChannelJSON("room_channel:"+req.RoomID, payload)
+	} else if chName != "global" && chName != "world" {
+		PublishChannelJSON("room_channel:"+chName, payload)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "ok",
+		"chat":   chatRow,
+	})
+}
+

@@ -55,11 +55,23 @@ export default function ProfessionSelect({ jobId, onChoose, onCreate, onBack, on
     return () => removeEventListener('resize', resize);
   }, []);
   useEffect(() => {
-    if (musicRef.current) {
-      musicRef.current.volume = volume;
-      void musicRef.current.play().catch(() => undefined);
+    const audio = musicRef.current;
+    if (audio) {
+      audio.volume = volume;
+      void audio.play().catch(() => undefined);
     }
     if (changeRef.current) changeRef.current.volume = effectsVolume;
+    const unlockAudio = () => {
+      if (musicRef.current && musicRef.current.paused && volume > 0) {
+        void musicRef.current.play().catch(() => undefined);
+      }
+    };
+    window.addEventListener('pointerdown', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
+    return () => {
+      window.removeEventListener('pointerdown', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
   }, [assets, volume, effectsVolume]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {

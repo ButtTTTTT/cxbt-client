@@ -37,9 +37,8 @@
 .lobby-art-button:active, .lobby-art-button.active { background-image: var(--down-art, var(--art)); }
 .lobby-art-button:disabled { background-image: var(--disabled-art, var(--art)); }
 .lobby-main-tabs { position: absolute; top: 161px; left: 176px; display: flex; gap: 4px; }
-.lobby-main-tabs button { width: 206px; height: 42px; padding-top: 1px; }
+.lobby-main-tabs button { width: 176px; height: 42px; padding-top: 1px; }
 .lobby-main-tabs button.active { color: #785c36; }
-.lobby-main-tabs button:last-child { filter: saturate(.12); color: #aaa; }
 .lobby-content { position: absolute; top: 201px; left: 155px; width: 1128px; height: 645px; background-size: 100% 100%; }
 .lobby-character-panel { position: absolute; left: 13px; top: 16px; width: 508px; height: 490px; border: 2px solid #765e36; border-radius: 13px; box-shadow: inset 0 0 0 3px #ffe6a6, 0 0 0 2px #d7e9de; background: linear-gradient(125deg, #ffd776, #ffbb58 65%, #fbb445); overflow: hidden; }
 .lobby-character-glow { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 55%, #fff0a6b3, transparent 68%); }

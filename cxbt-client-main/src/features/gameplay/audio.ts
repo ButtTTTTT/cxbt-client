@@ -1,5 +1,13 @@
 const BASE = `${import.meta.env.BASE_URL}assets/gameplay/audio/`;
 
+const SOUND_ALIASES: Record<string, string> = {
+  hit: 'hit_body',
+  'grenade-explode': 'explosion_rpg',
+  hit_crossbow: 'sb-at_crossbow-hit',
+  'skill-wild': 'skill-overreaction',
+  'skill-pet_skill01': 'skill-cure',
+};
+
 export function createBattleAudio(ambienceName?: string | null) {
   const music = new Audio(`${BASE}battle.ogg`);
   const ambienceFile = ['ambience_day', 'alien_boss', 'castle'].includes(ambienceName ?? '')
@@ -17,7 +25,8 @@ export function createBattleAudio(ambienceName?: string | null) {
   };
   const pause = () => { music.pause(); ambience.pause(); };
   const play = (name: string, volume = 0.55) => {
-    const effect = new Audio(`${BASE}${name}.wav`);
+    const resolved = SOUND_ALIASES[name] ?? name;
+    const effect = new Audio(`${BASE}${resolved}.wav`);
     effect.volume = volume;
     effects.add(effect);
     effect.addEventListener('ended', () => effects.delete(effect), { once: true });
@@ -30,3 +39,4 @@ export function createBattleAudio(ambienceName?: string | null) {
   };
   return { start, pause, play, dispose };
 }
+

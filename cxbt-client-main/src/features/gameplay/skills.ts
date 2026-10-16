@@ -1,4 +1,4 @@
-﻿import type { CreationWeapon } from '../characterCreation/assets';
+import type { CreationWeapon } from '../characterCreation/assets';
 import type { Skill } from '../lobby/skills';
 import { BATTLE_QUICK_KEYS } from './hud';
 
@@ -74,15 +74,16 @@ export type PassiveModifiers = {
   fireRate: number; spread: number; critChance: number; critDamage: number;
   damageReduction: number; regenPerTick: number; storeEnergy: number; releaseDamage: number;
   releaseRadius: number; poisonChance: number; dotDamage: number; poisonResist: number;
-  lifesteal: number; puppetChance: number; plagueChance: number; plagueDamage: number;
+  lifesteal: number; puppetChance: number; puppetRecover: number;
+  plagueChance: number; plagueDamage: number; plagueRadius: number;
   gasDamage: number; gasPoisonChance: number; weakChance: number; weakDuration: number;
 };
 
 export function passiveModifiers(loads: LoadedSkill[]): PassiveModifiers {
   const base: PassiveModifiers = { fireRate: 0, spread: 0, critChance: 0, critDamage: 0,
     damageReduction: 0, regenPerTick: 0, storeEnergy: 0, releaseDamage: 0, releaseRadius: 8,
-    poisonChance: 0, dotDamage: 0, poisonResist: 0, lifesteal: 0, puppetChance: 0,
-    plagueChance: 0, plagueDamage: 0, gasDamage: 0, gasPoisonChance: 0, weakChance: 0, weakDuration: 3 };
+    poisonChance: 0, dotDamage: 0, poisonResist: 0, lifesteal: 0, puppetChance: 0, puppetRecover: 0,
+    plagueChance: 0, plagueDamage: 0, plagueRadius: 5, gasDamage: 0, gasPoisonChance: 0, weakChance: 0, weakDuration: 3 };
   for (const load of loads) {
     if (load.active || load.level <= 0) continue;
     const p = load.params;
@@ -95,14 +96,17 @@ export function passiveModifiers(loads: LoadedSkill[]): PassiveModifiers {
       case 'vitals': base.weakChance = p.weakChance ?? 0; base.weakDuration = p.duration ?? 3; break;
       case 'poison': base.poisonChance = p.poisonChance ?? 0; base.dotDamage = p.dotDamage ?? 0;
         base.poisonResist = p.poisonResist ?? 0; break;
-      case 'suckblood': base.lifesteal = p.lifesteal ?? 0; base.puppetChance = p.puppetChance ?? 0; break;
-      case 'plague': base.plagueChance = p.plagueChance ?? 0; base.plagueDamage = p.plagueDamage ?? 0; break;
+      case 'suckblood': base.lifesteal = p.lifesteal ?? 0; base.puppetChance = p.puppetChance ?? 0;
+        base.puppetRecover = p.puppetRecover ?? 10; break;
+      case 'plague': base.plagueChance = p.plagueChance ?? 0; base.plagueDamage = p.plagueDamage ?? 0;
+        base.plagueRadius = p.plagueRadius ?? 5; break;
       case 'gasbomb': base.gasDamage = p.gasDamage ?? 0; base.gasPoisonChance = p.gasPoisonChance ?? 0; break;
       default: break;
     }
   }
   return base;
 }
+
 
 export type BattleSlot =
   | { key: string; kind: 'empty' }

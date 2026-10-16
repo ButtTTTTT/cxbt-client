@@ -77,10 +77,12 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
   const [status, setStatus] = useState('');
   const allocation = useSkillAllocation(skillAssets, character.jobId);
   // The cache keeps an unnamed item for every skill icon, so the hotbar resolves
-  // the current class's own skills before falling back to the inventory item.
-  const jobSkills = useMemo(() => new Map((skillAssets?.jobs[character.jobId]?.skills ?? [])
+  // the current class's own skills and boss skills before falling back to the inventory item.
+  const jobSkills = useMemo(() => new Map([...(skillAssets?.jobs[character.jobId]?.skills ?? []), ...(skillAssets?.bossSkills ?? [])]
     .map((skill) => [skill.id, skill])), [skillAssets, character.jobId]);
   const jobSkillList = useMemo(() => skillAssets?.jobs[character.jobId]?.skills ?? [], [skillAssets, character.jobId]);
+  const bossSkillList = useMemo(() => skillAssets?.bossSkills ?? [], [skillAssets]);
+
   const audioRef = useRef<HTMLAudioElement>(null);
   const weaponAudioRef = useRef<HTMLAudioElement | null>(null);
   const dialogRef = useRef<HTMLElement>(null);
@@ -224,7 +226,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
   if (!assets || !creation) return <main className="lobby-viewport"><p role="status">{error || '正在进入大厅…'}</p></main>;
   if (battleRoom) return <Gameplay room={battleRoom} character={charState} creation={creation} assets={assets}
     avatarPreset={avatarCard?.preset}
-    quickbar={quickbar} skills={jobSkillList} levels={allocation.levels}
+    quickbar={quickbar} skills={jobSkillList} bossSkills={bossSkillList} levels={allocation.levels}
     volume={volume} effectsVolume={effectsVolume} onVolume={setVolume} onEffectsVolume={setEffectsVolume}
     onExit={() => {
       setBattleRoom(undefined);
@@ -248,6 +250,14 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
     const skill = jobSkills.get(id);
     if (!assets.items.some((item) => item.id === id) && skill?.kind !== 'active') return;
     setQuickbar((slots) => slots.map((value, slot) => slot === index ? id : value));
+  };
+  const equipSkillToQuickbar = (skillId: string) => {
+    setQuickbar((slots) => {
+      if (slots.includes(skillId)) return slots;
+      const emptyIdx = slots.findIndex((val, i) => i >= 3 && !val);
+      const targetIdx = emptyIdx >= 0 ? emptyIdx : 9;
+      return slots.map((v, i) => i === targetIdx ? skillId : v);
+    });
   };
   const moduleDialog = (title: string) => setDialog({ title });
 
@@ -299,12 +309,13 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
           onOpenExpedition={() => moduleDialog('冒险远征')}
           onStatus={setStatus} /> : <>
       <nav className="lobby-main-tabs" aria-label="角色页面">
-        {['背包', '技能', '宠物', '幸运寻宝', '冒险远征'].map((label, index) => <button key={label}
+        {['背包', '技能', '宠物', '幸运寻宝', '冒险远征', 'PDE工程台'].map((label, index) => <button key={label}
           className={'lobby-art-button' + ((index === 0 && page === 'bag') || (index === 1 && page === 'skill') ? ' active' : '')}
           style={buttonArt('mainTab')} aria-pressed={index === 0 ? page === 'bag' : index === 1 ? page === 'skill' : undefined}
           onClick={() => {
             if (index === 0) { setPage('bag'); chooseCategory('equipment'); }
             else if (index === 1) setPage('skill');
+            else if (label === 'PDE工程台') { window.location.href = `${import.meta.env.BASE_URL}sandbox`; }
             else moduleDialog(label);
           }}>{label}</button>)}
       </nav>
@@ -335,7 +346,8 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
           </div>
         </section>
         {page === 'skill' && skillAssets ? <SkillPanel assets={skillAssets} job={character.jobId} allocation={allocation}
-          tab={skillTab} onTab={setSkillTab} onMessage={setStatus} />
+          tab={skillTab} onTab={setSkillTab} onMessage={setStatus} onEquipSkill={equipSkillToQuickbar} />
+
           : <section className="lobby-inventory" style={art('inventory')} aria-label="背包">
           <h1>背包</h1>
           <label className="lobby-search"><span className="sr-only">搜索物品</span><input placeholder="搜索物品" value={query} onChange={(event) => { setQuery(event.target.value); setBagPage(0); }} /></label>

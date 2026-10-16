@@ -167,9 +167,12 @@ func (c *Client) readPump() {
 			if msgType == "chat" {
 				sender, _ := gameMsg["userId"].(string)
 				text, _ := gameMsg["message"].(string)
+				chOverride, _ := gameMsg["channel"].(string)
 				if sender != "" && text != "" {
 					chName := "global"
-					if c.RoomID != "" {
+					if chOverride != "" {
+						chName = chOverride
+					} else if c.RoomID != "" {
 						chName = c.RoomID
 					}
 					go func(ch, s, m string) {
@@ -180,6 +183,9 @@ func (c *Client) readPump() {
 							MsgType: "chat",
 						})
 					}(chName, sender, text)
+					if chOverride == "global" || chOverride == "world" {
+						PublishChannel("global_channel", message)
+					}
 				}
 			}
 		}
@@ -187,6 +193,7 @@ func (c *Client) readPump() {
 		PublishChannel(c.Channel, message)
 	}
 }
+
 
 func (c *Client) writePump() {
 	defer func() {

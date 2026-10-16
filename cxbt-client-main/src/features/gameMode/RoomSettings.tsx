@@ -70,22 +70,42 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
     }
   };
 
+  const appendRoomChat = (line: string) => {
+    setMessages((current) => {
+      if (current[current.length - 1] === line) return current;
+      return [...current.slice(-47), line];
+    });
+  };
+
   const sendMessage = (event: FormEvent) => {
     event.preventDefault();
     const message = draft.trim();
     if (!message) return;
+    appendRoomChat(`${hostName}: ${message}`);
     const ws = (window as any)._roomWs;
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'chat', message, userId: hostName }));
-    } else {
-      setMessages((current) => [...current.slice(-47), `${hostName}: ${message}`]);
+      ws.send(JSON.stringify({ type: 'chat', roomId: room.id, channel: room.id || 'room', message, userId: hostName }));
     }
+    void apiFetch('/chat/send', {
+      method: 'POST',
+      body: JSON.stringify({ channel: room.id || 'room', roomId: room.id || '', message, sender: hostName }),
+    }).catch(() => undefined);
     setDraft('');
   };
 
   useEffect(() => {
     if (!room.id) return;
     const roomId = room.id;
+    apiFetch(`/chat/history?channel=${encodeURIComponent(roomId)}`)
+      .then((rows: any[]) => {
+        if (Array.isArray(rows) && rows.length > 0) {
+          setMessages([
+            `进入房间: ${room.name}`,
+            ...rows.slice(-20).map((r) => `${r.sender}: ${r.message}`),
+          ]);
+        }
+      })
+      .catch(() => undefined);
     const ws = new WebSocket(`${WS_BASE}?roomId=${roomId}&playerId=${encodeURIComponent(hostName)}`);
     (window as any)._roomWs = ws;
     ws.onmessage = (e) => {
@@ -97,9 +117,9 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
         if (msg.type === 'start_game') {
           enterBattle(roomId);
         } else if (msg.type === 'join' || msg.type === 'leave') {
-          setMessages((current) => [...current.slice(-47), `系统: 玩家 ${msg.userId} ${msg.type === 'join' ? '进入' : '离开'}了房间`]);
+          appendRoomChat(`系统: 玩家 ${msg.userId} ${msg.type === 'join' ? '进入' : '离开'}了房间`);
         } else if (msg.type === 'chat') {
-          setMessages((current) => [...current.slice(-47), `${msg.userId}: ${msg.message}`]);
+          appendRoomChat(`${msg.sender || msg.userId}: ${msg.message}`);
         }
       } catch {
         // ignore malformed message
@@ -107,6 +127,7 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
     };
     return () => ws.close();
   }, [room.id, hostName]);
+
 
   return <div className="practice-room-root room-settings-root" data-room-settings-ready="true">
     <div className="practice-room-content" style={art(assets, 'content')}>

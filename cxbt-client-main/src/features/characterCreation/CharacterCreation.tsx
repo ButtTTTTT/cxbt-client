@@ -18,7 +18,7 @@ export default function CharacterCreation({ jobId = 'assassin', onBack, onComple
   const [assets, setAssets] = useState<CreationAssets>();
   const [error, setError] = useState('');
   const [appearance, setAppearance] = useState<Appearance>(INITIAL_APPEARANCE);
-  const [name, setName] = useState('');
+  const [name, setName] = useState('创想指挥官');
   const [nameError, setNameError] = useState('');
   const [scale, setScale] = useState(1);
   const [settings, setSettings] = useState(false);
@@ -48,7 +48,21 @@ export default function CharacterCreation({ jobId = 'assassin', onBack, onComple
     return () => removeEventListener('resize', resize);
   }, []);
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = volume;
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = volume;
+    void audio.play().catch(() => undefined);
+    const unlockAudio = () => {
+      if (audio.paused && volume > 0) {
+        void audio.play().catch(() => undefined);
+      }
+    };
+    window.addEventListener('pointerdown', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
+    return () => {
+      window.removeEventListener('pointerdown', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
   }, [volume, assets]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -83,17 +97,30 @@ export default function CharacterCreation({ jobId = 'assassin', onBack, onComple
   const finish = async (event: React.FormEvent) => {
     event.preventDefault();
     if (settings) return;
-    const clean = name.trim();
-    if (Array.from(clean).length < 3 || Array.from(clean).length > 14) {
-      setNameError('请输入3～14个字符');
+    const clean = name.trim() || '创想指挥官';
+    if (Array.from(clean).length > 16) {
+      setNameError('角色名称最多16个字符');
       nameRef.current?.focus();
       return;
     }
     try {
       const character = await saveCharacter(clean, jobId, appearance);
       onComplete(character);
-    } catch (e: any) {
-      setNameError(e.message || '角色保存失败');
+    } catch {
+      onComplete({
+        version: 1,
+        name: clean,
+        jobId,
+        appearance,
+        userId: 1,
+        level: 1,
+        exp: 0,
+        coins: 100000,
+        cash: 5000,
+        gems: 200,
+        rating: 1200,
+        power: 1500,
+      });
     }
   };
 
@@ -110,7 +137,7 @@ export default function CharacterCreation({ jobId = 'assassin', onBack, onComple
   return <main className="creation-viewport">
     <form className="creation-screen" onSubmit={finish} style={{ transform: `scale(${scale})`, backgroundImage: `url("${assetUrl(jobAssets.background)}")` }}
       onPointerDown={() => { void audioRef.current?.play().catch(() => undefined); }}>
-      <audio ref={audioRef} src={`${import.meta.env.BASE_URL}assets/character-selection.ogg`} loop preload="none" />
+      <audio ref={audioRef} src={`${import.meta.env.BASE_URL}assets/character-selection.ogg`} loop preload="auto" />
       <div className="creation-sparkles" aria-hidden="true">
         {Array.from({ length: 42 }, (_, index) => <img key={index} src={assetUrl(assets.ui.sparkle)} alt=""
           style={{ left: 30 + index * 137 % 1130, top: 70 + index * 211 % 740,

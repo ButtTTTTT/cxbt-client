@@ -188,9 +188,15 @@
           "kind": "active",
           "icon": "icons/conduction.png",
           "disabledIcon": "icons/conduction_disabled.png",
-          "tip": null,
-          "description": null,
-          "levels": []
+          "tip": "tips_abilities_shengmingchuandao",
+          "description": "消耗自身一定生命值，按比例治疗一定范围内当前生命值最低的受伤队友。同时你会得到一个“活力增量”的效果，让你在一定时间内，受到治疗时更高效的恢复生命。",
+          "levels": [
+            "治疗效果提升：45%\n消耗量：生命上限的10%\n治疗量：消耗量的80%\n冷却时间：10秒",
+            "治疗效果提升：58%\n消耗量：生命上限的10%\n治疗量：消耗量的98%\n冷却时间：8秒",
+            "治疗效果提升：71%\n消耗量：生命上限的10%\n治疗量：消耗量的116%\n冷却时间：6秒",
+            "治疗效果提升：84%\n消耗量：生命上限的10%\n治疗量：消耗量的134%\n冷却时间：4秒",
+            "治疗效果提升：100%\n消耗量：生命上限的10%\n治疗量：消耗量的152%\n冷却时间：2秒"
+          ]
         },
         {
           "id": "suckblood",
@@ -198,9 +204,15 @@
           "kind": "passive",
           "icon": "icons/suckblood.png",
           "disabledIcon": "icons/suckblood_disabled.png",
-          "tip": null,
-          "description": null,
-          "levels": []
+          "tip": "tips_abilities_shengmingchouqu",
+          "description": "当使用“弩”命中敌方目标时，弩所射出的针筒会抽取目标的生命，并传播给生化专家自己。传播生命量为弩所造成伤害的一定百分比。抽取生命后有一定概率使目标变成“生命傀儡”，当傀儡受到攻击流失生命时，其中部分生命会被生化专家回收并补充自己的生命值。使用条件：快捷栏中装备“弩”。",
+          "levels": [
+            "抽取生命量：弩伤害量的18%\n傀儡产生概率：26%\n傀儡生命回收率：受伤损耗生命的10%",
+            "抽取生命量：弩伤害量的26%\n傀儡产生概率：32%\n傀儡生命回收率：受伤损耗生命的15%",
+            "抽取生命量：弩伤害量的34%\n傀儡产生概率：38%\n傀儡生命回收率：受伤损耗生命的20%",
+            "抽取生命量：弩伤害量的42%\n傀儡产生概率：44%\n傀儡生命回收率：受伤损耗生命的25%",
+            "抽取生命量：弩伤害量的50%\n傀儡产生概率：50%\n傀儡生命回收率：受伤损耗生命的30%"
+          ]
         },
         {
           "id": "plague",
@@ -208,9 +220,15 @@
           "kind": "passive",
           "icon": "icons/plague.png",
           "disabledIcon": "icons/plague_disabled.png",
-          "tip": null,
-          "description": null,
-          "levels": []
+          "tip": "tips_abilities_wenyichuanbo",
+          "description": "受到生化专家“喷雾器”伤害的目标，有一定概率感染瘟疫，感染瘟疫的目标会持续受到伤害，并间歇性传染给一定范围内的友方玩家。只有将自己生命值补满才会彻底治愈。“活力”属性会提高瘟疫的伤害。\n使用条件：快捷栏中装备“喷雾器”。",
+          "levels": [
+            "产生瘟疫概率：15%\n瘟疫单次伤害：80\n瘟疫传播范围：5米",
+            "产生瘟疫概率：20%\n瘟疫单次伤害：110\n瘟疫传播范围：5米",
+            "产生瘟疫概率：25%\n瘟疫单次伤害：140\n瘟疫传播范围：5米",
+            "产生瘟疫概率：30%\n瘟疫单次伤害：170\n瘟疫传播范围：5米",
+            "产生瘟疫概率：35%\n瘟疫单次伤害：200\n瘟疫传播范围：5米"
+          ]
         },
         {
           "id": "gasbomb",
@@ -218,9 +236,15 @@
           "kind": "passive",
           "icon": "icons/gasbomb.png",
           "disabledIcon": "icons/gasbomb_disabled.png",
-          "tip": null,
-          "description": null,
-          "levels": []
+          "tip": "tips_abilities_duqidan",
+          "description": "使榴弹发射器的榴弹更换为毒气弹。毒气弹爆炸后会产生一定范围的毒雾（该范围与榴弹爆炸范围一致），接触到毒雾的敌人一定概率会中毒，造成持续伤害(持续12秒）。“活力”属性会提高中毒的伤害。\n使用条件：快捷栏中装备“榴弹发射器”。",
+          "levels": [
+            "单次伤害：基础伤害100\n中毒概率：20%",
+            "单次伤害：基础伤害140\n中毒概率：25%",
+            "单次伤害：基础伤害180\n中毒概率：30%",
+            "单次伤害：基础伤害220\n中毒概率：35%",
+            "单次伤害：基础伤害260\n中毒概率：40%"
+          ]
         },
         {
           "id": "overreaction",
@@ -228,9 +252,15 @@
           "kind": "active",
           "icon": "icons/overreaction.png",
           "disabledIcon": "icons/overreaction_disabled.png",
-          "tip": null,
-          "description": null,
-          "levels": []
+          "tip": "tips_abilities_guojifanying",
+          "description": "“生化专家”向自己体内注射一种浓缩的生物毒素，每当受到敌人的攻击并受伤时，就会过量分泌肾上腺素，做出过激反应，一定时间内奔跑速度加快，生命上限有一定比例的提升。注射毒素如果超出安全剂量，神经系统受到刺激而狂躁不安，毒素通过汗腺渗出体外，接触到敌人就会使目标感染“生命傀儡”、“瘟疫”和“中毒”效果。",
+          "levels": [
+            "奔跑速度提高到：6米/秒\n生命上限提升：32%\n持续时间：8秒\n冷却时间：30秒",
+            "奔跑速度提高到：6米/秒\n生命上限提升：49%\n持续时间：8秒\n冷却时间：28秒",
+            "奔跑速度提高到：6米/秒\n生命上限提升：66%\n持续时间：8秒\n冷却时间：26秒",
+            "奔跑速度提高到：6米/秒\n生命上限提升：83%\n持续时间：8秒\n冷却时间：23秒",
+            "奔跑速度提高到：6米/秒\n生命上限提升：100%\n持续时间：8秒\n冷却时间：20秒"
+          ]
         }
       ]
     },
@@ -319,5 +349,80 @@
         }
       ]
     }
-  }
+  },
+  "bossSkills": [
+    {
+      "id": "tread",
+      "name": "震地践踏",
+      "kind": "active",
+      "icon": "icons/tread.png",
+      "disabledIcon": "icons/tread_disabled.png",
+      "source": "机械母体 · 远征首领掉落",
+      "description": "猛烈践踏地面引发地壳崩裂冲击波，对周围8米内所有敌人造成高额震荡伤害并将其震飞击退。",
+      "levels": [
+        "伤害：580。\n有效半径：8米。\n冷却时间：16秒。"
+      ]
+    },
+    {
+      "id": "shriek",
+      "name": "刺耳尖叫",
+      "kind": "active",
+      "icon": "icons/shriek.png",
+      "disabledIcon": "icons/shriek_disabled.png",
+      "source": "疯狂园丁 · 远征首领掉落",
+      "description": "发出高频音波尖啸，对周围9米内的所有敌人造成音波撕裂伤害，并震慑敌方心智。",
+      "levels": [
+        "伤害：520。\n有效半径：9米。\n冷却时间：15秒。"
+      ]
+    },
+    {
+      "id": "result",
+      "name": "母体结界",
+      "kind": "active",
+      "icon": "icons/result.png",
+      "disabledIcon": "icons/result_disabled.png",
+      "source": "暗黑母体 · 远征首领掉落",
+      "description": "展开神秘的远古结界力场，瞬间生成1400点超强吸收护盾并恢复400点生命值。",
+      "levels": [
+        "防御量：1400点生命值。\n治疗量：400点生命值。\n持续时间：12秒。\n冷却时间：20秒。"
+      ]
+    },
+    {
+      "id": "eatfish",
+      "name": "深海狂怒",
+      "kind": "active",
+      "icon": "icons/eatfish.png",
+      "disabledIcon": "icons/eatfish_disabled.png",
+      "source": "深海渔夫 · 远征首领掉落",
+      "description": "吞食深海活鱼激发潜能，立即恢复850点生命值，并在8秒内大幅提升移动速度。",
+      "levels": [
+        "治疗量：850点生命值。\n速度提高到：每秒6.5米。\n持续时间：8秒。\n冷却时间：18秒。"
+      ]
+    },
+    {
+      "id": "bombgoon",
+      "name": "矿工爆破",
+      "kind": "active",
+      "icon": "icons/bombgoon.png",
+      "disabledIcon": "icons/bombgoon_disabled.png",
+      "source": "爆破矿工 · 远征首领掉落",
+      "description": "向前方连续投掷3枚高爆矿山炸药包，在落点引发连锁剧烈爆炸。",
+      "levels": [
+        "伤害：750。\n伤害半径：7米。\n冷却时间：18秒。"
+      ]
+    },
+    {
+      "id": "wolfdecelerate",
+      "name": "狼王咆哮",
+      "kind": "active",
+      "icon": "icons/wolfdecelerate.png",
+      "disabledIcon": "icons/wolfdecelerate_disabled.png",
+      "source": "嗜血狼人 · 远征首领掉落",
+      "description": "释放嗜血狼王战吼并向前疾风突袭，撕裂周围敌人造成伤害并汲取生命。",
+      "levels": [
+        "伤害：640。\n治疗量：320点生命值。\n有效半径：7米。\n冷却时间：14秒。"
+      ]
+    }
+  ]
 }
+

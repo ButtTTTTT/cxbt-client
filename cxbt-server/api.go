@@ -70,8 +70,10 @@ func RegisterRoutes(r *gin.Engine) {
 		protected.POST("/signin", SignInHandler)
 		protected.GET("/matches", GetMatchesHandler)
 		protected.GET("/chat/history", GetChatHistoryHandler)
+		protected.POST("/chat/send", SendChatMessageHandler)
 	}
 }
+
 
 func getCharacterHandler(c *gin.Context) {
 	userID := c.MustGet("userId").(uint)

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { CreationJob } from '../characterCreation/assets';
 import { lobbyUrl } from './assets';
 
@@ -9,12 +9,19 @@ export type Skill = {
   kind: SkillKind;
   icon: string;
   disabledIcon: string | null;
-  tip: string | null;
+  tip?: string | null;
+  source?: string | null;
   description: string | null;
   levels: (string | null)[];
 };
 export type SkillJob = { name: string; skills: Skill[] };
-export type SkillAssets = { maxLevel: number; barWidths: number[]; jobs: Record<CreationJob, SkillJob> };
+export type SkillAssets = {
+  maxLevel: number;
+  barWidths: number[];
+  jobs: Record<CreationJob, SkillJob>;
+  bossSkills?: Skill[];
+};
+
 
 // personalInfo.lua stores the server's leftpoints in skillLeave and lists five
 // rows per class. The class screenshots show every skill at level 1 with 10
@@ -42,8 +49,8 @@ export function skillTip(skill: Skill, level: number): string {
 export function useSkillAllocation(assets: SkillAssets | undefined, jobId: CreationJob) {
   const skills = useMemo(() => assets?.jobs[jobId]?.skills ?? [], [assets, jobId]);
   const maxLevel = assets?.maxLevel ?? 5;
-  const [levels, setLevels] = useState<number[]>([]);
-  const [pending, setPending] = useState<number[]>([]);
+  const [levels, setLevels] = useState<number[]>(() => skills.map(() => SKILL_BASE_LEVEL));
+  const [pending, setPending] = useState<number[]>(() => skills.map(() => SKILL_BASE_LEVEL));
   useEffect(() => { setLevels(skills.map(() => SKILL_BASE_LEVEL)); setPending(skills.map(() => SKILL_BASE_LEVEL)); }, [skills]);
   const read = (values: number[], index: number) => values[index] ?? 0;
   const points = SKILL_POINTS - pending.reduce((total, value) => total + value, 0);
