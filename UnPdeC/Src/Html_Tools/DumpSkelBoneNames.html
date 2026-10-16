@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>.SKEL骨骼解析工具</title>
+    <style>
+        body {
+            width: 900px;
+            margin: 0 auto;
+            font-family: Arial, sans-serif;
+            background-color: #f9f9f9;
+            padding: 20px 0;
+        }
+
+        .input-area {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .dropzone {
+            border: 3px dashed #007bff;
+            text-align: center;
+            border-radius: 8px;
+            margin: 15px 0;
+            background-color: #f0f8ff;
+            cursor: pointer;
+        }
+
+        textarea {
+            width: 100%;
+            height: 50px;
+            margin: 10px 0;
+            font-family: monospace;
+            padding: 12px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        #fileLabel {
+            display: block;
+            padding: 40px 0;
+            background-color: #eef6ff;
+            color: black;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+
+        #output,
+        #outputSorted {
+            background: #ffffff;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 16px;
+            min-height: 100px;
+            max-height: 800px;
+            overflow: auto;
+        }
+
+        .stats {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        .highlight {
+            color: #0066cc;
+            font-weight: bold;
+        }
+
+        h1,
+        h3 {
+            color: #333;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>.SKEL骨骼解析工具</h1>
+    <div class="input-area">
+        <h3>粘贴十六进制数据</h3>
+        <textarea id="hexInput" placeholder="粘贴 .skel 文件的十六进制数据"></textarea>
+        <h3>或上传 .skel 文件</h3>
+        <div class="dropzone" id="dropArea">
+            <input type="file" id="fileInput" accept=".skel">
+            <label for="fileInput" id="fileLabel">点击选择 .skel 文件</label>
+        </div>
+    </div>
+
+    <div>
+        <h3>解析结果</h3>
+        <span id="stats" class="stats"></span>
+    </div>
+
+    <div style="display: flex; gap: 20px; margin-top: 10px;">
+        <div style="flex: 1;">
+            <h4>原始顺序</h4>
+            <div id="output">等待解析...</div>
+        </div>
+        <div style="flex: 1;">
+            <h4>按父级索引排序</h4>
+            <div id="outputSorted">排序结果</div>
+        </div>
+    </div>
+
+    <script>
+        const hexInput = document.getElementById('hexInput');
+        let debounceTimer;
+
+        hexInput.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(parseFromHex, 300);
+        });
+
+        document.getElementById('fileInput').addEventListener('change', parseFromFile);
+
+        function parseFromHex() {
+            const hexStr = hexInput.value.trim();
+            if (!hexStr) return resetOutput();
+
+            try {
+                const bytes = new Uint8Array(hexStr.replace(/\s+/g, '').match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                const boneData = parseBoneData(bytes);
+                showResult(boneData);
+            } catch (e) {
+                document.getElementById('output').textContent = `解析失败：${e.message}`;
+                document.getElementById('outputSorted').textContent = '';
+                document.getElementById('stats').textContent = '';
+            }
+        }
+
+        function parseFromFile() {
+            const file = document.getElementById('fileInput').files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = e => {
+                try {
+                    const bytes = new Uint8Array(e.target.result);
+                    const boneData = parseBoneData(bytes);
+                    showResult(boneData);
+                } catch (e) {
+                    document.getElementById('output').textContent = `解析失败：${e.message}`;
+                    document.getElementById('outputSorted').textContent = '';
+                    document.getElementById('stats').textContent = '';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function parseBoneData(bytes) {
+            const dataView = new DataView(bytes.buffer);
+            let offset = 0;
+
+            if (dataView.getUint32(offset, true) !== 0x600) throw new Error("非SKEL文件");
+            offset += 4;
+            const boneCount = dataView.getUint32(offset, true);
+            offset += 4;
+
+            const bones = [];
+            for (let i = 0; i < boneCount; i++) {
+                const parentIndex = dataView.getUint32(offset, true);
+                offset += 4;
+                const nameLen = dataView.getUint32(offset, true);
+                offset += 4;
+
+                if (nameLen === 0) continue;
+                const boneName = new TextDecoder('utf-8').decode(bytes.subarray(offset, offset + nameLen));
+                offset += nameLen;
+                bones.push({ name: boneName, parentIndex });
+            }
+            return bones;
+        }
+
+        function showResult(boneData) {
+            if (boneData.length === 0) {
+                document.getElementById('output').textContent = "未解析到骨骼数据";
+                document.getElementById('outputSorted').textContent = "";
+                document.getElementById('stats').textContent = "";
+                return;
+            }
+
+            const original = boneData.map((b, index) => `[${index + 1}] [${b.parentIndex}] ${b.name}`).join('\n');
+            const sorted = [...boneData].sort((a, b) => a.parentIndex - b.parentIndex)
+                .map((b, index) => `[${index + 1}] [${b.parentIndex}] ${b.name}`).join('\n');
+
+            document.getElementById('output').textContent = original;
+            document.getElementById('outputSorted').textContent = sorted;
+            document.getElementById('stats').innerHTML = `成功解析 <span class="highlight">${boneData.length}</span> 个骨骼`;
+        }
+
+        function resetOutput() {
+            document.getElementById('output').textContent = "等待解析...";
+            document.getElementById('outputSorted').textContent = "排序结果";
+            document.getElementById('stats').textContent = "";
+        }
+
+        // 拖拽支持
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e =>
+            document.getElementById('dropArea').addEventListener(e, ev => ev.preventDefault(), false)
+        );
+        document.getElementById('dropArea').addEventListener('drop', e => {
+            e.preventDefault();
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.toLowerCase().endsWith('.skel')) {
+                document.getElementById('fileInput').files = e.dataTransfer.files;
+                parseFromFile();
+            }
+        });
+    </script>
+</body>
+
+</html>

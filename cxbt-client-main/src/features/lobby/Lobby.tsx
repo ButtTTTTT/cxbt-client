@@ -295,9 +295,11 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
         weaponIds={battleWeapons} initialJoinedRoom={quickJoinedRoom}
         onBack={() => { setPracticeRoom(false); setQuickJoinedRoom(undefined); setGameModeLobby(true); setStatus(''); }} onStart={setBattleRoom} onStatus={setStatus} />
         : gameModeLobby ? <GameModeLobby assets={assets} weaponIds={battleWeapons}
-          onPractice={(joinedRoom) => { setQuickJoinedRoom(joinedRoom); setPracticeRoom(true); setStatus(''); }} onStatus={setStatus} /> : <>
+          onPractice={(joinedRoom) => { setQuickJoinedRoom(joinedRoom); setPracticeRoom(true); setStatus(''); }}
+          onOpenExpedition={() => moduleDialog('冒险远征')}
+          onStatus={setStatus} /> : <>
       <nav className="lobby-main-tabs" aria-label="角色页面">
-        {['背包', '技能', '宠物'].map((label, index) => <button key={label}
+        {['背包', '技能', '宠物', '幸运寻宝', '冒险远征'].map((label, index) => <button key={label}
           className={'lobby-art-button' + ((index === 0 && page === 'bag') || (index === 1 && page === 'skill') ? ' active' : '')}
           style={buttonArt('mainTab')} aria-pressed={index === 0 ? page === 'bag' : index === 1 ? page === 'skill' : undefined}
           onClick={() => {
@@ -327,7 +329,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
           </div>
           <div className="lobby-character-stats" style={art('stats')}>
             <span className="lobby-stats-title" style={art('statsTitle')}>角色属性</span>
-            <div className="lobby-stat-modes">战场 <span>冒险远征</span></div>
+            <div className="lobby-stat-modes">战场 <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => moduleDialog('冒险远征')}>冒险远征</span></div>
             <div className="lobby-stat-values">{[['生命值', '3201', 1], ['耐力值', '100', 6], ['活力值', '120', 2], ['恢复力', '85', 3], ['护甲值', '240', 4], ['破甲值', '180', 5]].map(([label, value, icon]) =>
               <div key={label}><img src={lobbyUrl(assets.ui[`stat${icon}`])} alt="" /><span>{label}</span><b>{value}</b></div>)}</div>
           </div>
@@ -421,6 +423,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
         character={charState}
         onUpdateCharacter={setCharState}
         onSelectBagItem={(item) => chooseItem(item)}
+        onStartRoom={setBattleRoom}
         onStatus={setStatus}
         onClose={() => setDialog(undefined)}
       />}

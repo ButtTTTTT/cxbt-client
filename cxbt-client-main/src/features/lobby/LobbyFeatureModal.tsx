@@ -10,6 +10,7 @@ type LobbyFeatureModalProps = {
   character: SavedCharacter;
   onUpdateCharacter: (char: SavedCharacter) => void;
   onSelectBagItem?: (item: InventoryItem) => void;
+  onStartRoom?: (room: any) => void;
   onStatus: (msg: string) => void;
   onClose: () => void;
 };
@@ -27,12 +28,30 @@ const PET_LIST = [
   { id: 'pet_fairy', name: '治愈光灵 · 露娜', desc: '纳米医疗伴侣，持续提供战地生命恢复与护盾充能', bonusPower: 220 },
 ];
 
+const MANUFACTURE_BLUEPRINTS = [
+  { id: 'bp_gold_ak47', itemId: 'Rifle_AK47_Gold', itemName: '黄金AK47 · 裁决', category: 'equipment', costCoins: 6000, costGems: 25, bonusPower: 240, materials: '精铁核心 x4 + 黄金镀层 x2' },
+  { id: 'bp_abyss_cannon', itemId: 'Bazooka_Abyss', itemName: '深渊重炮 · 毁灭者', category: 'equipment', costCoins: 7500, costGems: 35, bonusPower: 290, materials: '高爆火药桶 x5 + 钛合金炮管 x1' },
+  { id: 'bp_nano_pulse', itemId: 'Curegun_Nano', itemName: '纳米治愈脉冲枪', category: 'equipment', costCoins: 5200, costGems: 20, bonusPower: 210, materials: '纳米生物芯片 x3 + 能量电池 x2' },
+  { id: 'bp_phantom_sniper', itemId: 'Sniper_Phantom', itemName: '暗夜幽灵狙击步枪', category: 'equipment', costCoins: 8000, costGems: 40, bonusPower: 310, materials: '光学瞄准镜 x2 + 碳纤维枪托 x2' },
+  { id: 'bp_seraph_wing', itemId: 'Wing_Seraph', itemName: '炽天使光翼 · 改', category: 'equipment', costCoins: 9500, costGems: 50, bonusPower: 360, materials: '炽天使羽毛 x6 + 星辰秘银 x2' },
+  { id: 'bp_enhance_stone_box', itemId: 'Item_EnhanceBox', itemName: '传说强化石礼盒', category: 'items', costCoins: 3000, costGems: 10, bonusPower: 120, materials: '原矿结晶 x5' },
+];
+
+const EXPEDITION_STAGES = [
+  { id: 'stage_1', name: '第一关 · 荒漠前哨', bossName: '重装机甲 · 暴君', mapId: 'level1', hp: 8000, recPower: 1500, drop: '黄金战星金币 +2,500 · 强化石 x3' },
+  { id: 'stage_2', name: '第二关 · 炽热熔炉', bossName: '熔岩领主 · 赤焰督军', mapId: 'level11', hp: 14000, recPower: 1850, drop: '高纯度稳压剂 x2 · 远征勋章 x4' },
+  { id: 'stage_3', name: '第三关 · 迷雾神庙', bossName: '远古石像 · 魅影鬼王', mapId: 'level18', hp: 22000, recPower: 2200, drop: '精良武器图纸 x2 · 星币 +120' },
+  { id: 'stage_4', name: '第四关 · 极寒要塞', bossName: '冰霜巨龙 · 零度深渊', mapId: 'level25', hp: 32000, recPower: 2600, drop: '暗黑巨龙宠物碎片 x3 · 角色传承结晶 x1' },
+  { id: 'stage_5', name: '第五关 · 暗黑圣殿', bossName: '终焉主宰 · 阿瓦塔魔神', mapId: 'level40', hp: 48000, recPower: 3200, drop: '黄金AK47成品箱 · 宝石 +150 · 传说勋章' },
+];
+
 export default function LobbyFeatureModal({
   title,
   assets,
   character,
   onUpdateCharacter,
   onSelectBagItem,
+  onStartRoom,
   onStatus,
   onClose,
 }: LobbyFeatureModalProps) {
@@ -47,6 +66,27 @@ export default function LobbyFeatureModal({
 
   const [missions, setMissions] = useState<any[]>([]);
   const [enhancements, setEnhancements] = useState<any[]>([]);
+  const [enhanceSubTab, setEnhanceSubTab] = useState<'weaponUp' | 'manufacture' | 'inherit'>('weaponUp');
+  const [useStabilizer, setUseStabilizer] = useState(true);
+  const [sourceCard, setSourceCard] = useState('新兵造型卡 · Lv.10');
+  const [targetCard, setTargetCard] = useState('限定传说造型卡 · Lv.1');
+  const [useCrystalInherit, setUseCrystalInherit] = useState(true);
+
+  const [activitySubTab, setActivitySubTab] = useState<'luckdraw' | 'expedition' | 'rank'>(
+    title === '冒险远征' ? 'expedition' : title === '军衔' ? 'rank' : 'luckdraw'
+  );
+  const [luckDrawState, setLuckDrawState] = useState<any>({
+    position: 0,
+    laps: 0,
+    freeRollsLeft: 3,
+    lastDice: 0,
+    board: Array.from({ length: 42 }, (_, i) => ({
+      index: i,
+      type: i % 7 === 0 ? 'jackpot' : i % 3 === 0 ? 'gems' : 'coins',
+      label: i === 0 ? '起点' : i % 7 === 0 ? '至尊大奖' : i % 3 === 0 ? '宝石补给' : '金币袋',
+    })),
+  });
+
   const [shopTab, setShopTab] = useState<'weapons' | 'avatars' | 'wings' | 'items'>('weapons');
   const [auctionList, setAuctionList] = useState<any[]>([]);
   const [auctionItemName, setAuctionItemName] = useState('');
@@ -77,6 +117,10 @@ export default function LobbyFeatureModal({
   useEffect(() => {
     setToast('');
     setLoading(true);
+    if (title === '冒险远征') setActivitySubTab('expedition');
+    else if (title === '幸运寻宝') setActivitySubTab('luckdraw');
+    else if (title === '军衔') setActivitySubTab('rank');
+
     const loadModule = async () => {
       try {
         if (title === '公会') {
@@ -95,11 +139,18 @@ export default function LobbyFeatureModal({
         } else if (title === '排行榜') {
           const data = await apiFetch('/leaderboard');
           if (Array.isArray(data)) setLeaderboard(data);
-        } else if (title === '军衔' || title === '活动') {
-          const data = await apiFetch('/matches');
-          if (data) {
-            setMatchesData(data);
-            if (data.character) syncChar(data.character);
+        } else if (title === '军衔' || title === '活动' || title === '幸运寻宝' || title === '冒险远征') {
+          const [matchesRes, luckRes] = await Promise.allSettled([
+            apiFetch('/matches'),
+            apiFetch('/luckdraw/state'),
+          ]);
+          if (matchesRes.status === 'fulfilled' && matchesRes.value) {
+            setMatchesData(matchesRes.value);
+            if (matchesRes.value.character) syncChar(matchesRes.value.character);
+          }
+          if (luckRes.status === 'fulfilled' && luckRes.value) {
+            setLuckDrawState((prev: any) => ({ ...prev, ...luckRes.value }));
+            if (luckRes.value.character) syncChar(luckRes.value.character);
           }
         } else if (title === '好友') {
           const data = await apiFetch('/friends');
@@ -124,6 +175,13 @@ export default function LobbyFeatureModal({
     if (shopTab === 'wings') return all.filter((i) => i.attachment).slice(0, 16);
     return all.filter((i) => i.category === 'items' || i.category === 'gestures').slice(0, 16);
   }, [assets.items, shopTab]);
+
+  const avatarCardsList = useMemo(() => {
+    const cards = (assets.items || []).filter((i) => i.avatarCard).slice(0, 12);
+    return cards.length > 0
+      ? cards.map((c) => c.name)
+      : ['新兵造型卡 · Lv.10', '暗夜刺客卡 · Lv.15', '皇家护卫卡 · Lv.18', '限定传说造型卡 · Lv.1'];
+  }, [assets.items]);
 
   return (
     <div className="lobby-feature-shade" onClick={onClose}>
@@ -267,42 +325,172 @@ export default function LobbyFeatureModal({
             </div>
           )}
 
-          {/* 强化系统 */}
+          {/* 强化系统 (整合 weaponUp.lua + manufactureDepot.lua + playercardinherit.lua) */}
           {title === '强化' && (
-            <div className="lobby-feature-grid">
-              {enhancements.map((item: any) => {
-                const cost = (item.level + 1) * 1500;
-                return (
-                  <div key={item.slotKey} className="lobby-feature-card">
+            <>
+              <div className="lobby-feature-subtabs">
+                <button className={enhanceSubTab === 'weaponUp' ? 'active' : ''} onClick={() => setEnhanceSubTab('weaponUp')}>
+                  🔨 武器与部位强化 (weaponUp)
+                </button>
+                <button className={enhanceSubTab === 'manufacture' ? 'active' : ''} onClick={() => setEnhanceSubTab('manufacture')}>
+                  ⚙️ 军械制造工坊 (manufactureDepot)
+                </button>
+                <button className={enhanceSubTab === 'inherit' ? 'active' : ''} onClick={() => setEnhanceSubTab('inherit')}>
+                  🔮 角色卡属性传承 (cardInherit)
+                </button>
+              </div>
+
+              {enhanceSubTab === 'weaponUp' && (
+                <>
+                  <div className="lobby-feature-card" style={{ borderColor: '#38bdf8', marginBottom: 8 }}>
                     <div className="lobby-feature-card-info">
-                      <strong>{item.slotName} <span style={{ color: '#38bdf8' }}>+{item.level}</span></strong>
-                      <small>附加战力: +{item.bonusPower} · 附加生命: +{item.bonusHp}</small>
-                      <small style={{ color: '#fbbf24' }}>下级强化消耗: {cost} 金币 (成功率 100%)</small>
+                      <strong>高纯度强化稳压剂 (原版 weaponUp.lua 保护机制)</strong>
+                      <small>开启后每次强化额外消耗 15 宝石，保证 +5 以上高阶强化 100% 成功不掉级，并额外提升 +45 战斗力！</small>
                     </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#fde047', fontWeight: 700, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={useStabilizer} onChange={(e) => setUseStabilizer(e.target.checked)} />
+                      启用稳压剂保护
+                    </label>
+                  </div>
+                  <div className="lobby-feature-grid">
+                    {enhancements.map((item: any) => {
+                      const cost = (item.level + 1) * 1500;
+                      const baseRate = item.level < 5 ? 100 : Math.max(35, 100 - (item.level - 4) * 10);
+                      return (
+                        <div key={item.slotKey} className="lobby-feature-card">
+                          <div className="lobby-feature-card-info">
+                            <strong>{item.slotName} <span style={{ color: '#38bdf8' }}>+{item.level}</span></strong>
+                            <small>附加战力: +{item.bonusPower} · 附加生命: +{item.bonusHp}</small>
+                            <small style={{ color: '#fbbf24' }}>
+                              消耗: {cost} 金币{useStabilizer ? ' + 15 宝石' : ''} · 成功率: {useStabilizer ? '100% (稳压保护)' : `${baseRate}%`}
+                            </small>
+                          </div>
+                          <button
+                            className="lobby-feature-btn"
+                            disabled={item.level >= 15}
+                            onClick={async () => {
+                              try {
+                                const res = await apiFetch('/enhance', {
+                                  method: 'POST',
+                                  body: JSON.stringify({ slotKey: item.slotKey, useStabilizer }),
+                                });
+                                if (res?.character) syncChar(res.character);
+                                const refreshed = await apiFetch('/enhance');
+                                if (refreshed?.enhancements) setEnhancements(refreshed.enhancements);
+                                notify(res?.message || '强化成功！');
+                              } catch (e: any) {
+                                notify(e.message || '强化失败');
+                              }
+                            }}
+                          >
+                            {item.level >= 15 ? '已满级' : '强化 +1'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {enhanceSubTab === 'manufacture' && (
+                <div className="lobby-feature-grid">
+                  {MANUFACTURE_BLUEPRINTS.map((bp) => (
+                    <div key={bp.id} className="lobby-feature-card">
+                      <div className="lobby-feature-card-info">
+                        <strong>{bp.itemName} <small style={{ color: '#38bdf8' }}>({bp.id})</small></strong>
+                        <small>所需材料：{bp.materials}</small>
+                        <small style={{ color: '#fbbf24' }}>
+                          锻造费用：{bp.costCoins} 金币 + {bp.costGems} 宝石 · 永久战力 +{bp.bonusPower}
+                        </small>
+                      </div>
+                      <button
+                        className="lobby-feature-btn"
+                        onClick={async () => {
+                          try {
+                            const res = await apiFetch('/manufacture', {
+                              method: 'POST',
+                              body: JSON.stringify({
+                                recipeId: bp.id,
+                                itemId: bp.itemId,
+                                itemName: bp.itemName,
+                                category: bp.category,
+                                costCoins: bp.costCoins,
+                                costGems: bp.costGems,
+                                bonusPower: bp.bonusPower,
+                              }),
+                            });
+                            if (res?.character) syncChar(res.character);
+                            notify(res?.message || `制造工坊成功锻造【${bp.itemName}】！`);
+                          } catch (e: any) {
+                            notify(e.message || '制造失败');
+                          }
+                        }}
+                      >
+                        立即锻造合成
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {enhanceSubTab === 'inherit' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div className="lobby-feature-card" style={{ borderColor: '#c084fc' }}>
+                    <div className="lobby-feature-card-info">
+                      <strong>角色卡属性传承室 (还原 playercardinherit.lua)</strong>
+                      <small>将旧角色造型卡的强化等级、生命加成与战斗潜能无损转移至新造型卡，立即获得高额战力与经验突破！</small>
+                    </div>
+                  </div>
+                  <div className="lobby-feature-row-form" style={{ flexWrap: 'wrap', gap: 10 }}>
+                    <label style={{ color: '#cbd5e1', fontSize: 13 }}>
+                      源造型卡 (提供经验)：
+                      <select
+                        value={sourceCard}
+                        onChange={(e) => setSourceCard(e.target.value)}
+                        style={{ marginLeft: 8, padding: '6px 10px', borderRadius: 6, background: '#0f172a', color: '#fff', border: '1px solid #334155' }}
+                      >
+                        {avatarCardsList.map((c) => <option key={`src-${c}`} value={c}>{c}</option>)}
+                      </select>
+                    </label>
+                    <label style={{ color: '#cbd5e1', fontSize: 13 }}>
+                      目标造型卡 (接受传承)：
+                      <select
+                        value={targetCard}
+                        onChange={(e) => setTargetCard(e.target.value)}
+                        style={{ marginLeft: 8, padding: '6px 10px', borderRadius: 6, background: '#0f172a', color: '#fff', border: '1px solid #334155' }}
+                      >
+                        {avatarCardsList.map((c) => <option key={`dst-${c}`} value={c}>{c}</option>)}
+                      </select>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#fde047', fontSize: 13, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={useCrystalInherit} onChange={(e) => setUseCrystalInherit(e.target.checked)} />
+                      使用【至尊传承结晶】(100% 完美无损传承 · 消耗 80 宝石，否则消耗 5000 金币 80% 传承)
+                    </label>
                     <button
                       className="lobby-feature-btn"
-                      disabled={item.level >= 15}
                       onClick={async () => {
                         try {
-                          const res = await apiFetch('/enhance', {
+                          const res = await apiFetch('/card-inherit', {
                             method: 'POST',
-                            body: JSON.stringify({ slotKey: item.slotKey }),
+                            body: JSON.stringify({
+                              sourceCardId: sourceCard,
+                              targetCardId: targetCard,
+                              useCrystal: useCrystalInherit,
+                            }),
                           });
                           if (res?.character) syncChar(res.character);
-                          const refreshed = await apiFetch('/enhance');
-                          if (refreshed?.enhancements) setEnhancements(refreshed.enhancements);
-                          notify(res?.message || '强化成功！');
+                          notify(res?.message || '角色卡属性传承完成！');
                         } catch (e: any) {
-                          notify(e.message || '强化失败');
+                          notify(e.message || '传承失败');
                         }
                       }}
                     >
-                      {item.level >= 15 ? '已满级' : '强化 +1'}
+                      🔮 执行属性传承
                     </button>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* 商城系统 */}
@@ -495,54 +683,194 @@ export default function LobbyFeatureModal({
             </>
           )}
 
-          {/* 军衔与活动系统 */}
-          {(title === '军衔' || title === '活动') && (
+          {/* 军衔、活动、幸运寻宝 (luckDraw.lua) 与 冒险远征 (expedition.lua) */}
+          {(title === '军衔' || title === '活动' || title === '幸运寻宝' || title === '冒险远征') && (
             <>
-              <div className="lobby-feature-card" style={{ borderColor: '#38bdf8' }}>
-                <div className="lobby-feature-card-info">
-                  <strong>当前军衔：{matchesData.rankTitle} （积分：{character.rating ?? 1200}）</strong>
-                  <small>{matchesData.rankDesc || '参与练习赛、快速匹配或击败敌人即可提升军衔积分'}</small>
-                  <small style={{ color: '#fbbf24' }}>
-                    生涯战绩：{matchesData.totalGames} 场 · 胜场：{matchesData.totalWins} · 累计击败：{matchesData.totalKills}
-                  </small>
-                </div>
-                <button
-                  className="lobby-feature-btn"
-                  onClick={async () => {
-                    const res = await apiFetch('/character/online-reward', { method: 'POST' });
-                    if (res?.character) syncChar(res.character);
-                    notify('成功领取军衔战备津贴：+2500 金币、+20 宝石！');
-                  }}
-                >
-                  领取军衔津贴
+              <div className="lobby-feature-subtabs">
+                <button className={activitySubTab === 'luckdraw' ? 'active' : ''} onClick={() => setActivitySubTab('luckdraw')}>
+                  🎲 幸运寻宝大转盘 (luckDraw 42格)
+                </button>
+                <button className={activitySubTab === 'expedition' ? 'active' : ''} onClick={() => setActivitySubTab('expedition')}>
+                  👹 冒险远征首领讨伐 (expedition 5关)
+                </button>
+                <button className={activitySubTab === 'rank' ? 'active' : ''} onClick={() => setActivitySubTab('rank')}>
+                  🎖️ 生涯军衔与战绩
                 </button>
               </div>
 
-              {matchesData.records?.length > 0 && (
-                <table className="lobby-feature-table">
-                  <thead>
-                    <tr>
-                      <th>模式</th>
-                      <th>地图</th>
-                      <th>结果</th>
-                      <th>击败/阵亡</th>
-                      <th>奖励金币</th>
-                      <th>积分变化</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {matchesData.records.map((rec: any, i: number) => (
-                      <tr key={rec.ID || i}>
-                        <td>{rec.modeName}</td>
-                        <td>{rec.mapName}</td>
-                        <td style={{ color: rec.result === 'Victory' ? '#34d399' : '#f87171', fontWeight: 700 }}>{rec.result}</td>
-                        <td>{rec.kills} / {rec.deaths}</td>
-                        <td>+{rec.rewardCoins}</td>
-                        <td>{rec.ratingDelta >= 0 ? `+${rec.ratingDelta}` : rec.ratingDelta}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {activitySubTab === 'luckdraw' && (
+                <div>
+                  <div className="lobby-feature-card" style={{ borderColor: '#fbbf24', marginBottom: 10 }}>
+                    <div className="lobby-feature-card-info">
+                      <strong>
+                        🎲 幸运寻宝 42 格环游棋盘 (还原 gui/lua/luckDraw.lua) · 当前位置：第 {(luckDrawState.position ?? 0) + 1}/42 格 · 已完成 {luckDrawState.laps ?? 0} 圈
+                      </strong>
+                      <small>
+                        今日剩余免费次数：{luckDrawState.freeRollsLeft ?? 0} 次（超出后每次消耗 20 宝石）。每完成一整圈额外奖赏 +10,000 金币与 +50 宝石！
+                      </small>
+                    </div>
+                    <button
+                      className="lobby-feature-btn"
+                      onClick={async () => {
+                        try {
+                          const res = await apiFetch('/luckdraw/roll', { method: 'POST' });
+                          if (res) {
+                            setLuckDrawState((prev: any) => ({ ...prev, ...res }));
+                            if (res.character) syncChar(res.character);
+                            notify(res.message || `投出 ${res.dice} 点，获得丰厚寻宝奖励！`);
+                          }
+                        } catch (e: any) {
+                          notify(e.message || '投掷失败');
+                        }
+                      }}
+                    >
+                      🎲 投掷寻宝骰子 {luckDrawState.lastDice ? `(上次: ${luckDrawState.lastDice}点)` : ''}
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+                      gap: 6,
+                      maxHeight: 300,
+                      overflowY: 'auto',
+                      padding: 4,
+                    }}
+                  >
+                    {(luckDrawState.board || []).slice(0, 42).map((tile: any, idx: number) => {
+                      const isCurrent = (luckDrawState.position ?? 0) === idx;
+                      const isJackpot = idx % 7 === 0;
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            padding: '7px 6px',
+                            borderRadius: 8,
+                            border: isCurrent
+                              ? '2px solid #facc15'
+                              : isJackpot
+                              ? '1px solid rgba(244,114,182,0.6)'
+                              : '1px solid rgba(148,163,184,0.25)',
+                            background: isCurrent
+                              ? 'rgba(250,204,21,0.24)'
+                              : isJackpot
+                              ? 'rgba(131,24,67,0.35)'
+                              : 'rgba(15,23,42,0.75)',
+                            textAlign: 'center',
+                            fontSize: 11,
+                          }}
+                        >
+                          <div style={{ fontWeight: 800, color: isCurrent ? '#fde047' : '#94a3b8' }}>
+                            #{idx + 1} {isCurrent ? '📍当前' : ''}
+                          </div>
+                          <div style={{ color: isJackpot ? '#f472b6' : '#e2e8f0', fontWeight: 700, marginTop: 2 }}>
+                            {tile.name || tile.label || (isJackpot ? '🎁 至尊秘宝' : idx % 2 === 0 ? '🪙 金币袋' : '💎 宝石箱')}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {activitySubTab === 'expedition' && (
+                <div className="lobby-feature-grid">
+                  {EXPEDITION_STAGES.map((st) => (
+                    <div key={st.id} className="lobby-feature-card" style={{ borderColor: 'rgba(248,113,113,0.45)' }}>
+                      <div className="lobby-feature-card-info">
+                        <strong>👹 {st.name} · <span style={{ color: '#f87171' }}>{st.bossName}</span></strong>
+                        <small>首领生命值：{st.hp.toLocaleString()} HP · 推荐战力：{st.recPower} · 作战地图：{st.mapId}</small>
+                        <small style={{ color: '#fbbf24' }}>通关掉落：{st.drop}</small>
+                      </div>
+                      <button
+                        className="lobby-feature-btn"
+                        onClick={async () => {
+                          try {
+                            const res = await apiFetch('/expedition/start', {
+                              method: 'POST',
+                              body: JSON.stringify({ stageId: st.id }),
+                            });
+                            if (res?.room && onStartRoom) {
+                              onClose();
+                              onStartRoom(res.room);
+                              return;
+                            }
+                          } catch {}
+                          if (onStartRoom) {
+                            onClose();
+                            onStartRoom({
+                              id: `expedition-${st.id}`,
+                              name: st.name,
+                              password: '',
+                              maxPlayers: 4,
+                              balanceTeams: false,
+                              modeId: 'boss',
+                              modeName: '远征首领战',
+                              mapId: st.mapId,
+                              mapName: st.name,
+                            });
+                          } else {
+                            notify(`已解锁远征关卡【${st.name}】！`);
+                          }
+                        }}
+                      >
+                        ⚔️ 立即远征讨伐
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {activitySubTab === 'rank' && (
+                <>
+                  <div className="lobby-feature-card" style={{ borderColor: '#38bdf8' }}>
+                    <div className="lobby-feature-card-info">
+                      <strong>当前军衔：{matchesData.rankTitle} （积分：{character.rating ?? 1200}）</strong>
+                      <small>{matchesData.rankDesc || '参与练习赛、快速匹配或击败敌人即可提升军衔积分'}</small>
+                      <small style={{ color: '#fbbf24' }}>
+                        生涯战绩：{matchesData.totalGames} 场 · 胜场：{matchesData.totalWins} · 累计击败：{matchesData.totalKills}
+                      </small>
+                    </div>
+                    <button
+                      className="lobby-feature-btn"
+                      onClick={async () => {
+                        const res = await apiFetch('/character/online-reward', { method: 'POST' });
+                        if (res?.character) syncChar(res.character);
+                        notify('成功领取军衔战备津贴：+2500 金币、+20 宝石！');
+                      }}
+                    >
+                      领取军衔津贴
+                    </button>
+                  </div>
+
+                  {matchesData.records?.length > 0 && (
+                    <table className="lobby-feature-table">
+                      <thead>
+                        <tr>
+                          <th>模式</th>
+                          <th>地图</th>
+                          <th>结果</th>
+                          <th>击败/阵亡</th>
+                          <th>奖励金币</th>
+                          <th>积分变化</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {matchesData.records.map((rec: any, i: number) => (
+                          <tr key={rec.ID || i}>
+                            <td>{rec.modeName}</td>
+                            <td>{rec.mapName}</td>
+                            <td style={{ color: rec.result === 'Victory' ? '#34d399' : '#f87171', fontWeight: 700 }}>{rec.result}</td>
+                            <td>{rec.kills} / {rec.deaths}</td>
+                            <td>+{rec.rewardCoins}</td>
+                            <td>{rec.ratingDelta >= 0 ? `+${rec.ratingDelta}` : rec.ratingDelta}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </>
               )}
             </>
           )}

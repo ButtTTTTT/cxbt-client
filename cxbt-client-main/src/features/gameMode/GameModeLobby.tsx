@@ -9,6 +9,7 @@ type GameModeLobbyProps = {
   weaponIds?: string[];
   onStatus: (message: string) => void;
   onPractice: (joinedRoom?: any) => void;
+  onOpenExpedition?: () => void;
 };
 
 type GameMode = {
@@ -39,7 +40,7 @@ function buttonArt(assets: LobbyAssets, key: string): CSSProperties {
   } as CSSProperties;
 }
 
-export default function GameModeLobby({ assets, weaponIds = [], onStatus, onPractice }: GameModeLobbyProps) {
+export default function GameModeLobby({ assets, weaponIds = [], onStatus, onPractice, onOpenExpedition }: GameModeLobbyProps) {
   const startQuickMatch = async (modeId = 'team', modeName = '团队', mapId = 'level1', mapName = '训练场') => {
     try {
       onStatus('正在为您快速匹配战局…');
@@ -72,7 +73,10 @@ export default function GameModeLobby({ assets, weaponIds = [], onStatus, onPrac
           if (mode.id === '01') onPractice();
           else if (mode.id === '02') { onStatus('战场模式 · 已进入凌云要塞战区大厅'); onPractice(); }
           else if (mode.id === '03') window.location.href = `${import.meta.env.BASE_URL}sandbox`;
-          else if (mode.id === '04') void startQuickMatch('occupy', '占点', 'level1', '远征要塞');
+          else if (mode.id === '04') {
+            if (onOpenExpedition) onOpenExpedition();
+            else void startQuickMatch('boss', '远征首领战', 'level1', '荒漠前哨');
+          }
         }}>
         <span>{mode.label}</span>
       </button>)}

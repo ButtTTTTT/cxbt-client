@@ -1,0 +1,520 @@
+<Window x:Class="PDEView.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:PDEView"
+        xmlns:vm="clr-namespace:PDEView.ViewModels"
+        mc:Ignorable="d"
+        Title="PDEView - PDE 文件查看器 v1.0.0" Height="700" Width="1200"
+        WindowStartupLocation="CenterScreen"
+        Background="White"
+        FontFamily="Segoe UI"
+        AllowDrop="True"
+        Drop="Window_Drop"
+        DragOver="Window_DragOver">
+
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+
+    <Window.Resources>
+        <!-- FC风格主题 - 白色背景+橙色强调 -->
+        <SolidColorBrush x:Key="PrimaryBrush" Color="#FF6A00"/>
+        <SolidColorBrush x:Key="PrimaryLightBrush" Color="#FF8C3A"/>
+        <SolidColorBrush x:Key="PrimaryDarkBrush" Color="#CC5500"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#FF4500"/>
+        <SolidColorBrush x:Key="AccentLightBrush" Color="#FF6B4A"/>
+        <SolidColorBrush x:Key="DarkBgBrush" Color="#F5F5F5"/>
+        <SolidColorBrush x:Key="DarkPanelBrush" Color="#FAFAFA"/>
+        <SolidColorBrush x:Key="DarkCardBrush" Color="White"/>
+        <SolidColorBrush x:Key="DarkBorderBrush" Color="#E0E0E0"/>
+        <SolidColorBrush x:Key="LightTextBrush" Color="#333333"/>
+        <SolidColorBrush x:Key="GrayTextBrush" Color="#666666"/>
+        <SolidColorBrush x:Key="DimTextBrush" Color="#999999"/>
+
+        <!-- 工具栏按钮样式 -->
+        <Style x:Key="ToolBarButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource LightTextBrush}"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="Transparent"
+                                BorderThickness="0"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource PrimaryBrush}"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.4"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- 导航按钮样式 -->
+        <Style x:Key="NavButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource DarkCardBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource LightTextBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource DarkBorderBrush}"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource PrimaryBrush}"/>
+                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.3"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- 预览标签样式 -->
+        <Style x:Key="PreviewTabStyle" TargetType="TabItem">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border Name="Border" 
+                                Background="{StaticResource DarkCardBrush}" 
+                                BorderBrush="{StaticResource DarkBorderBrush}" 
+                                BorderThickness="1,1,1,0"
+                                CornerRadius="4,4,0,0"
+                                Padding="14,8"
+                                Margin="0,0,3,0">
+                            <ContentPresenter x:Name="ContentSite"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Center"
+                                              ContentSource="Header"
+                                              TextElement.Foreground="{StaticResource GrayTextBrush}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="{StaticResource DarkPanelBrush}"/>
+                                <Setter TargetName="Border" Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
+                                <Setter TargetName="Border" Property="BorderThickness" Value="2,2,2,0"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="{StaticResource PrimaryLightBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ListView 行样式 -->
+        <Style x:Key="ListViewItemStyle" TargetType="ListViewItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{StaticResource LightTextBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListViewItem">
+                        <Border x:Name="Bd" 
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="0"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="4"
+                                Margin="2,1">
+                            <GridViewRowPresenter Columns="{Binding Path=View.Columns, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                  SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <!-- 鼠标悬停：浅橙色背景 -->
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FFF0E0"/>
+                                <Setter Property="Foreground" Value="{StaticResource PrimaryDarkBrush}"/>
+                            </Trigger>
+                            <!-- 选中状态：浅橙色加深 -->
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FFD4A8"/>
+                                <Setter Property="Foreground" Value="{StaticResource PrimaryDarkBrush}"/>
+                            </Trigger>
+                            <!-- 选中+悬停：更深的浅橙色 -->
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsSelected" Value="True"/>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Bd" Property="Background" Value="#FFBF80"/>
+                                <Setter Property="Foreground" Value="{StaticResource PrimaryDarkBrush}"/>
+                            </MultiTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- GridView 列头样式 -->
+        <Style x:Key="GridViewColumnHeaderStyle" TargetType="GridViewColumnHeader">
+            <Setter Property="Background" Value="{StaticResource DarkPanelBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="8,10"/>
+            <Setter Property="BorderBrush" Value="{StaticResource PrimaryDarkBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,2"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GridViewColumnHeader">
+                        <Grid>
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter/>
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{StaticResource DarkCardBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <local:EntryIconConverter x:Key="IconConverter"/>
+        <local:EntryIconTooltipConverter x:Key="IconTooltipConverter"/>
+        <local:BlockCountConverter x:Key="BlockCountConverter"/>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 标题栏 -->
+        <Border Grid.Row="0" Background="{StaticResource DarkPanelBrush}" BorderBrush="{StaticResource DarkBorderBrush}" BorderThickness="0,0,0,1">
+            <Grid Margin="15,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Logo -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Background="{StaticResource PrimaryBrush}" CornerRadius="4" Padding="10,6" Margin="0,0,15,0">
+                        <TextBlock Text="F/C" FontSize="16" FontWeight="Bold" Foreground="White"/>
+                    </Border>
+                    <TextBlock Text="资源查看器" FontSize="16" Foreground="{StaticResource GrayTextBrush}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Border Background="{StaticResource PrimaryLightBrush}" CornerRadius="3" Padding="8,3" Margin="0,0,0,0">
+                        <TextBlock Text="{Binding CurrentExtractModeText}" FontSize="11" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
+                    </Border>
+                </StackPanel>
+
+                <!-- 工具栏 -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Style="{StaticResource ToolBarButtonStyle}" Command="{Binding OpenCommand}" ToolTip="打开 PDE 文件 (Ctrl+O)">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📂" FontSize="14" Margin="0,0,6,0"/>
+                            <TextBlock Text="打开" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Style="{StaticResource ToolBarButtonStyle}" Command="{Binding CloseCommand}" ToolTip="关闭文件">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="✖" FontSize="14" Margin="0,0,6,0"/>
+                            <TextBlock Text="关闭" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Border Width="1" Background="{StaticResource DarkBorderBrush}" Margin="8,5"/>
+
+                    <Button Style="{StaticResource ToolBarButtonStyle}" Command="{Binding ExportCommand}" ToolTip="导出选中 (Ctrl+E)">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📤" FontSize="14" Margin="0,0,6,0"/>
+                            <TextBlock Text="导出" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Style="{StaticResource ToolBarButtonStyle}" Command="{Binding ExportAllCommand}" ToolTip="导出全部文件（当前模式）">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📥" FontSize="14" Margin="0,0,6,0"/>
+                            <TextBlock Text="全部导出" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Style="{StaticResource ToolBarButtonStyle}" Command="{Binding ExportWithOptionsCommand}" ToolTip="导出选项（请先打开文件）">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⚙️" FontSize="14" Margin="0,0,6,0"/>
+                            <TextBlock Text="导出选项" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Border Width="1" Background="{StaticResource DarkBorderBrush}" Margin="8,5"/>
+
+                    <Button Style="{StaticResource ToolBarButtonStyle}" Command="{Binding RefreshCommand}" ToolTip="刷新 (F5)">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🔄" FontSize="14" Margin="0,0,6,0"/>
+                            <TextBlock Text="刷新" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 导航栏 -->
+        <Border Grid.Row="1" Background="{StaticResource DarkCardBrush}" BorderBrush="{StaticResource DarkBorderBrush}" BorderThickness="0,0,0,1" Padding="15,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,15,0">
+                    <Button Style="{StaticResource NavButtonStyle}" Content="◀" 
+                            Command="{Binding GoBackCommand}" ToolTip="后退 (Alt+Left)" Width="32"/>
+                    <Button Style="{StaticResource NavButtonStyle}" Content="▶" 
+                            Command="{Binding GoForwardCommand}" ToolTip="前进 (Alt+Right)" Width="32"/>
+                    <Button Style="{StaticResource NavButtonStyle}" Content="▲" 
+                            Command="{Binding GoUpCommand}" ToolTip="上级 (Backspace)" Width="32"/>
+                </StackPanel>
+
+                <Border Grid.Column="1" Background="{StaticResource DarkPanelBrush}" CornerRadius="4" Padding="10,6" BorderBrush="{StaticResource DarkBorderBrush}" BorderThickness="1">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="🏠 根目录" Padding="8,4" Margin="0,0,5,0"
+                                    Command="{Binding NavigateToRootCommand}"
+                                    ToolTip="根目录"
+                                    Background="Transparent" BorderThickness="0" Cursor="Hand" FontSize="13"
+                                    Foreground="{StaticResource PrimaryBrush}" FontWeight="SemiBold"/>
+                            <ItemsControl ItemsSource="{Binding BreadcrumbPath}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="›" Margin="5,0" Foreground="{StaticResource GrayTextBrush}" VerticalAlignment="Center" FontSize="14"/>
+                                            <Button Content="{Binding Name}" Padding="8,4"
+                                                    Command="{Binding NavigateCommand}"
+                                                    CommandParameter="{Binding .}"
+                                                    Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                                    Foreground="{StaticResource LightTextBrush}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- 主内容 -->
+        <Grid Grid.Row="2" Margin="15">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 文件列表 -->
+            <Border Grid.Column="0" Background="{StaticResource DarkPanelBrush}" CornerRadius="4" BorderBrush="{StaticResource DarkBorderBrush}" BorderThickness="1">
+                <Grid>
+                    <ListView x:Name="FileListView"
+                              ItemsSource="{Binding CurrentDirectoryEntries}"
+                              SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                              BorderThickness="0"
+                              Background="Transparent"
+                              VirtualizingStackPanel.IsVirtualizing="True"
+                              VirtualizingStackPanel.VirtualizationMode="Recycling"
+                              SelectionMode="Extended"
+                              SelectionChanged="FileListView_SelectionChanged"
+                              GridViewColumnHeader.Click="FileListView_HeaderClick"
+                              MouseDoubleClick="FileListView_MouseDoubleClick"
+                              ItemContainerStyle="{StaticResource ListViewItemStyle}">
+                        <ListView.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="📤 导出" Command="{Binding ExportCommand}"/>
+                                <MenuItem Header="✏️ 重命名 (F2)" Click="MenuItem_Rename_Click"/>
+                            </ContextMenu>
+                        </ListView.ContextMenu>
+                        <ListView.View>
+                            <GridView ColumnHeaderContainerStyle="{StaticResource GridViewColumnHeaderStyle}">
+                                <GridViewColumn Header="" Width="35">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding ., Converter={StaticResource IconConverter}}" FontSize="15" Foreground="{StaticResource PrimaryBrush}" ToolTip="{Binding ., Converter={StaticResource IconTooltipConverter}}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="名称" Width="200">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}" FontWeight="Medium" Foreground="{StaticResource LightTextBrush}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="大小" Width="90">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding FormattedSize}" HorizontalAlignment="Right" Foreground="{StaticResource GrayTextBrush}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="块数" Width="60">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding BlockCount, Converter={StaticResource BlockCountConverter}}" HorizontalAlignment="Right" Foreground="{StaticResource GrayTextBrush}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="修改时间" Width="130">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding FormattedTime}" Foreground="{StaticResource DimTextBrush}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+
+                    <!-- 空状态提示 -->
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                                Visibility="{Binding HasFile, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
+                        <TextBlock Text="🎯" FontSize="64" HorizontalAlignment="Center" Opacity="0.4"/>
+                        <TextBlock Text="拖拽 PDE 文件到此处" HorizontalAlignment="Center"
+                                   Margin="0,15,0,0" Foreground="{StaticResource GrayTextBrush}" FontSize="16"/>
+                        <TextBlock Text="或点击「打开」浏览文件" HorizontalAlignment="Center"
+                                   Margin="0,5,0,0" Foreground="{StaticResource DimTextBrush}" FontSize="13"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch"
+                          Background="Transparent" ShowsPreview="True"/>
+
+            <!-- 预览面板 -->
+            <Border Grid.Column="2" Background="{StaticResource DarkPanelBrush}" CornerRadius="4" Padding="10" BorderBrush="{StaticResource DarkBorderBrush}" BorderThickness="1">
+                <Grid>
+                    <Grid Visibility="{Binding SelectedEntry, Converter={StaticResource NotNullToVisibilityConverter}}">
+                        <Border Background="{StaticResource DarkCardBrush}" BorderBrush="{StaticResource DarkBorderBrush}" BorderThickness="1" CornerRadius="4"
+                                Visibility="{Binding SelectedEntry.IsFile, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TabControl BorderThickness="0" Padding="0">
+                                <TabItem Header="📦 Cache 十六进制" Style="{StaticResource PreviewTabStyle}" ToolTip="原始数据（XOR 解密，无 LZ77 解压）">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8">
+                                        <TextBox Text="{Binding CacheHexContent, Mode=OneWay}"
+                                                 IsReadOnly="True"
+                                                 Background="#F8F8F8"
+                                                 Foreground="#CC5500"
+                                                 FontFamily="Consolas, Monaco, monospace"
+                                                 FontSize="12"
+                                                 BorderThickness="0"
+                                                 TextWrapping="NoWrap"
+                                                 AcceptsReturn="True"
+                                                 VerticalScrollBarVisibility="Disabled"
+                                                 HorizontalScrollBarVisibility="Disabled"/>
+                                    </ScrollViewer>
+                                </TabItem>
+
+                                <TabItem Header="🔓 LZ77 十六进制" Style="{StaticResource PreviewTabStyle}" ToolTip="LZ77 解压数据（仅 .cache 文件）">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8">
+                                        <TextBox Text="{Binding LZ77HexContent, Mode=OneWay}"
+                                                 IsReadOnly="True"
+                                                 Background="#F8F8F8"
+                                                 Foreground="#0066CC"
+                                                 FontFamily="Consolas, Monaco, monospace"
+                                                 FontSize="12"
+                                                 BorderThickness="0"
+                                                 TextWrapping="NoWrap"
+                                                 AcceptsReturn="True"
+                                                 VerticalScrollBarVisibility="Disabled"
+                                                 HorizontalScrollBarVisibility="Disabled"/>
+                                    </ScrollViewer>
+                                </TabItem>
+
+                                <TabItem Header="📝 文本" Style="{StaticResource PreviewTabStyle}">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8">
+                                        <TextBox Text="{Binding TextContent, Mode=OneWay}"
+                                                 IsReadOnly="True"
+                                                 Background="#F8F8F8"
+                                                 Foreground="{StaticResource LightTextBrush}"
+                                                 FontFamily="Consolas, Monaco, monospace"
+                                                 FontSize="12"
+                                                 BorderThickness="0"
+                                                 TextWrapping="NoWrap"
+                                                 AcceptsReturn="True"
+                                                 VerticalScrollBarVisibility="Disabled"
+                                                 HorizontalScrollBarVisibility="Disabled"/>
+                                    </ScrollViewer>
+                                </TabItem>
+                            </TabControl>
+                        </Border>
+                    </Grid>
+
+                    <!-- 空预览提示 -->
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                                Visibility="{Binding SelectedEntry, Converter={StaticResource NullToVisibilityConverter}}">
+                        <TextBlock Text="👁️" FontSize="64" HorizontalAlignment="Center" Opacity="0.4"/>
+                        <TextBlock Text="选择文件以预览" HorizontalAlignment="Center"
+                                   Margin="0,15,0,0" Foreground="{StaticResource GrayTextBrush}" FontSize="16"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- 状态栏 -->
+        <Border Grid.Row="3" Background="{StaticResource PrimaryBrush}" Padding="15,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="{Binding StatusMessage}"
+                           Foreground="White" VerticalAlignment="Center" FontSize="13"/>
+                <TextBlock Grid.Column="2" Text="{Binding FileName}"
+                           Foreground="#FFE0D0" VerticalAlignment="Center" FontSize="13"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

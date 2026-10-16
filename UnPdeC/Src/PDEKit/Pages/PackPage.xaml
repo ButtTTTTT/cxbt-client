@@ -1,0 +1,97 @@
+<Page x:Class="PDEKit.Pages.PackPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:converters="clr-namespace:PDEKit.Converters"
+      mc:Ignorable="d"
+      d:DesignHeight="700" d:DesignWidth="850"
+      Title="打包">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="32,28,32,32">
+            <!-- 页面标题 -->
+            <TextBlock Text="PDE 打包" Style="{StaticResource PageTitleStyle}" />
+            <TextBlock Text="将资源目录打包为 .pde 文件，或生成 .cache 文件"
+                       Style="{StaticResource PageSubtitleStyle}" />
+
+            <!-- PDE 打包卡片 -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                CornerRadius="4" Padding="6" Margin="0,0,10,0">
+                            <TextBlock Text="&#xE8E5;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                       VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Text="PDE 打包" Style="{StaticResource CardTitleStyle}" />
+                    </StackPanel>
+                    <TextBlock Text="将资源目录打包为 .pde 文件"
+                               Style="{StaticResource DescriptionTextStyle}" />
+
+                    <TextBlock Text="资源目录" Style="{StaticResource LabelTextStyle}" />
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="PackInputDir" Grid.Column="0"
+                                 converters:Watermark.Text="拖入资源目录..."
+                                 IsReadOnly="True"
+                                 Margin="0,0,8,0" />
+                        <Button Grid.Column="1" Content="浏览"
+                                Style="{StaticResource SecondaryButtonStyle}" />
+                    </Grid>
+
+                    <Button Content="&#xE72C;  开始打包"
+                            Style="{StaticResource AccentButtonStyle}"
+                            HorizontalAlignment="Left" />
+                </StackPanel>
+            </Border>
+
+            <!-- Cache 打包卡片 -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                CornerRadius="4" Padding="6" Margin="0,0,10,0">
+                            <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                       VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Text="Cache 打包" Style="{StaticResource CardTitleStyle}" />
+                    </StackPanel>
+                    <TextBlock Text="将普通文件打包为 .cache 文件（自动计算 CRC32 校验值）"
+                               Style="{StaticResource DescriptionTextStyle}" />
+
+                    <TextBlock Text="资源根目录" Style="{StaticResource LabelTextStyle}" />
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="ReCacheRootDir" Grid.Column="0"
+                                 converters:Watermark.Text="选择资源根目录..."
+                                 IsReadOnly="True"
+                                 Margin="0,0,8,0" />
+                        <Button Grid.Column="1" Content="浏览"
+                                Style="{StaticResource SecondaryButtonStyle}" />
+                    </Grid>
+
+                    <TextBlock Text="参考文件" Style="{StaticResource LabelTextStyle}" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="ReCacheRefFile" Grid.Column="0"
+                                 converters:Watermark.Text="选择参考 .cache 文件..."
+                                 IsReadOnly="True"
+                                 Margin="0,0,8,0" />
+                        <Button Grid.Column="1" Content="浏览"
+                                Style="{StaticResource SecondaryButtonStyle}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

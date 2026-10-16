@@ -37,6 +37,7 @@ func main() {
 	})
 
 	RegisterRoutes(r)
+	RegisterPdeFeatureRoutes(r)
 	r.GET("/ws", ServeWs)
 	r.GET("/webrtc", ServeWebRTC)
 

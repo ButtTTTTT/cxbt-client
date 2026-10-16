@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>偏移计算 / OffSet Calc</title>
+    <meta name="author" content="letleon">
+    <meta name="author" content="Claude">
+    <style>
+        body {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 10px 15px 20px;
+            font-family: Arial, sans-serif;
+            background-color: #f7f9fc;
+            color: #333;
+        }
+
+        .ovalbox {
+            text-align: center;
+            background-color: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+        }
+
+        .title {
+            font-size: 60px;
+            font-weight: bold;
+            margin: 15px 0 0 0;
+            color: #2c3e50;
+        }
+
+        .subtitle {
+            font-size: 30px;
+            font-weight: bold;
+            margin: 0 0 40px 0;
+            color: #2c3e50;
+        }
+
+        .ovalinputs {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .valinputleft,
+        .valinputright {
+            background-color: #f1f1f1;
+            border-radius: 10px;
+            padding: 15px 0;
+            flex: 1;
+            min-width: 250px;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .valinputleft {
+            background-color: #e8f4fd;
+        }
+
+        .valinputright {
+            background-color: #f0f5e9;
+        }
+
+        .valinputleft:focus-within {
+            background-color: #d6e1fc;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 2px rgba(66, 133, 244, 0.25);
+        }
+
+        .valinputright:focus-within {
+            background-color: #e4f2d9;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 2px rgba(76, 175, 80, 0.25);
+        }
+
+        .valinputleft p {
+            color: #2c6bac;
+        }
+
+        .valinputright p {
+            color: #3c7d40;
+        }
+
+        .valinputleft:focus-within,
+        .valinputright:focus-within {
+            background-color: #fef1b6;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 2px rgba(66, 133, 244, 0.25);
+        }
+
+        .valinputleft p,
+        .valinputright p {
+            font-size: 18px;
+            font-weight: bold;
+            padding: 0 20px 10px;
+            margin: 0;
+            text-align: left;
+            color: #5a6474;
+        }
+
+        .valinputleft input,
+        .valinputright input {
+            font-size: 40px;
+            border: 0;
+            background-color: transparent;
+            outline: none;
+            text-align: center;
+            width: 90%;
+            padding: 5px 0;
+            font-family: 'Consolas', monospace;
+        }
+
+        .valinputfh {
+            font-size: 40px;
+            cursor: pointer;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #4a90e2;
+            color: white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .valinputfh:hover {
+            background-color: #3a7bc8;
+            transform: scale(1.05);
+        }
+
+        .valinputfh svg {
+            width: 100%;
+            height: 100%;
+            fill: white;
+        }
+
+        #results {
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+
+        #results p {
+            margin: 10px 0;
+            font-size: 18px;
+            background-color: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            display: flex;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #results p::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+        }
+
+        .result-left,
+        .result-right {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .result-left {
+            text-align: right;
+            padding-right: 15px;
+            color: #2c3e50;
+        }
+
+        .result-right {
+            text-align: left;
+            padding-left: 15px;
+            color: #2c3e50;
+        }
+
+        .hex-value-original,
+        .hex-value-pde {
+            font-family: 'Consolas', monospace;
+            padding: 3px 6px;
+            border-radius: 4px;
+            margin: 0 2px;
+            border: 1px solid;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .hex-value-original {
+            background-color: #f0f5e9;
+            color: #3c7d40;
+            border-color: #d4e5c5;
+        }
+
+        .hex-value-pde {
+            background-color: #e8f4fd;
+            color: #2c6bac;
+            border-color: #c5d9e5;
+        }
+
+        .hex-value-original:hover,
+        .hex-value-pde:hover {
+            filter: brightness(0.95);
+            transform: scale(1.05);
+        }
+
+        .hex-value-original:active,
+        .hex-value-pde:active {
+            filter: brightness(0.9);
+            transform: scale(0.98);
+        }
+
+        .arrow {
+            color: #4a90e2;
+            font-weight: bold;
+            margin: 0 12px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+        }
+
+        .arrow svg {
+            width: 24px;
+            height: 24px;
+            fill: #4a90e2;
+        }
+
+        footer {
+            padding: 20px 0;
+            color: #666;
+            font-size: 18px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        footer p {
+            margin: 0;
+        }
+
+        @media (max-width: 600px) {
+            .ovalinputs {
+                flex-direction: column;
+            }
+
+            .valinputleft,
+            .valinputright {
+                width: 100%;
+            }
+
+            .valinputfh {
+                transform: rotate(90deg);
+                margin: 10px 0;
+            }
+        }
+
+        @media (max-width: 650px) {
+            #results p {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .result-left,
+            .result-right {
+                text-align: left;
+                padding: 5px 0;
+            }
+
+            .arrow {
+                margin: 5px 0;
+            }
+
+            .arrow svg {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="ovalbox">
+        <h1 class="title">偏移计算</h1>
+        <h5 class="subtitle">OffSet Calc</h5>
+        <div class="ovalinputs">
+            <div class="valinputleft">
+                <p>真实偏移/Real Offset (L)</p>
+                <input id="pdeOffsetValue" placeholder="DB036000" oninput="RealToRaw()">
+            </div>
+            <div class="valinputfh" onclick="clearInputs()">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M16.01 11H4v2h12.01v3L20 12l-3.99-4v3z" />
+                    <path d="M7.99 11V8L4 12l3.99 4v-3H16v-2H7.99z" />
+                </svg>
+            </div>
+            <div class="valinputright">
+                <p>原始偏移/Raw Offset (L)</p>
+                <input id="originalOffsetValue" placeholder="DACCA" oninput="RawToReal()">
+            </div>
+        </div>
+    </div>
+
+    <div id="results"></div>
+
+    <footer>
+        <p>Powered by: letleon</p>
+        <p>Ai assistant powered by: Claude</p>
+    </footer>
+
+    <script>
+        // 清空输入和结果
+        function clearInputs() {
+            document.getElementById("pdeOffsetValue").value = "";
+            document.getElementById("originalOffsetValue").value = "";
+            document.getElementById("results").innerHTML = "";
+        }
+
+        // 原始偏移 转 真实偏移
+        function RawToReal() {
+            try {
+                const originalValue = document.getElementById("originalOffsetValue").value.trim();
+                if (!originalValue) return;
+
+                // 移除所有空格后再转换为BigInt
+                const cleanValue = originalValue.replace(/\s+/g, '');
+                
+                try {
+                    // 尝试转换为BigInt，如果失败会抛出异常
+                    const rawOffset = BigInt("0x" + cleanValue);
+                    
+                    // 计算PDE偏移
+                    // const shifted = rawOffset >> 10n; // 汇编中得到的算法
+                    // const intermediate = rawOffset + shifted + 1n;
+                    // const offsetPde = intermediate << 12n;
+                    // const offsetPde = (rawOffset + (rawOffset >> 10n) + 1n) << 12n; // 整合版本
+                    const offsetPde = (rawOffset + (rawOffset / 1024n) + 1n) * 4096n; // 乘除法版本
+
+                    // 转换为十六进制字符串
+                    const hexResult = offsetPde.toString(16).toUpperCase();
+
+                    // 获取大端表示
+                    const bigEndian = getBigEndianHex(Number(rawOffset));
+                    const pdeBigEndian = getBigEndianHex(Number(offsetPde));
+
+                    // 显示结果，确保小端格式补齐到8位
+                    const paddedRawHex = padHexTo8Digits(rawOffset.toString(16).toUpperCase());
+                    const paddedPdeHex = padHexTo8Digits(hexResult);
+                    displayResult(`原始/Raw: ${paddedRawHex}(L) ${bigEndian}(B) → 真实/Real ${paddedPdeHex}(L) ${pdeBigEndian}(B)`);
+                    document.getElementById("pdeOffsetValue").value = hexResult;
+                } catch (error) {
+                    // 显示错误提示
+                    showErrorToast(`输入错误: "${originalValue}" 不是有效的十六进制值`);
+                    console.error("计算错误:", error);
+                }
+            } catch (error) {
+                console.error("计算错误:", error);
+                showErrorToast("计算过程中发生错误");
+            }
+        }
+
+        // 真实偏移 转 原始偏移
+        function RealToRaw() {
+            try {
+                const pdeValue = document.getElementById("pdeOffsetValue").value.trim();
+                if (!pdeValue) return;
+
+                // 移除所有空格后再转换为BigInt
+                const cleanValue = pdeValue.replace(/\s+/g, '');
+                
+                try {
+                    // 尝试转换为BigInt，如果失败会抛出异常
+                    const realOffset = BigInt("0x" + cleanValue);
+
+                    // 计算原始的 OffsetUint
+                    // let offsetUint = Number((realOffset >> 12n) / 1025n); // 从汇编中得到的算法
+                    // let offsetUint = Number((realOffset / 4096n) * 1024n / 1025n); // 乘除法版
+                    let offsetUint = Number(realOffset / 4100n); // 精简优化后的算法
+
+                    // 转换为十六进制字符串并大写
+                    let hexLittleEndian = offsetUint.toString(16).toUpperCase();
+
+                    // 获取大端表示
+                    const bigEndian = getBigEndianHex(offsetUint);
+                    const pdeBigEndian = getBigEndianHex(Number(realOffset));
+
+                    // 显示结果，确保小端格式补齐到8位
+                    const paddedRealHex = padHexTo8Digits(realOffset.toString(16).toUpperCase());
+                    const paddedRawHex = padHexTo8Digits(hexLittleEndian);
+                    displayResult(`真实/Real: ${paddedRealHex}(L) ${pdeBigEndian}(B) → 原始/Raw: ${paddedRawHex}(L) ${bigEndian}(B)`);
+
+                    // 更新原始偏移输入框的值
+                    document.getElementById("originalOffsetValue").value = hexLittleEndian;
+                } catch (error) {
+                    // 显示错误提示
+                    showErrorToast(`输入错误: "${pdeValue}" 不是有效的十六进制值`);
+                    console.error("计算错误:", error);
+                }
+            } catch (error) {
+                console.error("计算错误:", error);
+                showErrorToast("计算过程中发生错误");
+            }
+        }
+
+        // 获取大端表示的十六进制字符串
+        function getBigEndianHex(value) {
+            // 转换为十六进制字符串
+            let hex = value.toString(16).toUpperCase();
+
+            // 确保字符串长度为偶数
+            if (hex.length % 2 !== 0) {
+                hex = '0' + hex;
+            }
+
+            // 补齐到8位十六进制(4字节)
+            while (hex.length < 8) {
+                hex = '0' + hex;
+            }
+
+            // 将字节顺序颠倒
+            let bigEndian = '';
+            for (let i = hex.length - 2; i >= 0; i -= 2) {
+                bigEndian += hex.substr(i, 2);
+            }
+
+            return bigEndian;
+        }
+
+        // 格式化十六进制部分
+        function formatHexPart(part) {
+            let formattedPart = part;
+
+            // 判断是原始值还是PDE值
+            if (part.includes('原始/Raw')) {
+                // 匹配原始值的十六进制值和标签
+                const regex = /([0-9A-F]+)\(([LB])\)/g;
+                formattedPart = formattedPart.replace(regex, '<span class="hex-value-original" onclick="copyToClipboard(\'$1\')">$1</span><small>($2)</small>');
+            } else if (part.includes('真实/Real')) {
+                // 匹配PDE值的十六进制值和标签
+                const regex = /([0-9A-F]+)\(([LB])\)/g;
+                formattedPart = formattedPart.replace(regex, '<span class="hex-value-pde" onclick="copyToClipboard(\'$1\')">$1</span><small>($2)</small>');
+            }
+
+            return formattedPart;
+        }
+
+        // 显示结果
+        function displayResult(message) {
+            const resultsDiv = document.getElementById("results");
+            const newResult = document.createElement("p");
+
+            // 解析并格式化消息
+            const parts = message.split('→');
+            if (parts.length === 2) {
+                const leftPart = formatHexPart(parts[0].trim());
+                const rightPart = formatHexPart(parts[1].trim());
+
+                // 创建左侧和右侧容器
+                const leftDiv = document.createElement('div');
+                leftDiv.className = 'result-left';
+                leftDiv.innerHTML = leftPart;
+
+                const arrowSpan = document.createElement('div');
+                arrowSpan.className = 'arrow';
+                arrowSpan.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M16.01 11H4v2h12.01v3L20 12l-3.99-4v3z"/>
+                    </svg>
+                `;
+
+                const rightDiv = document.createElement('div');
+                rightDiv.className = 'result-right';
+                rightDiv.innerHTML = rightPart;
+
+                // 添加到结果中
+                newResult.appendChild(leftDiv);
+                newResult.appendChild(arrowSpan);
+                newResult.appendChild(rightDiv);
+
+                // 根据转换方向设置左边框颜色
+                if (parts[0].includes('原始/Raw:')) {
+                    newResult.style.borderLeft = '4px solid #3c7d40'; // 原始值到PDE值的转换
+                } else {
+                    newResult.style.borderLeft = '4px solid #2c6bac'; // PDE值到原始值的转换
+                }
+            } else {
+                newResult.textContent = message;
+            }
+
+            resultsDiv.insertBefore(newResult, resultsDiv.firstChild);
+        }
+
+        // 复制到剪贴板
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    // 显示复制成功提示
+                    showCopyToast('已复制: ' + text);
+                })
+                .catch(err => {
+                    console.error('复制失败:', err);
+                });
+        }
+
+        // 显示复制成功提示
+        function showCopyToast(message) {
+            // 检查是否已存在toast元素
+            let toast = document.getElementById('copy-toast');
+            if (!toast) {
+                // 创建toast元素
+                toast = document.createElement('div');
+                toast.id = 'copy-toast';
+                toast.style.position = 'fixed';
+                toast.style.bottom = '20px';
+                toast.style.left = '50%';
+                toast.style.transform = 'translateX(-50%)';
+                toast.style.backgroundColor = 'rgba(212, 229, 197, 1)';
+                toast.style.color = '#3c7d40';
+                toast.style.padding = '10px 20px';
+                toast.style.borderRadius = '5px';
+                toast.style.zIndex = '1000';
+                toast.style.transition = 'opacity 0.3s';
+                document.body.appendChild(toast);
+            }
+
+            // 设置消息并显示
+            toast.textContent = message;
+            toast.style.opacity = '1';
+
+            // 2秒后隐藏
+            setTimeout(() => {
+                toast.style.opacity = '0';
+            }, 2000);
+        }
+
+        // 补齐十六进制值到8位
+        function padHexTo8Digits(hex) {
+            // 补齐到8位十六进制(4字节)
+            let paddedHex = hex;
+            while (paddedHex.length < 8) {
+                paddedHex = '0' + paddedHex;
+            }
+            return paddedHex;
+        }
+
+        // 显示错误提示
+        function showErrorToast(message) {
+            // 检查是否已存在error-toast元素
+            let toast = document.getElementById('error-toast');
+            if (!toast) {
+                // 创建toast元素
+                toast = document.createElement('div');
+                toast.id = 'error-toast';
+                toast.style.position = 'fixed';
+                toast.style.bottom = '20px';
+                toast.style.left = '50%';
+                toast.style.transform = 'translateX(-50%)';
+                toast.style.backgroundColor = 'rgba(220, 53, 69, 0.9)';
+                toast.style.color = 'white';
+                toast.style.padding = '10px 20px';
+                toast.style.borderRadius = '5px';
+                toast.style.zIndex = '1000';
+                toast.style.transition = 'opacity 0.3s';
+                document.body.appendChild(toast);
+            }
+
+            // 设置消息并显示
+            toast.textContent = message;
+            toast.style.opacity = '1';
+
+            // 3秒后隐藏
+            setTimeout(() => {
+                toast.style.opacity = '0';
+            }, 3000);
+        }
+    </script>
+</body>
+
+</html>

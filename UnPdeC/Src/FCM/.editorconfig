@@ -1,0 +1,36 @@
+# 参考自 https://learn.microsoft.com/zh-cn/dotnet/fundamentals/code-analysis/style-rules/csharp-formatting-options
+root = true
+
+[*.cs]
+tab_width = 4
+charset = utf-8
+end_of_line = lf
+indent_style = tab
+indent_size = 4
+
+# if (...) {
+#     ...
+# }
+csharp_new_line_before_open_brace = none
+# if (...) {
+#     ...
+# } else {
+#     ...
+# }
+csharp_new_line_before_else = false
+# try {
+#     ...
+# } catch (Exception e) {
+#     ...
+# }
+csharp_new_line_before_catch = false
+# try {
+#     ...
+# } catch (Exception e) {
+#     ...
+# } finally {
+#     ...
+# }
+csharp_new_line_before_finally = false
+# 错误提示
+dotnet_diagnostic.IDE0055.severity = error

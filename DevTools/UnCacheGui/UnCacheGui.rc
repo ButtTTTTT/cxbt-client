@@ -1,0 +1,85 @@
+// UnCacheGui.rc
+// 主对话框模板：纯 Win32 资源脚本，可用 VS 资源编辑器打开微调。
+#pragma code_page(65001)
+
+#include "resource.h"
+#include "winres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+// 中文(简体，中国)资源
+LANGUAGE LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED
+
+/////////////////////////////////////////////////////////////////////////////
+// Manifest：启用 ComCtl32 v6（视觉样式）+ Per-Monitor V2 DPI 感知
+// 由资源脚本自带，工程链接器需设 GenerateManifest=false 以免冲突
+1 24 "res\\app.manifest"
+IDI_APP ICON "res\\app.ico"
+
+//////////////////////////////////////////////////////////////////////////////
+// 主对话框
+// 布局约定：工作区 620x324 DLU（含进度条），底部另留物理像素高的原生状态栏；
+// 所有坐标与 MainWindow.cpp 的 kSpecs 表一一对应，改一处必须同步改另一处。
+IDD_MAIN DIALOGEX 0, 0, 620, 340
+STYLE DS_SETFONT | DS_CENTER | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+CAPTION "UnCache GUI - .cache 批量解压"
+FONT 9, "Segoe UI", 400, 0, 0x0
+BEGIN
+    PUSHBUTTON      "选择 .cache 文件...",IDC_BTN_FILES,8,7,84,14
+    PUSHBUTTON      "选择文件夹...",IDC_BTN_FOLDER,96,7,66,14
+    LTEXT           "",-1,169,8,2,12,SS_ETCHEDVERT
+    DEFPUSHBUTTON   "开始解压",IDC_BTN_START,178,7,52,14
+    PUSHBUTTON      "停止",IDC_BTN_STOP,234,7,34,14
+    PUSHBUTTON      "清空列表",IDC_BTN_CLEAR,272,7,46,14
+    LTEXT           "",-1,325,8,2,12,SS_ETCHEDVERT
+    PUSHBUTTON      "导出失败.log",IDC_BTN_EXPORTFAIL,458,7,72,14
+    PUSHBUTTON      "打开输出目录",IDC_BTN_OPENOUT,534,7,78,14
+    CTEXT           "把 .cache 文件或文件夹直接拖到本窗口即可开始解压（支持一次拖多个）",IDC_STATIC_DROP,8,26,604,10
+    GROUPBOX        "选项",IDC_GROUP_OPTIONS,8,40,604,64
+    AUTOCHECKBOX    "删除解压结果的前 8 字节（.dds/.tga 预览需要）",IDC_CHECK_STRIP,17,53,240,10
+    RADIOBUTTON     "仅对下列扩展名生效",IDC_RADIO_STRIP_EXT,17,67,104,10
+    EDITTEXT        IDC_EDIT_STRIPEXT,126,66,84,12,ES_AUTOHSCROLL
+    RADIOBUTTON     "对所有格式生效",IDC_RADIO_STRIP_ALL,216,67,84,10
+    AUTOCHECKBOX    "递归处理子目录",IDC_CHECK_RECURSE,17,82,96,10
+    AUTOCHECKBOX    "输出已存在则跳过",IDC_CHECK_SKIPEXIST,120,82,104,10
+    RTEXT           "并行度",IDC_STATIC_PARALLEL,232,82,26,8
+    COMBOBOX        IDC_COMBO_THREADS,262,80,66,90,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "输出规则：xxx.dds.cache -> xxx.dds，xxx.lua.cache -> xxx.luac，写在源文件同目录；源 .cache 不会被删除。",IDC_STATIC_NOTE,17,95,588,10
+    CONTROL         "",IDC_LIST_FILES,"SysListView32",LVS_REPORT | LVS_OWNERDATA | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,8,110,604,200
+    CONTROL         "",IDC_PROGRESS,"msctls_progress32",PBS_SMOOTH,8,314,604,8
+    CONTROL         "",IDC_STATUSBAR,"msctls_statusbar32",SBARS_SIZEGRIP,0,328,620,14
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// 版本信息
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,0,0
+ PRODUCTVERSION 1,0,0,0
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x40004L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404b0"
+        BEGIN
+            VALUE "CompanyName", "FinalCombat"
+            VALUE "FileDescription", "UnCache GUI - .cache 批量解压工具"
+            VALUE "FileVersion", "1.0.0.0"
+            VALUE "InternalName", "UnCacheGui.exe"
+            VALUE "LegalCopyright", "内部工具"
+            VALUE "OriginalFilename", "UnCacheGui.exe"
+            VALUE "ProductName", "UnCache GUI"
+            VALUE "ProductVersion", "1.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x804, 1200
+    END
+END

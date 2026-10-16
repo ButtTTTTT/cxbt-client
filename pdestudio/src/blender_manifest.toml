@@ -1,0 +1,53 @@
+schema_version = "1.0.0"
+
+# 唯一标识
+id = "pde_studio"
+
+# 名称
+name = "PDE Studio"
+
+# 版本
+version = "0.1.0"
+
+# 描述
+tagline = "PDE Studio - PDE引擎模型导出工具, 仅用于学习, 严禁商用"
+
+# 维护者
+maintainer = "letleon <letleon@163.com>"
+
+# 类型
+type = "add-on"
+
+# 版权
+copyright = ["2026 letleon"]
+
+# 官网
+website = "https://github.com/0xletleon"
+
+# 标签
+tags = ["Mesh", "Animation", "Development", "Game Engine", "Import-Export"]
+
+# 支持 Blender 5.1.2 +
+blender_version_min = "5.1.2"
+
+# 许可证
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+
+# 权限声明
+[permissions]
+files = "需要访问文件系统导出模型文件"
+
+# 排除文件
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  ".vscode/",
+  "/.git/",
+  "/*.zip",
+  "/*.bat",
+  "/*.jpg",
+  "/*.png",
+  "/.gitignore",
+]

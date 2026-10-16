@@ -2,9 +2,10 @@ import { useState } from 'react';
 import ModelViewer from './modes/ModelViewer';
 import CharacterController from './modes/CharacterController';
 import MapEditor from './modes/MapEditor';
+import { PdeToolchainStudio } from './modes/PdeToolchainStudio';
 
 export default function SandboxApp() {
-  const [activeMode, setActiveMode] = useState<'viewer' | 'controller' | 'editor'>('controller');
+  const [activeMode, setActiveMode] = useState<'viewer' | 'controller' | 'editor' | 'pde'>('controller');
   const [playtestMapId, setPlaytestMapId] = useState<string | undefined>(undefined);
 
   return (
@@ -71,6 +72,22 @@ export default function SandboxApp() {
           🗺️ 3D 地图与人物/怪物编辑器
         </button>
 
+        <button 
+          id="tab-sandbox-pde-toolchain"
+          onClick={() => setActiveMode('pde')}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: activeMode === 'pde' ? '#37f4d3' : 'transparent',
+            color: activeMode === 'pde' ? '#0f172a' : '#94a3b8',
+            border: activeMode === 'pde' ? 'none' : '1px solid #475569',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: activeMode === 'pde' ? 'bold' : 'normal',
+            transition: 'all 0.2s'
+          }}>
+          🔬 PDE 引擎逆向工具链
+        </button>
+
         <div style={{ flex: 1 }} />
 
         <button
@@ -102,6 +119,7 @@ export default function SandboxApp() {
             }}
           />
         )}
+        {activeMode === 'pde' && <PdeToolchainStudio />}
       </div>
     </div>
   );

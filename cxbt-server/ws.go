@@ -150,6 +150,20 @@ func (c *Client) readPump() {
 				continue
 			}
 
+			if msgType == "objective_action" && c.RoomID != "" {
+				redDelta := 0
+				blueDelta := 0
+				if r, ok := gameMsg["redDelta"].(float64); ok {
+					redDelta = int(r)
+				}
+				if b, ok := gameMsg["blueDelta"].(float64); ok {
+					blueDelta = int(b)
+				}
+				HandleObjectiveAction(c.RoomID, redDelta, blueDelta)
+				continue
+			}
+
+
 			if msgType == "chat" {
 				sender, _ := gameMsg["userId"].(string)
 				text, _ := gameMsg["message"].(string)

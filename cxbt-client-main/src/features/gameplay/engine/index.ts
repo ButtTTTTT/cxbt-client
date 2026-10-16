@@ -14,3 +14,5 @@ export * from './CombatEffectsManager';
 export * from './BotManager';
 export * from './ProceduralWeaponBuilder';
 export * from './CustomMapStore';
+export * from './PdeBinaryLoader';
+

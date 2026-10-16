@@ -52,6 +52,7 @@ const ALL_MODES: Mode[] = [
   { id: 'all', label: '全部', icon: 'practiceModeAll' },
   ...VISIBLE_MODES,
   { id: 'survival', label: '生存', icon: 'practiceModeSurvival' },
+  { id: 'boss', label: '远征首领', icon: 'practiceModeSurvival' },
 ];
 
 const MAP_PAGE_SIZE = 6;

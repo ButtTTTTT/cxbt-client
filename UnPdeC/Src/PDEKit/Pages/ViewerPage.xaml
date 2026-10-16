@@ -1,0 +1,59 @@
+<Page x:Class="PDEKit.Pages.ViewerPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:converters="clr-namespace:PDEKit.Converters"
+      mc:Ignorable="d"
+      d:DesignHeight="700" d:DesignWidth="850"
+      Title="浏览">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="32,28,32,32">
+            <!-- 页面标题 -->
+            <TextBlock Text="PDE 浏览器" Style="{StaticResource PageTitleStyle}" />
+            <TextBlock Text="可视化浏览 .pde / .xor 文件内容，支持单文件或批量导出"
+                       Style="{StaticResource PageSubtitleStyle}" />
+
+            <!-- 文件选择卡片 -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <TextBlock Text="打开文件" Style="{StaticResource LabelTextStyle}" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="ViewerInputPath" Grid.Column="0"
+                                 converters:Watermark.Text="拖入 .pde 或 .xor 文件..."
+                                 IsReadOnly="True"
+                                 Margin="0,0,8,0" />
+                        <Button Grid.Column="1" Content="浏览"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Margin="0,0,8,0" />
+                        <Button Grid.Column="2" Content="打开"
+                                Style="{StaticResource AccentButtonStyle}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- 文件树占位 -->
+            <Border Style="{StaticResource CardStyle}"
+                    MinHeight="380">
+                <Grid>
+                    <!-- 空状态提示 -->
+                    <StackPanel HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Opacity="0.4">
+                        <TextBlock Text="&#xE8E5;" FontFamily="Segoe MDL2 Assets" FontSize="56"
+                                   HorizontalAlignment="Center" Margin="0,0,0,16" />
+                        <TextBlock Text="打开 .pde / .xor 文件以浏览内容"
+                                   FontSize="14"
+                                   HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

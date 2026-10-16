@@ -1,0 +1,362 @@
+<Window x:Class="ReCache.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ReCache v1.1.0 - .cache生成工具" Width="700"
+        AllowDrop="True" Drop="Window_Drop" DragOver="Window_DragOver"
+        WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize"
+        MinWidth="600" SizeToContent="Height">
+    <Window.Resources>
+        <!-- 样式定义 -->
+        <Style x:Key="DropZoneStyle" TargetType="Border">
+            <Setter Property="BorderBrush" Value="#2196F3"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Background" Value="#E3F2FD"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="#1976D2"/>
+                    <Setter Property="Background" Value="#BBDEFB"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="SourceZoneStyle" TargetType="Border">
+            <Setter Property="BorderBrush" Value="#4CAF50"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Background" Value="#E8F5E9"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="#388E3C"/>
+                    <Setter Property="Background" Value="#C8E6C9"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#2196F3"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="20,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="5" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#1976D2"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="#BDBDBD"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="SmallButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#757575"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,5"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#616161"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="#BDBDBD"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="ClearXButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#999"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="4,2"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="#E53935"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <StackPanel Margin="20">
+        <!-- ========== 信息面板（CRC32 + 8字节 + 输入输出） ========== -->
+        <Border BorderBrush="#BDBDBD" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,12"
+                Background="#FAFAFA">
+            <StackPanel>
+                <!-- CRC32 校验 -->
+                <Border x:Name="CrcResultPanel" BorderBrush="#E0E0E0" BorderThickness="1" 
+                        CornerRadius="5" Padding="10" Margin="0,0,0,8" Background="#FAFAFA">
+                    <StackPanel>
+                        <TextBlock Text="CRC32 校验" FontSize="11" Foreground="#888" Margin="0,0,0,6"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="文件头中存储:" FontSize="11" Foreground="#666"/>
+                                <TextBlock x:Name="StoredCrcText" Text="-" FontSize="14" FontWeight="Bold" FontFamily="Consolas"/>
+                            </StackPanel>
+                            
+                            <TextBlock Grid.Column="1" Text="对比" VerticalAlignment="Center" Margin="15,5" 
+                                       FontWeight="Bold" Foreground="#999"/>
+                            
+                            <StackPanel Grid.Column="2" HorizontalAlignment="Right">
+                                <TextBlock Text="计算值:" FontSize="11" Foreground="#666" HorizontalAlignment="Right"/>
+                                <TextBlock x:Name="CalculatedCrcText" Text="-" FontSize="14" FontWeight="Bold" 
+                                           FontFamily="Consolas" HorizontalAlignment="Right"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- 前8字节对比 -->
+                <Grid x:Name="Header8BytesPanel" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <Border Grid.Column="0" x:Name="Cache8BytesBorder" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="5" Padding="10" Margin="0,0,6,0">
+                        <StackPanel>
+                            <TextBlock Text="🔓 Cache 解压后前8字节" FontWeight="Bold" Margin="0,0,0,3" FontSize="11" Foreground="#888"/>
+                            <TextBlock x:Name="First8BytesText" Text="-" FontSize="14" FontWeight="Bold" 
+                                       FontFamily="Consolas" Foreground="#0066CC"/>
+                        </StackPanel>
+                    </Border>
+                    
+                    <Border Grid.Column="1" x:Name="Input8BytesBorder" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="5" Padding="10" Margin="6,0,0,0">
+                        <StackPanel>
+                            <TextBlock Text="📄 待压缩文件前8字节" FontWeight="Bold" Margin="0,0,0,3" FontSize="11" Foreground="#888"/>
+                            <TextBlock x:Name="InputFirst8BytesText" Text="-" FontSize="14" FontWeight="Bold" 
+                                       FontFamily="Consolas" Foreground="#E65100"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- 输入输出文件信息 -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <Border Grid.Column="0" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="5" Padding="10" Margin="0,0,6,0">
+                        <StackPanel>
+                            <TextBlock Text="输入" FontWeight="Bold" Margin="0,0,0,3" FontSize="11" Foreground="#666"/>
+                            <TextBlock x:Name="InputFileName" Text="-" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="InputFileSize" Text="-" FontSize="11" Foreground="#888"/>
+                        </StackPanel>
+                    </Border>
+                    
+                    <Border Grid.Column="1" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="5" Padding="10" Margin="6,0,0,0">
+                        <StackPanel>
+                            <TextBlock Text="输出" FontWeight="Bold" Margin="0,0,0,3" FontSize="11" Foreground="#666"/>
+                            <TextBlock x:Name="OutputFileName" Text="-" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="OutputFileSize" Text="-" FontSize="11" Foreground="#888"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- ========== cache 根目录 ========== -->
+        <StackPanel Margin="0,0,0,12">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                <TextBlock Text="cache根目录" FontWeight="Bold" Foreground="#F57C00"/>
+                <TextBlock Text=" (必填)" Foreground="#F44336" FontSize="11"/>
+            </StackPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <ComboBox Grid.Column="0" x:Name="RootPathCombo" IsEditable="True" 
+                          Height="32" Margin="0,0,10,0" VerticalContentAlignment="Center"
+                          FontSize="12" FontFamily="Consolas"
+                          SelectionChanged="RootPathCombo_SelectionChanged"
+                          KeyDown="RootPathCombo_KeyDown"/>
+                <Button Grid.Column="1" Content="浏览..." Style="{StaticResource SmallButtonStyle}"
+                        Click="RootPath_Click" VerticalAlignment="Center" Margin="0,0,8,0"
+                        Background="#F57C00"/>
+                <Button Grid.Column="2" Content="✕" Style="{StaticResource ClearXButtonStyle}"
+                        Click="ClearRootPath_Click" VerticalAlignment="Center" ToolTip="清除"/>
+            </Grid>
+        </StackPanel>
+
+        <!-- ========== 文件选择（一行：原始cache | 待压缩文件） ========== -->
+        <Grid Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="10"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            
+            <!-- 左：原始 .cache 文件 -->
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="原始cache文件" FontWeight="Bold" Margin="0,0,0,5" Foreground="#388E3C" FontSize="12"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <Border Grid.Column="0" x:Name="SourceCacheZone" Style="{StaticResource SourceZoneStyle}" 
+                            Height="38" Margin="0,0,6,0" MouseLeftButtonUp="SourceCache_Click" Cursor="Hand">
+                        <TextBlock x:Name="SourceCacheText" Text="点击选择 .cache" 
+                                   FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="10,0"/>
+                    </Border>
+                    <Button Grid.Column="1" Content="✕" Style="{StaticResource ClearXButtonStyle}"
+                            Click="ClearSourceCache_Click" VerticalAlignment="Center" ToolTip="清除"/>
+                </Grid>
+            </StackPanel>
+            
+            <!-- 右：待压缩文件 -->
+            <StackPanel Grid.Column="2">
+                <TextBlock Text="待压缩文件" FontWeight="Bold" Margin="0,0,0,5" FontSize="12"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <Border Grid.Column="0" x:Name="DropZone" Style="{StaticResource DropZoneStyle}" 
+                            Height="38" Margin="0,0,6,0" MouseLeftButtonUp="DropZone_Click" Cursor="Hand">
+                        <TextBlock x:Name="DropZoneText" Text="拖放或点击选择文件" 
+                                   FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="10,0"/>
+                    </Border>
+                    <Button Grid.Column="1" Content="✕" Style="{StaticResource ClearXButtonStyle}"
+                            Click="ClearInputFile_Click" VerticalAlignment="Center" ToolTip="清除"/>
+                </Grid>
+            </StackPanel>
+        </Grid>
+
+        <!-- ========== 选项面板 ========== -->
+        <Grid Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <TextBlock Text="模式:" VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="Bold"/>
+                <ComboBox x:Name="CompressionModeCombo" SelectedIndex="0" Width="240" VerticalAlignment="Center">
+                    <ComboBoxItem Content="压缩 (0x6F) - LZ77" ToolTip="标准 LZ77 压缩，推荐用于大多数文件"/>
+                    <ComboBoxItem Content="不压缩 (0x6E)" ToolTip="不压缩直接存储，文件体积更大"/>
+                </ComboBox>
+            </StackPanel>
+            
+            <CheckBox Grid.Column="1" x:Name="Prepend8BytesCheckBox" Content="包含8字节头" 
+                      IsChecked="True" VerticalAlignment="Center" Margin="20,0,20,0"
+                      ToolTip="默认勾选。当待压缩文件已包含8字节头时不会重复插入；不包含时则自动插入8字节头"/>
+            
+            <CheckBox Grid.Column="2" x:Name="AddCacheExtensionCheckBox" Content="添加 .cache 扩展名" 
+                      IsChecked="True" VerticalAlignment="Center"/>
+        </Grid>
+        
+        <!-- ========== 输出目录 + 打包按钮（一行） ========== -->
+        <Grid Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            
+            <!-- 左：输出目录 -->
+            <StackPanel Grid.Column="0">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                    <TextBlock Text="输出目录" FontWeight="Bold" Foreground="#673AB7" FontSize="12"/>
+                    <TextBlock Text=" (可选)" Foreground="#888" FontSize="11"/>
+                </StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <Border Grid.Column="0" x:Name="OutputDirZone" 
+                            BorderBrush="#673AB7" BorderThickness="2" Background="#EDE7F6"
+                            CornerRadius="8" Height="38" Margin="0,0,6,0" 
+                            MouseLeftButtonUp="OutputDir_Click" Cursor="Hand">
+                        <TextBlock x:Name="OutputDirText" Text="点击选择输出目录" 
+                                   FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="10,0"/>
+                    </Border>
+                    <Button Grid.Column="1" Content="打开" Style="{StaticResource SmallButtonStyle}"
+                            Click="OpenOutputDir_Click" VerticalAlignment="Center" Margin="0,0,4,0"
+                            Background="#673AB7" ToolTip="在资源管理器中打开输出目录"/>
+                    <Button Grid.Column="2" Content="✕" Style="{StaticResource ClearXButtonStyle}"
+                            Click="ClearOutputDir_Click" VerticalAlignment="Center" ToolTip="清除"/>
+                </Grid>
+            </StackPanel>
+            
+            <!-- 右：打包按钮 + 状态 -->
+            <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
+                <TextBlock x:Name="StatusText" Text="" FontSize="11" Foreground="#666" Margin="0,0,0,5" Height="16"/>
+                <ProgressBar x:Name="ProgressBar" Height="5" Visibility="Collapsed" Margin="0,0,0,8"/>
+                <Button Content="打包" x:Name="PackButton" 
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Click="Pack_Click" IsEnabled="False" 
+                        HorizontalAlignment="Stretch" Height="38"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- ========== 提示信息 ========== -->
+        <Border Background="#FFF8E1" BorderBrush="#FFC107" BorderThickness="1" CornerRadius="5" Padding="10" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#666" Margin="0,0,0,5">
+                    <Run FontWeight="Bold" Foreground="#F57C00">CRC32 要求:</Run>
+                    <Run>输出文件必须重命名为与原始文件名一致，并放置在缓存根目录下相同的相对路径中。</Run>
+                </TextBlock>
+                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#888">
+                    <Run FontWeight="Bold">示例:</Run>
+                    <Run>如果原始路径为 /scripts/test.lua.cache，输出文件必须放置在 [缓存根目录]/scripts/test.lua.cache</Run>
+                </TextBlock>
+                <Separator Margin="0,6" Background="#E0E0E0"/>
+                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#666" Margin="0,0,0,5">
+                    <Run FontWeight="Bold" Foreground="#F57C00">8字节头:</Run>
+                    <Run>勾选"包含8字节头"时，若待压缩文件前8字节与原始Cache解压后前8字节一致，则不会重复插入；不一致时会在文件数据前插入原始8字节。</Run>
+                </TextBlock>
+                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#888">
+                    <Run FontWeight="Bold">注意:</Run>
+                    <Run>.mesh、.skel、.anim、.lua 等类型的文件通常包含8字节头，而 .dds 等资源文件则不包含。若不确定，请对比上方两个8字节面板的值。</Run>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</Window>

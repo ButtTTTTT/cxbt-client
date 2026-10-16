@@ -139,15 +139,19 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
     }),
   ]);
 
-  const makeClip = (data: ClipData, name: string, boneNameSet: { has: (name: string) => boolean } = boneIndices) =>
-    new THREE.AnimationClip(name, data.duration ?? -1,
+  const makeClip = (data: ClipData, name: string, boneNameSet: { has: (name: string) => boolean } = boneIndices) => {
+    const rawFps = data.fps || 60;
+    const effectiveFps = rawFps === 60 ? 96 : rawFps;
+    const effectiveDuration = data.duration ? data.duration * (rawFps / effectiveFps) : -1;
+    return new THREE.AnimationClip(name, effectiveDuration,
       data.tracks.flatMap((track) => {
         if (!boneNameSet.has(track.name)) return [];
-        const positionTimes = track.positions.map((_, index) => index / data.fps);
-        const rotationTimes = track.rotations.map((_, index) => index / data.fps);
+        const positionTimes = track.positions.map((_, index) => index / effectiveFps);
+        const rotationTimes = track.rotations.map((_, index) => index / effectiveFps);
         return [new THREE.VectorKeyframeTrack(`${track.name}.position`, positionTimes, track.positions.flat()),
           new THREE.QuaternionKeyframeTrack(`${track.name}.quaternion`, rotationTimes, track.rotations.flat())];
       }));
+  };
   const fetchClip = async (path: string, name: string) => {
     const response = await fetch(path.startsWith('gameplay:')
       ? `${import.meta.env.BASE_URL}assets/gameplay/animations/${path.slice(9)}` : assetUrl(path));

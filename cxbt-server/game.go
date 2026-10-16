@@ -207,6 +207,28 @@ func HandleBotKill(roomID string, team string) {
 	})
 }
 
+func HandleObjectiveAction(roomID string, redDelta int, blueDelta int) {
+	state, ok := GetGameFromStore(roomID)
+	if !ok || state.Over {
+		return
+	}
+	if redDelta > 0 {
+		state.ScoreRed += redDelta
+	}
+	if blueDelta > 0 {
+		state.ScoreBlue += blueDelta
+	}
+	SaveGameToStore(roomID, state)
+
+	PublishChannelJSON("room_channel:"+roomID, map[string]interface{}{
+		"type":       "tick",
+		"time_left":  int((state.Duration - time.Since(state.StartTime)).Seconds()),
+		"score_red":  state.ScoreRed,
+		"score_blue": state.ScoreBlue,
+	})
+}
+
+
 // HandleHit processes a shot from an attacker to a target
 func HandleHit(roomID string, attackerID uint, targetID uint, damage int) {
 	state, ok := GetGameFromStore(roomID)

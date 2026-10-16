@@ -1,0 +1,227 @@
+<Page x:Class="PDEKit.Pages.UnpackPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:converters="clr-namespace:PDEKit.Converters"
+      mc:Ignorable="d"
+      d:DesignHeight="700" d:DesignWidth="850"
+      Title="解包"
+      AllowDrop="True"
+      Drop="Page_Drop"
+      DragOver="Page_DragOver">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="32,28,32,32">
+            <!-- 页面标题 -->
+            <TextBlock Text="PDE 解包" Style="{StaticResource PageTitleStyle}" />
+            <TextBlock Text="解压 .pde / .xor 资源文件，提取内部文件"
+                       Style="{StaticResource PageSubtitleStyle}" />
+
+            <!-- XOR 解密卡片 -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                CornerRadius="4" Padding="6" Margin="0,0,10,0">
+                            <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                       VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Text="XOR 解密" Style="{StaticResource CardTitleStyle}" />
+                    </StackPanel>
+                    <TextBlock Text="将 .pde 文件异或解密为 .xor 文件（也支持 .xor → 原文件的逆向操作）"
+                               Style="{StaticResource DescriptionTextStyle}" />
+
+                    <TextBlock Text="输入路径" Style="{StaticResource LabelTextStyle}" />
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 Text="{Binding XorViewModel.InputPath, UpdateSourceTrigger=PropertyChanged}"
+                                 converters:Watermark.Text="拖入 .pde 文件或目录..."
+                                 IsReadOnly="True"
+                                 Margin="0,0,8,0" />
+                        <Button Grid.Column="1" Content="选择文件"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Command="{Binding XorViewModel.BrowseFileCommand}"
+                                Margin="0,0,8,0" />
+                        <Button Grid.Column="2" Content="选择目录"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Command="{Binding XorViewModel.BrowseFolderCommand}" />
+                    </Grid>
+
+                    <!-- 进度区域 -->
+                    <Grid Margin="0,0,0,12"
+                          Visibility="{Binding XorViewModel.IsProcessing, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <ProgressBar Grid.Row="0" Value="{Binding XorViewModel.ProgressValue}"
+                                     Minimum="0" Maximum="100" Height="6" Margin="0,0,0,6" />
+                        <Grid Grid.Row="1">
+                            <TextBlock Text="{Binding XorViewModel.CurrentFile}" FontSize="11"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       TextTrimming="CharacterEllipsis" HorizontalAlignment="Left" />
+                            <TextBlock Text="{Binding XorViewModel.ProgressDetail}" FontSize="11"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       HorizontalAlignment="Right" />
+                        </Grid>
+                    </Grid>
+
+                    <Grid Margin="0,0,0,12">
+                        <TextBlock Text="{Binding XorViewModel.StatusText}" FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   HorizontalAlignment="Left" VerticalAlignment="Center" />
+                        <Button Content="&#xE72C;  开始解密"
+                                Style="{StaticResource AccentButtonStyle}"
+                                Command="{Binding XorViewModel.StartCommand}"
+                                HorizontalAlignment="Right" />
+                    </Grid>
+
+                    <Border Background="{DynamicResource ControlFillColorTransparentBrush}"
+                            CornerRadius="4" MaxHeight="160"
+                            Visibility="{Binding XorViewModel.Logs.Count, Converter={StaticResource CountToVisibilityConverter}}">
+                        <ListBox ItemsSource="{Binding XorViewModel.Logs}"
+                                 Background="Transparent" BorderThickness="0"
+                                 FontFamily="Cascadia Code, Consolas" FontSize="11"
+                                 Padding="8,4" MaxHeight="150"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="0,1" />
+                                    <Setter Property="Background" Value="Transparent" />
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                        </ListBox>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!-- PDE 解包卡片 -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                CornerRadius="4" Padding="6" Margin="0,0,10,0">
+                            <TextBlock Text="&#xE8E5;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                       VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Text="PDE 解包" Style="{StaticResource CardTitleStyle}" />
+                    </StackPanel>
+                    <TextBlock Text="将 .xor 文件解包为资源目录"
+                               Style="{StaticResource DescriptionTextStyle}" />
+
+                    <TextBlock Text="输入文件" Style="{StaticResource LabelTextStyle}" />
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 Text="{Binding UnpdecViewModel.InputPath, UpdateSourceTrigger=PropertyChanged}"
+                                 converters:Watermark.Text="拖入 .xor 文件..."
+                                 IsReadOnly="True"
+                                 Margin="0,0,8,0" />
+                        <Button Grid.Column="1" Content="浏览"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Command="{Binding UnpdecViewModel.BrowseFileCommand}" />
+                    </Grid>
+
+                    <!-- 解包选项 -->
+                    <TextBlock Text="解包选项" Style="{StaticResource LabelTextStyle}" />
+                    <StackPanel Margin="0,0,0,12">
+                        <RadioButton Content="混合模式（推荐）：.mesh/.skel/.anim/.physx 保留前8字节 [_m8byte]"
+                                     GroupName="UnpackMode" IsChecked="True"
+                                     Margin="0,0,0,4"
+                                     Checked="UnpackMode_Mixed" />
+                        <RadioButton Content="递归模式：删除全部前8字节 [_r8byte]"
+                                     GroupName="UnpackMode"
+                                     Margin="0,0,0,4"
+                                     Checked="UnpackMode_Recursive" />
+                        <RadioButton Content="保留模式：保留全部前8字节 [_k8byte]"
+                                     GroupName="UnpackMode"
+                                     Margin="0,0,0,4"
+                                     Checked="UnpackMode_KeepFirst8" />
+                        <RadioButton Content="缓存模式：保留 .cache 文件，不进行二次解压 [_cache]"
+                                     GroupName="UnpackMode"
+                                     Checked="UnpackMode_Cache" />
+                    </StackPanel>
+
+                    <!-- 进度区域 -->
+                    <Grid Margin="0,0,0,12"
+                          Visibility="{Binding UnpdecViewModel.IsProcessing, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <ProgressBar Grid.Row="0" Value="{Binding UnpdecViewModel.ProgressValue}"
+                                     Minimum="0" Maximum="100" Height="6" Margin="0,0,0,6" />
+                        <TextBlock Grid.Row="1" Text="{Binding UnpdecViewModel.CurrentFile}" FontSize="11"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   TextTrimming="CharacterEllipsis" />
+                    </Grid>
+
+                    <Grid Margin="0,0,0,12">
+                        <TextBlock Text="{Binding UnpdecViewModel.StatusText}" FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   HorizontalAlignment="Left" VerticalAlignment="Center" />
+                        <Button Content="&#xE72C;  开始解包"
+                                Style="{StaticResource AccentButtonStyle}"
+                                Command="{Binding UnpdecViewModel.StartCommand}"
+                                HorizontalAlignment="Right" />
+                    </Grid>
+
+                    <Border Background="{DynamicResource ControlFillColorTransparentBrush}"
+                            CornerRadius="4" MaxHeight="160"
+                            Visibility="{Binding UnpdecViewModel.Logs.Count, Converter={StaticResource CountToVisibilityConverter}}">
+                        <ListBox ItemsSource="{Binding UnpdecViewModel.Logs}"
+                                 Background="Transparent" BorderThickness="0"
+                                 FontFamily="Cascadia Code, Consolas" FontSize="11"
+                                 Padding="8,4" MaxHeight="150"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="0,1" />
+                                    <Setter Property="Background" Value="Transparent" />
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                        </ListBox>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!-- Cache 解压卡片 -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                CornerRadius="4" Padding="6" Margin="0,0,10,0">
+                            <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                       VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Text="Cache 解压" Style="{StaticResource CardTitleStyle}" />
+                    </StackPanel>
+                    <TextBlock Text="单独解压 .cache 文件（6D/6E/6F 标志位自动识别）"
+                               Style="{StaticResource DescriptionTextStyle}" />
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="CacheInputPath" Grid.Column="0"
+                                 converters:Watermark.Text="拖入 .cache 文件..."
+                                 IsReadOnly="True"
+                                 Margin="0,0,8,0" />
+                        <Button Grid.Column="1" Content="浏览"
+                                Style="{StaticResource SecondaryButtonStyle}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

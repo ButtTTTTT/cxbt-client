@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>IEEE754浮点计算</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="bulma.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="IEEE754.css">
+</head>
+
+<body>
+    <section class="section">
+        <div class="container">
+            <h1 class="title has-text-centered">IEEE754浮点计算</h1>
+
+            <div class="box">
+                <div class="rawhex-input control is-expanded">
+                    <input class="input is-medium" type="text" id="hexInput"
+                        placeholder="输入16进制值(如: E49E863E BB08233E 8FC2F53C)" oninput="convertMultiple()">
+                </div>
+                <div class="field is-grouped">
+                    <div class="control">
+                        <div class="select is-medium">
+                            <select id="endian" onchange="convertMultiple()">
+                                <option value="little">小端</option>
+                                <option value="big">大端</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="control">
+                        <div class="select is-medium">
+                            <select id="groupSize" onchange="convertMultiple();">
+                                <option value="24">0x18字节/组</option>
+                                <option value="28">0x1c字节/组</option>
+                                <option value="52">0x34字节/组</option>
+                                <option value="64">0x40字节/组</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="control">
+                        <button class="button is-medium is-info" onclick="copyResults()">
+                            <span class="icon">
+                                <i class="fas fa-copy"></i>
+                            </span>
+                            <span>复制结果</span>
+                        </button>
+                    </div>
+                    <div class="control">
+                        <button class="button is-medium is-danger" onclick="clearCache()">
+                            <span class="icon">
+                                <i class="fas fa-trash"></i>
+                            </span>
+                            <span>清除缓存</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="error" class="notification is-danger is-light" style="display: none;"></div>
+            </div>
+
+            <div id="groupInfo" class="has-text-centered"></div>
+            <div id="multipleResult"></div>
+        </div>
+    </section>
+
+    <button id="backToTopBtn">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <script src="IEEE754.js"></script>
+</body>
+
+</html>

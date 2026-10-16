@@ -1,0 +1,54 @@
+schema_version = "1.0.0"
+
+# 唯一标识
+id = "pde_model_tools"
+
+# 名称
+name = "PDE Model Tools"
+
+# 版本
+version = "0.2.0"
+
+# 描述
+tagline = "PDE Model Tools - PMT PDE模型工具, 仅用于学习,严禁商用"
+
+# 维护者
+maintainer = "letleon <letleon@163.com>"
+
+# 类型
+type = "add-on"
+
+# 版权
+copyright = ["2025 letleon"]
+
+# 官网
+website = "https://www.cnblogs.com/letleon"
+
+# 标签
+tags = ["Animation", "Mesh", "Development", "Game Engine"]
+
+# 支持 Blender 4.5 LTS - 5.1.1
+blender_version_min = "4.5.0"
+#blender_version_max = "5.1.1"
+
+# 许可证
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+
+# 排除文件
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  ".vscode/",
+  "/.git/",
+  "/*.zip",
+  "/*.bat",
+  "/*.jpg",
+  "/*.png",
+  "/.gitignore"
+]
+
+# 权限声明
+[permissions]
+files = "需要访问文件系统导入模型文件"

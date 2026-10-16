@@ -1,0 +1,134 @@
+<Window x:Class="PDEView.ExportOptionsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="导出选项" Height="520" Width="520"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#F5F5F5"
+        FontFamily="Segoe UI">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="PrimaryBrush" Color="#FF6A00"/>
+        <SolidColorBrush x:Key="PrimaryLightBrush" Color="#FF8C3A"/>
+        <SolidColorBrush x:Key="PrimaryDarkBrush" Color="#CC5500"/>
+        <SolidColorBrush x:Key="DarkBorderBrush" Color="#E0E0E0"/>
+        <SolidColorBrush x:Key="LightTextBrush" Color="#333333"/>
+        <SolidColorBrush x:Key="GrayTextBrush" Color="#666666"/>
+
+        <!-- Radio Button Style -->
+        <Style x:Key="RadioButtonStyle" TargetType="RadioButton">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{StaticResource LightTextBrush}"/>
+            <Setter Property="Margin" Value="5,8"/>
+            <Setter Property="Padding" Value="5,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <!-- Button Style -->
+        <Style x:Key="ButtonStyle" TargetType="Button">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="20,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource PrimaryLightBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0" Text="选择导出模式" FontSize="18" FontWeight="Bold" 
+                   Foreground="{StaticResource PrimaryBrush}" Margin="0,0,0,15"/>
+
+        <!-- Options -->
+        <Border Grid.Row="1" Background="White" CornerRadius="6" Padding="15" 
+                BorderBrush="{StaticResource DarkBorderBrush}" BorderThickness="1">
+            <StackPanel>
+                <!-- No Extract Mode -->
+                <GroupBox x:Name="gbNoExtract" Header="不进行二次解压" Margin="0,0,0,10"
+                          BorderBrush="{StaticResource DarkBorderBrush}" BorderThickness="1">
+                    <StackPanel Margin="10,5">
+                        <RadioButton x:Name="rbNoExtract" GroupName="ExtractMode" 
+                                     Style="{StaticResource RadioButtonStyle}"
+                                     IsChecked="True">
+                            <TextBlock TextWrapping="Wrap">
+                                <Run Text="直接导出 .cache 文件（不解压）"/>
+                            </TextBlock>
+                        </RadioButton>
+                        <TextBlock Text="输出目录：文件名_cache" 
+                                   Foreground="{StaticResource GrayTextBrush}" FontSize="11" Margin="25,0,0,5"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- Secondary Extraction Modes -->
+                <GroupBox Header="二次解压（LZ77 解压 .cache 文件）" 
+                          BorderBrush="{StaticResource DarkBorderBrush}" BorderThickness="1">
+                    <StackPanel Margin="10,5">
+                        <RadioButton x:Name="rbRemove8Bytes" GroupName="ExtractMode" 
+                                     Style="{StaticResource RadioButtonStyle}">
+                            <TextBlock TextWrapping="Wrap">
+                                <Run Text="移除所有解压文件的前 8 字节"/>
+                            </TextBlock>
+                        </RadioButton>
+                        <TextBlock Text="输出目录：文件名_nocache_m8byte" 
+                                   Foreground="{StaticResource GrayTextBrush}" FontSize="11" Margin="25,0,0,5"/>
+
+                        <RadioButton x:Name="rbKeep8Bytes" GroupName="ExtractMode" 
+                                     Style="{StaticResource RadioButtonStyle}">
+                            <TextBlock TextWrapping="Wrap">
+                                <Run Text="保留所有解压文件的前 8 字节"/>
+                            </TextBlock>
+                        </RadioButton>
+                        <TextBlock Text="输出目录：文件名_nocache_k8byte" 
+                                   Foreground="{StaticResource GrayTextBrush}" FontSize="11" Margin="25,0,0,5"/>
+
+                        <RadioButton x:Name="rbMixed" GroupName="ExtractMode" 
+                                     Style="{StaticResource RadioButtonStyle}">
+                            <TextBlock TextWrapping="Wrap">
+                                <Run Text="仅保留以下类型的前 8 字节："/>
+                                <Run Text=".mesh, .skel, .anim, .lua, .luac" Foreground="{StaticResource PrimaryBrush}" FontWeight="SemiBold"/>
+                                <Run Text="（其他类型移除）"/>
+                            </TextBlock>
+                        </RadioButton>
+                        <TextBlock Text="输出目录：文件名_nocache_mixed" 
+                                   Foreground="{StaticResource GrayTextBrush}" FontSize="11" Margin="25,0,0,5"/>
+                    </StackPanel>
+                </GroupBox>
+            </StackPanel>
+        </Border>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+            <Button Content="确定" Style="{StaticResource ButtonStyle}"
+                    Background="{StaticResource PrimaryBrush}" Foreground="White"
+                    BorderBrush="{StaticResource PrimaryDarkBrush}"
+                    Click="BtnOK_Click" IsDefault="True"
+                    Margin="0,0,10,0"/>
+            <Button Content="取消" Style="{StaticResource ButtonStyle}"
+                    Background="White" Foreground="{StaticResource LightTextBrush}"
+                    BorderBrush="{StaticResource DarkBorderBrush}"
+                    Click="BtnCancel_Click" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

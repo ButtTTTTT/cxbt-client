@@ -33,6 +33,7 @@ import './Gameplay.css';
 import { WebRTCClient } from '../../network/WebRTCClient';
 
 type MapDefinition = {
+  name?: string;
   scene: string;
   collision: string | null;
   minimap: string | null;
@@ -41,7 +42,33 @@ type MapDefinition = {
   camera: number[] | null;
   fog: number[] | null;
   ambience?: string | null;
+  sun?: number[] | null;
+  holdPoint?: number[] | null;
+  redSpawns?: number[][] | null;
+  blueSpawns?: number[][] | null;
+  redFlag?: number[] | null;
+  blueFlag?: number[] | null;
+  bombSites?: number[][] | null;
+  treasureSpawns?: number[][] | null;
 };
+
+export type ModeObjectiveState = {
+  modeId: string;
+  statusText: string;
+  progress: number; // 0..100 for occupy / plant
+  ownerTeam: 'neutral' | 'red' | 'blue';
+  carryingFlag: boolean;
+  treasuresCollected: number;
+  activeBuff: string;
+  bombPlanted: boolean;
+  bombTimer: number;
+  roundNumber: number;
+  bossName?: string;
+  bossHp?: number;
+  bossMaxHp?: number;
+  bossStage?: number;
+};
+
 type BattleControl = { 
   switchWeapon: (index: number) => void; 
   fire: () => void; 
@@ -52,6 +79,8 @@ type BattleControl = {
   reviveAllBots: () => void;
   clearAllBots: () => void;
   hitBot: (id: string, dmg: number) => void;
+  respawnPlayer: () => void;
+  interactObjective: () => void;
 };
 type HotbarState = { cooldowns: number[]; shield: number; stealthed: boolean; speed: number; maxHealthScale: number };
 type SandboxRules = { infiniteAmmo: boolean; noCooldown: boolean; godMode: boolean; autoRespawnBots: boolean };
@@ -74,12 +103,15 @@ function formatTime(seconds: number) {
   return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
 }
 
-function BattleScene({ map, customMap, character, creation, assets, avatarPreset, weapons, slots, loads, health, motion,
+function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion, character, creation, assets, avatarPreset, weapons, slots, loads, health, motion,
   active, onReady, onPosition, onShot, onHit, onReload, onWeaponChange, onDamage, onHeal, onHotbar,
-  onPause, paused, sandboxOpen, sandboxRules, onBotsChange, onBotKill, onHitMarker, onRecoil,
+  onPause, paused, sandboxOpen, sandboxRules, onBotsChange, onBotKill, onObjectiveScore, onObjectiveState, onHitMarker, onRecoil,
   otherPlayers, roomPlayers, logDebug }: {
   map: MapDefinition;
   customMap?: CustomMapBlueprint;
+  modeId: string;
+  damageBonusMult: number;
+  hasPetCompanion: boolean;
   character: SavedCharacter;
   creation: CreationAssets;
   assets: LobbyAssets;
@@ -94,7 +126,9 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
   sandboxOpen: RefObject<boolean>;
   sandboxRules: RefObject<SandboxRules>;
   onBotsChange: (bots: BotSnapshot[]) => void;
-  onBotKill: () => void;
+  onBotKill: (botName?: string, weaponName?: string) => void;
+  onObjectiveScore: (redDelta: number, blueDelta: number, feedText: string) => void;
+  onObjectiveState: (state: ModeObjectiveState) => void;
   onHitMarker: (crit: boolean) => void;
   onRecoil: (spread: number) => void;
   onReady: () => void;
@@ -125,8 +159,11 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
   const pauseRef = useRef(onPause);
   const botsChangeRef = useRef(onBotsChange);
   const botKillRef = useRef(onBotKill);
+  const objectiveScoreRef = useRef(onObjectiveScore);
+  const objectiveStateRef = useRef(onObjectiveState);
   const hitMarkerRef = useRef(onHitMarker);
   const recoilRef = useRef(onRecoil);
+  const damageBonusRef = useRef(damageBonusMult);
 
   shotRef.current = onShot;
   hitRef.current = onHit;
@@ -141,8 +178,11 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
   pauseRef.current = onPause;
   botsChangeRef.current = onBotsChange;
   botKillRef.current = onBotKill;
+  objectiveScoreRef.current = onObjectiveScore;
+  objectiveStateRef.current = onObjectiveState;
   hitMarkerRef.current = onHitMarker;
   recoilRef.current = onRecoil;
+  damageBonusRef.current = damageBonusMult;
 
   useEffect(() => {
     if (mountRef.current) {
@@ -231,10 +271,88 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
       if (left > 0) damageRef.current(left);
     };
 
+    let buffDamageMult = 1.0;
+    let buffSpeedMult = 1.0;
+    let buffExpireAt = 0;
+    let activeBuffLabel = '';
+
+    // Mode objective runtime state
+    const normalizedMode = (() => {
+      const m = (modeId || '').toLowerCase();
+      if (m.includes('occupy') || m.includes('zhandian') || m.includes('占')) return 'occupy';
+      if (m.includes('flag') || m.includes('snatch') || m.includes('夺旗')) return 'flag';
+      if (m.includes('treasure') || m.includes('contention') || m.includes('夺宝') || m.includes('宝箱')) return 'treasure';
+      if (m.includes('blast') || m.includes('爆破')) return 'blast';
+      if (m.includes('kill') || m.includes('歼灭')) return 'kill';
+      if (m.includes('survival') || m.includes('boss') || m.includes('bioche') || m.includes('远征') || m.includes('生化')) return 'boss';
+      return 'team';
+    })();
+
+    const BOSS_STAGES = [
+      { name: '阶段1 · 暴走重装机甲 (Boss_01)', maxHp: 6500, color: 0xef4444, scale: 1.9 },
+      { name: '阶段2 · 暗黑熔岩巨龙 (Boss_02)', maxHp: 9000, color: 0xf97316, scale: 2.1 },
+      { name: '阶段3 · 生化变异领主 (Boss_03)', maxHp: 12000, color: 0x10b981, scale: 2.2 },
+      { name: '阶段4 · 星界行刑者 (Boss_08)', maxHp: 15500, color: 0x8b5cf6, scale: 2.35 },
+      { name: '阶段5 · 终焉泰坦首领 (Boss_09)', maxHp: 20000, color: 0xfacc15, scale: 2.55 },
+    ];
+    let bossStageIdx = 0;
+    let bossHp = BOSS_STAGES[0].maxHp;
+    let bossMaxHp = BOSS_STAGES[0].maxHp;
+    let bossAttackCooldown = 3.5;
+
+    let occupyProgress = 0; // -100 (blue) .. +100 (red)
+    let occupyTickTimer = 0;
+    let carryingFlag = false;
+    let treasuresCollected = 0;
+    let bombPlanted = false;
+    let bombTimer = 35;
+    let roundNumber = 1;
+    let roundResetCooldown = 0;
+    let lastObjSync = 0;
+
+    const objectiveGroup = new THREE.Group();
+    scene.add(objectiveGroup);
+
+    let holdRingMesh: any = null;
+    let holdBeaconMesh: any = null;
+    let blueFlagMesh: any = null;
+    let redFlagMesh: any = null;
+    let carriedFlagMesh: any = null;
+    let bombSiteMeshes: any[] = [];
+    let plantedBombMesh: any = null;
+    let bossGroup: any = null;
+    let bossHitboxMesh: any = null;
+    let petCompanionMesh: any = null;
+    const treasureChests: Array<{ mesh: any; pos: any; respawnAt: number }> = [];
+
+    const resolveSafeSpawn = (team: 'red' | 'blue', index = 0) => {
+      if (customMap) {
+        return new THREE.Vector3(customMap.spawnPoint[0], customMap.spawnPoint[1], customMap.spawnPoint[2]);
+      }
+      const list = team === 'red' ? map.redSpawns : map.blueSpawns;
+      const fallback = map.holdPoint ?? map.camera ?? [0, 2, 0];
+      const raw = (list && list[index % list.length]) || fallback;
+      const sx = raw[0] ?? 0;
+      const sz = raw[2] ?? 0;
+      const ground = mapCollider.floorAt(sx, sz, (raw[1] ?? 12) + 65) ?? mapCollider.floorAt(0, 0, 90) ?? 0;
+      return new THREE.Vector3(sx, ground, sz);
+    };
+
+    const resolveHoldPointVec = () => {
+      const hp = map.holdPoint ?? map.redSpawns?.[0] ?? map.camera ?? [0, 1, 0];
+      const hx = hp[0] ?? 0;
+      const hz = hp[2] ?? 0;
+      const hy = mapCollider.floorAt(hx, hz, (hp[1] ?? 12) + 65) ?? (hp[1] ?? 0);
+      return new THREE.Vector3(hx, hy, hz);
+    };
+
     const botManager = new BotManager(scene, {
       onStateChange: (list) => botsChangeRef.current(list),
       onPlayerAttacked: (dmg) => takeDamage(dmg),
-      onBotKilled: () => botKillRef.current(),
+      onBotKilled: () => {
+        const wLabel = weapons[selected]?.label || '战术武器';
+        botKillRef.current('蓝方卫兵', wLabel);
+      },
       playAudio: (name, vol) => audio.play(name, vol),
       onStatus: (msg) => logRef.current(msg),
     });
@@ -247,34 +365,69 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
       for (const botTarget of botManager.getAliveTargets()) {
         list.push({ userId: botTarget.userId, position: botTarget.position });
       }
+      if (normalizedMode === 'boss' && bossGroup && bossHp > 0) {
+        list.push({ userId: '__boss__', position: bossGroup.position });
+      }
       return list;
     };
 
     const damageTargetById = (userId: string, damage: number, crit = false, hitPoint?: any) => {
-      const finalDamage = Math.max(1, Math.round(damage));
+      const scaledDamage = Math.max(1, Math.round(damage * damageBonusRef.current * buffDamageMult));
+      if (userId === '__boss__' && bossGroup && bossHp > 0) {
+        bossHp = Math.max(0, bossHp - scaledDamage);
+        const pos = hitPoint ? hitPoint.clone() : bossGroup.position.clone().add(new THREE.Vector3(0, 2.8, 0));
+        combatEffects.spawnFloatingDamage(pos, scaledDamage, crit);
+        hitMarkerRef.current(crit);
+        audio.play(crit ? 'critical_hit' : 'hit', crit ? 0.7 : 0.45);
+        if (bossHp <= 0) {
+          const defeatedName = BOSS_STAGES[bossStageIdx].name;
+          combatEffects.spawnExplosionEffect(bossGroup.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
+          audio.play('grenade-explode', 0.8);
+          objectiveScoreRef.current(10, 0, `👹 击败首领 [${defeatedName}]！红队 +10 分！`);
+          healRef.current(1200);
+          if (bossStageIdx < BOSS_STAGES.length - 1) {
+            bossStageIdx += 1;
+            const nextStage = BOSS_STAGES[bossStageIdx];
+            bossMaxHp = nextStage.maxHp;
+            bossHp = nextStage.maxHp;
+            bossGroup.scale.setScalar(nextStage.scale);
+            bossGroup.traverse((c: any) => {
+              if (c.isMesh && c.material && c.material.color) {
+                c.material.color.setHex(nextStage.color);
+              }
+            });
+          } else {
+            bossGroup.visible = false;
+          }
+        }
+        return;
+      }
       const bot = botManager.findById(userId);
       if (bot) {
-        botManager.damageBotById(userId, finalDamage);
+        botManager.damageBotById(userId, scaledDamage);
         const pos = hitPoint ? hitPoint.clone() : bot.entity.modelGroup.position.clone().add(new THREE.Vector3(0, 1.65, 0));
-        combatEffects.spawnFloatingDamage(pos, finalDamage, crit);
+        combatEffects.spawnFloatingDamage(pos, scaledDamage, crit);
         hitMarkerRef.current(crit);
         audio.play(crit ? 'critical_hit' : 'hit', crit ? 0.7 : 0.45);
         return;
       }
-      hitRef.current(userId, finalDamage);
+      hitRef.current(userId, scaledDamage);
       const remoteEntity = otherPlayerEntities.get(userId);
       if (remoteEntity) {
-        remoteEntity.takeDamage(finalDamage);
+        remoteEntity.takeDamage(scaledDamage);
         const pos = hitPoint ? hitPoint.clone() : remoteEntity.modelGroup.position.clone().add(new THREE.Vector3(0, 1.65, 0));
-        combatEffects.spawnFloatingDamage(pos, finalDamage, crit);
+        combatEffects.spawnFloatingDamage(pos, scaledDamage, crit);
       }
       hitMarkerRef.current(crit);
       audio.play(crit ? 'critical_hit' : 'hit', crit ? 0.7 : 0.45);
     };
 
-    const resolveTargetEntity = (hitObj: any): { entity: PlayerEntity; userId: string } | null => {
+    const resolveTargetEntity = (hitObj: any): { entity?: PlayerEntity; isBoss?: boolean; userId: string } | null => {
       let curr: any = hitObj;
       while (curr) {
+        if (curr.userData?.isBoss) {
+          return { isBoss: true, userId: '__boss__' };
+        }
         if (curr.userData?.isPlayer && curr.userData?.entity) {
           return { entity: curr.userData.entity as PlayerEntity, userId: String(curr.userData.userId ?? '') };
         }
@@ -290,6 +443,9 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
         const meshes = mapCollider.collisionMeshes.length ? [...mapCollider.collisionMeshes] : [...mapCollider.mapVisible];
         for (const hitbox of botManager.getAliveHitboxes()) {
           if (!meshes.includes(hitbox)) meshes.push(hitbox);
+        }
+        if (bossHitboxMesh && bossHp > 0 && !meshes.includes(bossHitboxMesh)) {
+          meshes.push(bossHitboxMesh);
         }
         return meshes;
       },
@@ -309,11 +465,12 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
       },
       (hit, kind) => {
         const target = resolveTargetEntity(hit.object);
-        if (target && target.entity.isAlive) {
+        if (target && (target.isBoss || target.entity?.isAlive)) {
           const weaponId = weapons[selected]?.id ?? 'smg_01';
           const profile = getWeaponCombatProfile(weaponId);
           if (kind === 'arrow') {
-            const relY = hit.point.y - target.entity.modelGroup.position.y;
+            const basePos = target.entity ? target.entity.modelGroup.position.y : (bossGroup?.position.y ?? 0);
+            const relY = hit.point.y - basePos;
             const isHeadshot = relY >= 1.35;
             let dmg = Math.round(profile.damage * (isHeadshot ? profile.headshotMultiplier : 1));
             if (weaponId.startsWith('crossbow') && passives.lifesteal > 0) {
@@ -391,6 +548,9 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
           mapCollider.collisionMeshes.push(hitbox);
         }
       }
+      if (bossHitboxMesh && bossHp > 0 && !mapCollider.collisionMeshes.includes(bossHitboxMesh)) {
+        mapCollider.collisionMeshes.push(bossHitboxMesh);
+      }
 
       if (kind === 'melee') {
         const aim = cameraController ? cameraController.getForwardDirection() : camera.getWorldDirection(new THREE.Vector3());
@@ -399,7 +559,7 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
         for (const enemy of enemyList()) {
           const offset = enemy.position.clone().sub(point);
           const distance = offset.length();
-          if (distance > 3.2 || (distance > 0.01 && offset.normalize().dot(aim) < 0.15)) continue;
+          if (distance > 3.5 || (distance > 0.01 && offset.normalize().dot(aim) < 0.15)) continue;
           let damage = profile.damage * 0.25;
           if (passives.poisonChance > 0 && Math.random() * 100 < passives.poisonChance) damage += passives.dotDamage * 6;
           damageTargetById(enemy.userId, Math.round(damage), false, enemy.position.clone().add(new THREE.Vector3(0, 1.0, 0)));
@@ -460,8 +620,9 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
 
         if (hit) {
           const target = resolveTargetEntity(hit.object);
-          if (target && target.entity.isAlive) {
-            const relY = hit.point.y - target.entity.modelGroup.position.y;
+          if (target && (target.isBoss || target.entity?.isAlive)) {
+            const baseY = target.entity ? target.entity.modelGroup.position.y : (bossGroup?.position.y ?? 0);
+            const relY = hit.point.y - baseY;
             const isHeadshot = relY >= 1.35;
             let damage = profile.damage * 0.22 * (isHeadshot ? profile.headshotMultiplier : 1);
             if (family === 'sniperrifle' && Math.random() * 100 < passives.critChance) damage *= 1 + passives.critDamage / 100;
@@ -473,6 +634,52 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
             combatEffects.spawnImpactSpark(hit.point);
           }
         }
+      }
+    };
+
+    const triggerObjectiveAction = () => {
+      if (!localPlayer) return;
+      const pPos = localPlayer.modelGroup.position;
+      if (normalizedMode === 'blast') {
+        if (!bombPlanted) {
+          bombPlanted = true;
+          bombTimer = 35;
+          if (plantedBombMesh) {
+            plantedBombMesh.position.copy(pPos).add(new THREE.Vector3(0, 0.35, 0));
+            plantedBombMesh.visible = true;
+          }
+          audio.play('grenade', 0.65);
+          objectiveScoreRef.current(2, 0, `💣 [${character.name}] 已在爆破点安放 C4 雷包！35秒引爆倒计时开始！`);
+        } else {
+          bombPlanted = false;
+          if (plantedBombMesh) plantedBombMesh.visible = false;
+          objectiveScoreRef.current(3, 0, `🛠️ [${character.name}] 成功拆除了高危雷包！`);
+        }
+      } else if (normalizedMode === 'flag') {
+        if (!carryingFlag && blueFlagMesh) {
+          carryingFlag = true;
+          blueFlagMesh.visible = false;
+          if (carriedFlagMesh) carriedFlagMesh.visible = true;
+          objectiveScoreRef.current(1, 0, `🚩 [${character.name}] 突袭夺取了蓝方战旗！请护送回己方基地！`);
+        } else if (carryingFlag) {
+          carryingFlag = false;
+          if (blueFlagMesh) blueFlagMesh.visible = true;
+          if (carriedFlagMesh) carriedFlagMesh.visible = false;
+          healRef.current(600);
+          objectiveScoreRef.current(5, 0, `🏆 [${character.name}] 成功将战旗护送回红方旗座！红队 +5 分！`);
+        }
+      } else if (normalizedMode === 'treasure') {
+        treasuresCollected += 1;
+        healRef.current(500);
+        buffDamageMult = 1.35;
+        buffSpeedMult = 1.22;
+        buffExpireAt = performance.now() + 12000;
+        activeBuffLabel = '⚡ 宝箱狂暴增益 (伤害+35% / 移速+22%)';
+        objectiveScoreRef.current(3, 0, `💎 [${character.name}] 开启了黄金宝箱 (#${treasuresCollected})！红队 +3 分！`);
+      } else {
+        // Default tactical pulse heal/buff
+        healRef.current(450);
+        combatEffects.spawnFloatingHeal(pPos, 450);
       }
     };
 
@@ -536,6 +743,16 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
       hitBot(id, dmg) {
         damageTargetById(id, dmg, false);
       },
+      respawnPlayer() {
+        if (!localPlayer) return;
+        const sp = resolveSafeSpawn('red', Math.floor(Math.random() * 4));
+        localPlayer.modelGroup.position.copy(sp);
+        localPlayer.revive();
+        combatEffects.spawnFloatingHeal(sp, MAX_HEALTH);
+      },
+      interactObjective() {
+        triggerObjectiveAction();
+      },
     };
 
     const lockPointer = () => {
@@ -559,6 +776,7 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
         localPlayer?.roll();
       }
       if (event.code === 'KeyR' && !event.repeat) active.current?.reload();
+      if (event.code === 'KeyE' && !event.repeat) triggerObjectiveAction();
 
       if (!event.repeat) {
         const index = BATTLE_QUICK_KEYS.indexOf(event.key);
@@ -688,6 +906,21 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
       localPlayer.events.onRoll = () => audio.play('roll');
       localPlayer.events.onDamage = (dmg) => damageRef.current(dmg);
 
+      // 挂载跟随宠物伴侣 (若玩家装备了宠物)
+      if (hasPetCompanion) {
+        const petGeo = new THREE.OctahedronGeometry(0.28, 1);
+        const petMat = new THREE.MeshStandardMaterial({
+          color: 0x38bdf8,
+          emissive: 0x0284c7,
+          emissiveIntensity: 0.85,
+          metalness: 0.6,
+          roughness: 0.2,
+        });
+        petCompanionMesh = new THREE.Mesh(petGeo, petMat);
+        petCompanionMesh.position.set(-0.65, 1.55, -0.45);
+        localPlayer.modelGroup.add(petCompanionMesh);
+      }
+
       // 3. 相机控制器实例化并绑定
       cameraController = new CameraController(camera, {
         distance: 2.9,
@@ -698,22 +931,176 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
       });
       cameraController.setTarget(localPlayer.modelGroup);
 
-      if (customMap) {
-        localPlayer.modelGroup.position.set(customMap.spawnPoint[0], customMap.spawnPoint[1], customMap.spawnPoint[2]);
-      } else {
-        const spawnX = map.camera?.[0] ?? 0;
-        const spawnZ = map.camera?.[2] ?? 0;
-        const ground = mapCollider.floorAt(spawnX, spawnZ, 80) ?? 0;
-        localPlayer.modelGroup.position.set(spawnX, ground, spawnZ);
+      // 4. 使用已验证的可行走地面出生点 (防止俯瞰相机坐标将玩家刷在场外高空)
+      const safeSpawn = resolveSafeSpawn('red', 0);
+      const holdVec = resolveHoldPointVec();
+      localPlayer.modelGroup.position.copy(safeSpawn);
+      const initialYaw = Math.atan2(holdVec.x - safeSpawn.x, holdVec.z - safeSpawn.z);
+      localPlayer.modelGroup.rotation.y = initialYaw;
+      cameraController.yaw = initialYaw;
+
+      // 5. 构建当前模式的 3D 场景交互目标物 (占点光环 / 红蓝战旗 / 黄金宝箱 / C4爆破点 / 远征Boss)
+      if (normalizedMode === 'occupy') {
+        const ringGeo = new THREE.TorusGeometry(4.2, 0.2, 16, 48);
+        ringGeo.rotateX(Math.PI / 2);
+        const ringMat = new THREE.MeshStandardMaterial({
+          color: 0xf59e0b,
+          emissive: 0xd97706,
+          emissiveIntensity: 0.8,
+        });
+        holdRingMesh = new THREE.Mesh(ringGeo, ringMat);
+        holdRingMesh.position.set(holdVec.x, holdVec.y + 0.18, holdVec.z);
+        objectiveGroup.add(holdRingMesh);
+
+        const beaconGeo = new THREE.CylinderGeometry(0.35, 0.35, 7.5, 16, 1, true);
+        const beaconMat = new THREE.MeshBasicMaterial({
+          color: 0xfbbf24,
+          transparent: true,
+          opacity: 0.28,
+          side: THREE.DoubleSide,
+        });
+        holdBeaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
+        holdBeaconMesh.position.set(holdVec.x, holdVec.y + 3.75, holdVec.z);
+        objectiveGroup.add(holdBeaconMesh);
+      } else if (normalizedMode === 'flag') {
+        const makeFlagMesh = (colorHex: number) => {
+          const g = new THREE.Group();
+          const pole = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.06, 0.06, 3.2, 10),
+            new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.8 })
+          );
+          pole.position.y = 1.6;
+          const cloth = new THREE.Mesh(
+            new THREE.BoxGeometry(1.1, 0.7, 0.06),
+            new THREE.MeshStandardMaterial({ color: colorHex, emissive: colorHex, emissiveIntensity: 0.55 })
+          );
+          cloth.position.set(0.55, 2.75, 0);
+          const base = new THREE.Mesh(
+            new THREE.CylinderGeometry(1.2, 1.4, 0.2, 20),
+            new THREE.MeshStandardMaterial({ color: colorHex, emissive: colorHex, emissiveIntensity: 0.35 })
+          );
+          base.position.y = 0.1;
+          g.add(pole, cloth, base);
+          return g;
+        };
+
+        const redFlagPos = safeSpawn.clone().add(new THREE.Vector3(2.2, 0, 2.2));
+        redFlagPos.y = mapCollider.floorAt(redFlagPos.x, redFlagPos.z, redFlagPos.y + 30) ?? safeSpawn.y;
+        redFlagMesh = makeFlagMesh(0xef4444);
+        redFlagMesh.position.copy(redFlagPos);
+        objectiveGroup.add(redFlagMesh);
+
+        blueFlagMesh = makeFlagMesh(0x3b82f6);
+        blueFlagMesh.position.copy(holdVec);
+        objectiveGroup.add(blueFlagMesh);
+
+        carriedFlagMesh = makeFlagMesh(0x3b82f6);
+        carriedFlagMesh.scale.setScalar(0.55);
+        carriedFlagMesh.position.set(0, 1.15, -0.35);
+        carriedFlagMesh.visible = false;
+        localPlayer.modelGroup.add(carriedFlagMesh);
+      } else if (normalizedMode === 'treasure') {
+        const rawT = map.treasureSpawns?.length
+          ? map.treasureSpawns
+          : [
+              [holdVec.x, holdVec.y, holdVec.z],
+              [holdVec.x - 5, holdVec.y, holdVec.z - 5],
+              [holdVec.x + 5, holdVec.y, holdVec.z + 5],
+              [holdVec.x - 5, holdVec.y, holdVec.z + 5],
+              [holdVec.x + 5, holdVec.y, holdVec.z - 5],
+            ];
+        for (const coords of rawT) {
+          const tx = coords[0] ?? holdVec.x;
+          const tz = coords[2] ?? holdVec.z;
+          const ty = mapCollider.floorAt(tx, tz, (coords[1] ?? 10) + 45) ?? holdVec.y;
+          const chestGroup = new THREE.Group();
+          const box = new THREE.Mesh(
+            new THREE.BoxGeometry(0.95, 0.72, 0.68),
+            new THREE.MeshStandardMaterial({
+              color: 0xfbbf24,
+              emissive: 0xd97706,
+              emissiveIntensity: 0.55,
+              metalness: 0.7,
+              roughness: 0.25,
+            })
+          );
+          box.position.y = 0.45;
+          chestGroup.add(box);
+          chestGroup.position.set(tx, ty, tz);
+          objectiveGroup.add(chestGroup);
+          treasureChests.push({ mesh: chestGroup, pos: new THREE.Vector3(tx, ty, tz), respawnAt: 0 });
+        }
+      } else if (normalizedMode === 'blast') {
+        const sites = map.bombSites?.length
+          ? map.bombSites
+          : [
+              [holdVec.x - 4, holdVec.y, holdVec.z],
+              [holdVec.x + 4, holdVec.y, holdVec.z],
+            ];
+        sites.forEach((sc, idx) => {
+          const bx = sc[0] ?? holdVec.x;
+          const bz = sc[2] ?? holdVec.z;
+          const by = mapCollider.floorAt(bx, bz, (sc[1] ?? 10) + 45) ?? holdVec.y;
+          const pad = new THREE.Mesh(
+            new THREE.CylinderGeometry(2.6, 2.6, 0.16, 28),
+            new THREE.MeshStandardMaterial({
+              color: idx === 0 ? 0xef4444 : 0xf97316,
+              emissive: idx === 0 ? 0xdc2626 : 0xea580c,
+              emissiveIntensity: 0.65,
+            })
+          );
+          pad.position.set(bx, by + 0.08, bz);
+          objectiveGroup.add(pad);
+          bombSiteMeshes.push(pad);
+        });
+
+        plantedBombMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(0.55, 0.3, 0.4),
+          new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xff0000, emissiveIntensity: 1.0 })
+        );
+        plantedBombMesh.visible = false;
+        objectiveGroup.add(plantedBombMesh);
+      } else if (normalizedMode === 'boss') {
+        bossGroup = new THREE.Group();
+        const core = new THREE.Mesh(
+          new THREE.DodecahedronGeometry(1.25, 1),
+          new THREE.MeshStandardMaterial({
+            color: BOSS_STAGES[0].color,
+            emissive: 0x7f1d1d,
+            emissiveIntensity: 0.6,
+            metalness: 0.65,
+            roughness: 0.25,
+          })
+        );
+        core.position.y = 1.8;
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(1.75, 0.14, 12, 32),
+          new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xd97706, emissiveIntensity: 0.8 })
+        );
+        ring.position.y = 1.8;
+        bossHitboxMesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(1.5, 1.5, 3.6, 12),
+          new THREE.MeshBasicMaterial({ visible: false })
+        );
+        bossHitboxMesh.position.y = 1.8;
+        bossHitboxMesh.userData = { isBoss: true, userId: '__boss__' };
+        bossGroup.add(core, ring, bossHitboxMesh);
+        bossGroup.position.copy(holdVec);
+        bossGroup.scale.setScalar(BOSS_STAGES[0].scale);
+        objectiveGroup.add(bossGroup);
+        mapCollider.collisionMeshes.push(bossHitboxMesh);
       }
 
-      // 单人或练习房间进场时自动召唤 2 名 AI 对手 (自定义地图已有预设人物/怪物时不额外重复生成)
+      // 单人或练习房间进场时自动在主战场召唤 AI 对手
       const humanCount = roomPlayers ? Object.keys(roomPlayers).length : 0;
       if (humanCount <= 1 && botManager.bots.length === 0) {
-        const origin = localPlayer.modelGroup.position.clone();
+        const botOrigin = holdVec.distanceTo(safeSpawn) < 48 ? holdVec : safeSpawn.clone().lerp(holdVec, 0.35);
         const env = mapCollider.toCollisionEnvironment();
-        void botManager.spawnBot({ mode: 'patrol', originPosition: origin, collisionEnv: env });
-        void botManager.spawnBot({ mode: 'chase', originPosition: origin, collisionEnv: env });
+        void botManager.spawnBot({ mode: 'patrol', originPosition: botOrigin, collisionEnv: env });
+        void botManager.spawnBot({ mode: 'chase', originPosition: botOrigin, collisionEnv: env });
+        if (normalizedMode === 'team' || normalizedMode === 'kill' || normalizedMode === 'boss') {
+          void botManager.spawnBot({ mode: 'chase', originPosition: botOrigin, collisionEnv: env });
+        }
       }
 
       ready = true;
@@ -728,10 +1115,23 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
     const animate = () => {
       frame = requestAnimationFrame(animate);
       const delta = Math.min(clock.getDelta(), 0.05);
+      const nowMs = performance.now();
+
+      if (buffExpireAt > 0 && nowMs > buffExpireAt) {
+        buffExpireAt = 0;
+        buffDamageMult = 1.0;
+        buffSpeedMult = 1.0;
+        activeBuffLabel = '';
+      }
+
+      if (petCompanionMesh) {
+        petCompanionMesh.rotation.y += delta * 2.4;
+        petCompanionMesh.position.y = 1.55 + Math.sin(nowMs * 0.004) * 0.12;
+      }
 
       // 多人联机对手同步与插值
       if (otherPlayers.current) {
-        const renderTime = performance.now() - 100;
+        const renderTime = nowMs - 100;
         for (const [userIdStr, stateObj] of Object.entries(otherPlayers.current)) {
           const buffer = stateObj.buffer;
           if (buffer.length === 0) continue;
@@ -838,7 +1238,7 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
       if (localPlayer && ready) {
         localPlayer.godMode = sandboxRules.current.godMode;
         localPlayer.setMotion(motion.current);
-        localPlayer.setSpeed(skillEffects.speed(localPlayer.getBaseSpeed()));
+        localPlayer.setSpeed(skillEffects.speed(localPlayer.getBaseSpeed()) * buffSpeedMult);
 
         const dir = new THREE.Vector3();
         if (!sandboxOpen.current) {
@@ -853,21 +1253,165 @@ function BattleScene({ map, customMap, character, creation, assets, avatarPreset
         localPlayer.setInput(dir, yaw, false);
         localPlayer.update(delta);
 
-        botManager.autoRespawn = sandboxRules.current.autoRespawnBots;
+        botManager.autoRespawn = normalizedMode === 'kill' ? false : sandboxRules.current.autoRespawnBots;
         botManager.update(delta, localPlayer, skillEffects.isStealthed());
 
         cameraController?.update(delta, mapCollider.collisionMeshes);
 
         const currentPos = localPlayer.modelGroup.position;
         const currentYaw = localPlayer.modelGroup.rotation.y;
-        if (performance.now() - (positionRef.current as any).lastTime > 66 || !(positionRef.current as any).lastTime) {
-          (positionRef.current as any).lastTime = performance.now();
+        if (nowMs - (positionRef.current as any).lastTime > 66 || !(positionRef.current as any).lastTime) {
+          (positionRef.current as any).lastTime = nowMs;
           positionRef.current(currentPos.x, currentPos.z, currentYaw);
+        }
+
+        // 6. 模式专属 3D 目标实时判定与推进
+        let statusText = '团队竞技 · 击败敌方目标夺取胜利';
+        let ownerTeam: 'neutral' | 'red' | 'blue' = 'neutral';
+
+        if (normalizedMode === 'occupy' && holdRingMesh) {
+          holdRingMesh.rotation.z += delta * 0.8;
+          const dist = currentPos.distanceTo(holdRingMesh.position);
+          const enemyNear = botManager.getAliveTargets().some((b) => b.position.distanceTo(holdRingMesh.position) < 6.5);
+          if (dist < 6.5 && !enemyNear) {
+            occupyProgress = Math.min(100, occupyProgress + delta * 22);
+          } else if (enemyNear && dist >= 6.5) {
+            occupyProgress = Math.max(-100, occupyProgress - delta * 14);
+          }
+          ownerTeam = occupyProgress >= 50 ? 'red' : occupyProgress <= -50 ? 'blue' : 'neutral';
+          if (holdRingMesh.material?.color) {
+            holdRingMesh.material.color.setHex(ownerTeam === 'red' ? 0xef4444 : ownerTeam === 'blue' ? 0x3b82f6 : 0xf59e0b);
+          }
+          if (ownerTeam === 'red') {
+            occupyTickTimer += delta;
+            if (occupyTickTimer >= 3.0) {
+              occupyTickTimer = 0;
+              objectiveScoreRef.current(2, 0, '');
+            }
+          }
+          statusText =
+            ownerTeam === 'red'
+              ? `占点模式 · 红队占领核心中 (${Math.round(occupyProgress)}%)`
+              : ownerTeam === 'blue'
+                ? `占点模式 · 蓝队控制核心 (${Math.round(Math.abs(occupyProgress))}%)`
+                : `占点模式 · 前往中央黄环占领据点 (${Math.round(Math.max(0, occupyProgress))}%)`;
+        } else if (normalizedMode === 'flag') {
+          if (!carryingFlag && blueFlagMesh && currentPos.distanceTo(blueFlagMesh.position) < 3.5) {
+            carryingFlag = true;
+            blueFlagMesh.visible = false;
+            if (carriedFlagMesh) carriedFlagMesh.visible = true;
+            objectiveScoreRef.current(1, 0, `🚩 [${character.name}] 夺取了蓝方战旗！护送回红方旗座！`);
+          } else if (carryingFlag && redFlagMesh && currentPos.distanceTo(redFlagMesh.position) < 4.0) {
+            carryingFlag = false;
+            if (blueFlagMesh) blueFlagMesh.visible = true;
+            if (carriedFlagMesh) carriedFlagMesh.visible = false;
+            healRef.current(600);
+            objectiveScoreRef.current(5, 0, `🏆 [${character.name}] 护送战旗抵达基地！红队 +5 分！`);
+          }
+          statusText = carryingFlag
+            ? '夺旗先锋 · 🚩 已夺取敌旗！快返回红方基地旗座得分 (或按 [E] 立即交付)'
+            : '夺旗先锋 · 突袭蓝方旗座夺取战旗 (可按 [E] 快速交互)';
+        } else if (normalizedMode === 'treasure') {
+          for (const item of treasureChests) {
+            if (item.respawnAt > 0) {
+              if (nowMs >= item.respawnAt) {
+                item.respawnAt = 0;
+                item.mesh.visible = true;
+              }
+              continue;
+            }
+            item.mesh.rotation.y += delta * 1.8;
+            if (currentPos.distanceTo(item.pos) < 3.0) {
+              item.respawnAt = nowMs + 8000;
+              item.mesh.visible = false;
+              treasuresCollected += 1;
+              healRef.current(450);
+              buffDamageMult = 1.35;
+              buffSpeedMult = 1.22;
+              buffExpireAt = nowMs + 12000;
+              activeBuffLabel = '⚡ 黄金宝箱增益 (伤害+35% / 移速+22%)';
+              objectiveScoreRef.current(3, 0, `💎 [${character.name}] 拾取了黄金宝箱 (#${treasuresCollected})！红队 +3 分！`);
+            }
+          }
+          statusText = `夺宝奇兵 · 已收集宝箱 ${treasuresCollected} 个 ${activeBuffLabel ? `| ${activeBuffLabel}` : '| 靠近发光宝箱或按 [E] 拾取'}`;
+        } else if (normalizedMode === 'blast') {
+          if (bombPlanted) {
+            bombTimer = Math.max(0, bombTimer - delta);
+            if (plantedBombMesh) {
+              plantedBombMesh.scale.setScalar(1 + Math.sin(nowMs * 0.02) * 0.18);
+            }
+            if (bombTimer <= 0) {
+              bombPlanted = false;
+              bombTimer = 35;
+              if (plantedBombMesh) {
+                combatEffects.spawnExplosionEffect(plantedBombMesh.position.clone());
+                plantedBombMesh.visible = false;
+              }
+              audio.play('grenade-explode', 0.85);
+              roundNumber += 1;
+              botManager.reviveAllBots();
+              objectiveScoreRef.current(5, 0, `💥 C4 雷包成功引爆！红队赢下第 ${roundNumber - 1} 回合 (+5 分)！`);
+            }
+            statusText = `爆破模式 · 💣 C4 已安放！引爆倒计时 ${Math.ceil(bombTimer)}s (按 [E] 交互)`;
+          } else {
+            statusText = `爆破模式 (第 ${roundNumber} 回合) · 前往爆破点按 [E] 安放 C4 雷包`;
+          }
+        } else if (normalizedMode === 'kill') {
+          const aliveEnemies = botManager.getAliveTargets().length;
+          if (aliveEnemies === 0 && botManager.bots.length > 0) {
+            roundResetCooldown += delta;
+            if (roundResetCooldown >= 2.2) {
+              roundResetCooldown = 0;
+              roundNumber += 1;
+              botManager.reviveAllBots();
+              healRef.current(800);
+              objectiveScoreRef.current(4, 0, `⚔️ 全歼敌军！红队赢下第 ${roundNumber - 1} 回合！`);
+            }
+            statusText = `团队歼灭 · 第 ${roundNumber} 回合肃清完成！正在部署下一波敌军...`;
+          } else {
+            statusText = `团队歼灭 (第 ${roundNumber} 回合) · 剩余存活敌军: ${aliveEnemies} 名`;
+          }
+        } else if (normalizedMode === 'boss') {
+          if (bossGroup && bossHp > 0) {
+            bossGroup.rotation.y += delta * 1.4;
+            bossAttackCooldown -= delta;
+            if (bossAttackCooldown <= 0) {
+              bossAttackCooldown = 4.2;
+              if (currentPos.distanceTo(bossGroup.position) < 16) {
+                combatEffects.spawnExplosionEffect(bossGroup.position.clone().add(new THREE.Vector3(0, 0.5, 0)));
+                takeDamage(180 + bossStageIdx * 45);
+              }
+            }
+          }
+          const curStage = BOSS_STAGES[bossStageIdx];
+          statusText = bossHp > 0
+            ? `远征首领战 · ${curStage.name} | HP: ${bossHp} / ${bossMaxHp}`
+            : `远征首领战 · 🏆 全部 5 阶段首领已彻底击溃！`;
+        }
+
+        if (nowMs - lastObjSync > 180) {
+          lastObjSync = nowMs;
+          objectiveStateRef.current({
+            modeId: normalizedMode,
+            statusText,
+            progress: Math.round(Math.abs(occupyProgress)),
+            ownerTeam,
+            carryingFlag,
+            treasuresCollected,
+            activeBuff: activeBuffLabel,
+            bombPlanted,
+            bombTimer: Math.ceil(bombTimer),
+            roundNumber,
+            bossName: normalizedMode === 'boss' ? BOSS_STAGES[bossStageIdx].name : undefined,
+            bossHp: normalizedMode === 'boss' ? bossHp : undefined,
+            bossMaxHp: normalizedMode === 'boss' ? bossMaxHp : undefined,
+            bossStage: normalizedMode === 'boss' ? bossStageIdx + 1 : undefined,
+          });
         }
       }
 
-      if (performance.now() - lastHotbar > 100) {
-        lastHotbar = performance.now();
+      if (nowMs - lastHotbar > 100) {
+        lastHotbar = nowMs;
         const snap = skillEffects.snapshot();
         const bySlot = skillEffects.bySlot();
         hotbarRef.current({
@@ -979,15 +1523,42 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   const [remaining, setRemaining] = useState(ROUND_LENGTH);
   const [scoreRed, setScoreRed] = useState(0);
   const [scoreBlue, setScoreBlue] = useState(0);
+  const [playerKills, setPlayerKills] = useState(0);
+  const [playerDeaths, setPlayerDeaths] = useState(0);
+  const [objectivePoints, setObjectivePoints] = useState(0);
+  const [killFeed, setKillFeed] = useState<Array<{ id: number; text: string; color?: string }>>([]);
+  const [objectiveState, setObjectiveState] = useState<ModeObjectiveState>({
+    modeId: room.modeId || 'team',
+    statusText: `${room.modeName || '团队竞技'} · 击败敌方目标夺取胜利`,
+    progress: 0,
+    ownerTeam: 'neutral',
+    carryingFlag: false,
+    treasuresCollected: 0,
+    activeBuff: '',
+    bombPlanted: false,
+    bombTimer: 35,
+    roundNumber: 1,
+  });
+  const [respawnCountdown, setRespawnCountdown] = useState(0);
+  const [showScoreboard, setShowScoreboard] = useState(false);
+  const [showSettlement, setShowSettlement] = useState(false);
+  const [flippedCards, setFlippedCards] = useState<Record<number, { name: string; icon: string; amount: string; rarity: string }>>({});
+  const damageBonusMult = useMemo(() => Math.max(1, 1 + Math.max(0, (character.power ?? 1500) - 1500) / 2500), [character.power]);
+  const [hasPetCompanion] = useState(true);
+
   const wsRef = useRef<WebRTCClient | null>(null);
   const sequenceRef = useRef(0);
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const logDebug = (msg: string) => setDebugLog(prev => [...prev.slice(-4), msg]);
 
+  const pushKillFeed = (text: string, color = '#fde047') => {
+    if (!text) return;
+    setKillFeed((prev) => [{ id: Date.now() + Math.random(), text, color }, ...prev.slice(0, 4)]);
+  };
+
   const myUserId = useMemo(() => {
     const me = Object.values(room.players || {}).find((p: any) => p.username === character.name);
     const resolvedId = me ? (me as any).userId : 0;
-    console.log('Resolved myUserId:', resolvedId, 'for character:', character.name, 'with players:', room.players);
     return resolvedId;
   }, [room.players, character.name]);
   const otherPlayersRef = useRef<Record<string, { buffer: {x: number, z: number, yaw: number, time: number}[] }>>({});
@@ -1015,7 +1586,7 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   const hitTimerRef = useRef(0);
   const recoilTimerRef = useRef(0);
   const hurtTimerRef = useRef(0);
-  pausedRef.current = paused;
+  pausedRef.current = paused || showSettlement;
   ammoRef.current = ammo;
   reservesRef.current = reserves;
   const loads = useMemo(() => loadSkills(skills, levels), [skills, levels]);
@@ -1029,15 +1600,45 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   const mapArt = chosenMap?.minimap;
 
   useEffect(() => {
-    if ((paused || sandboxOpen) && document.pointerLockElement) document.exitPointerLock();
-  }, [paused, sandboxOpen]);
+    if ((paused || sandboxOpen || showSettlement) && document.pointerLockElement) document.exitPointerLock();
+  }, [paused, sandboxOpen, showSettlement]);
+
+  // Respawn countdown when player HP reaches 0
+  useEffect(() => {
+    if (health > 0 || respawnCountdown > 0) return;
+    setPlayerDeaths((d) => d + 1);
+    setScoreBlue((b) => b + 1);
+    pushKillFeed(`💀 [${character.name}] 阵亡，3 秒后于红方基地重整复活`, '#f87171');
+    setRespawnCountdown(3);
+  }, [health]);
+
+  useEffect(() => {
+    if (respawnCountdown <= 0) return;
+    const t = window.setTimeout(() => {
+      if (respawnCountdown <= 1) {
+        setRespawnCountdown(0);
+        setHealth(maxHealth);
+        setAmmo(weapons.map(magazine));
+        control.current?.respawnPlayer();
+      } else {
+        setRespawnCountdown((c) => c - 1);
+      }
+    }, 1000);
+    return () => window.clearTimeout(t);
+  }, [respawnCountdown, maxHealth, weapons]);
+
+  // Trigger post-match settlement (game_balance.lua) when timer expires
+  useEffect(() => {
+    if (ready && remaining === 0 && !showSettlement) {
+      setShowSettlement(true);
+    }
+  }, [ready, remaining, showSettlement]);
 
   useEffect(() => {
     const roomId = room.id ?? 'default-room';
     const gameUrl = `${WS_BASE}?roomId=${roomId}&playerId=${myUserId}`;
     const sigUrl = `${WS_BASE.replace('/ws', '/webrtc')}?roomId=${roomId}&playerId=${myUserId}`;
     const ws = new WebRTCClient(gameUrl, sigUrl, () => {
-      console.log('WebRTC Ready! Sending first sync.');
       logDebug(`[Network] WebRTC DataChannel OPENED! 握手成功`);
       sequenceRef.current++;
       ws.sendMove(myUserId, position.x, position.z, position.yaw, sequenceRef.current);
@@ -1054,7 +1655,6 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
           setHealth(msg.hp);
         } else if (msg.type === 'sync' && msg.userId != myUserId) {
           if (!otherPlayersRef.current[msg.userId]) {
-            console.log(`[Networking] First sync received for remote player userId=${msg.userId}!`);
             logDebug(`[Network] 接收到玩家数据 (userId=${msg.userId})，开始渲染`);
             otherPlayersRef.current[msg.userId] = { buffer: [] };
           }
@@ -1062,10 +1662,9 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
           buffer.push({ x: msg.x, z: msg.z, yaw: msg.yaw, time: performance.now() });
           if (buffer.length > 20) buffer.shift();
         } else if (msg.type === 'respawn' && msg.userId == myUserId) {
-          setHealth(MAX_HEALTH);
+          setHealth(maxHealth);
         } else if (msg.type === 'game_over') {
-          onExit();
-          alert(`游戏结束！获胜方: ${msg.winner}`);
+          setShowSettlement(true);
         }
       } catch (err) {}
     };
@@ -1093,16 +1692,21 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   }, [weapons]);
 
   useEffect(() => {
-    if (!ready || paused || remaining <= 0) return;
+    if (!ready || paused || showSettlement || remaining <= 0) return;
     const timer = window.setInterval(() => setRemaining((value) => Math.max(0, value - 1)), 1000);
     return () => window.clearInterval(timer);
-  }, [ready, paused, remaining]);
+  }, [ready, paused, showSettlement, remaining]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Tab') {
         event.preventDefault();
-        if (sandboxOpenRef.current) {
+        setShowScoreboard((prev) => !prev);
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        if (showScoreboard) {
+          setShowScoreboard(false);
+        } else if (sandboxOpenRef.current) {
           sandboxOpenRef.current = false;
           setSandboxOpen(false);
           void document.body.requestPointerLock();
@@ -1123,7 +1727,7 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
     };
     addEventListener('keydown', onKey);
     return () => removeEventListener('keydown', onKey);
-  }, []);
+  }, [showScoreboard]);
 
   const triggerHitMarker = (crit = false) => {
     setHitMarker({ active: true, crit });
@@ -1176,7 +1780,6 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
     const nextAmmo = curAmmo - 1;
     ammoRef.current = ammoRef.current.map((value, slot) => slot === index ? nextAmmo : value);
     setAmmo(ammoRef.current);
-    // 弹夹最后一发打空后自动触发换弹
     if (nextAmmo <= 0) {
       window.setTimeout(() => {
         if ((ammoRef.current[selectedRef.current] ?? 0) <= 0) {
@@ -1217,22 +1820,93 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
       ? { x, z, yaw } : previous);
   };
 
+  const handleFlipRewardCard = async (cardIdx: number) => {
+    if (flippedCards[cardIdx] || Object.keys(flippedCards).length >= 3) return;
+    try {
+      const data = await apiFetch('/battle/flip-card', {
+        method: 'POST',
+        body: JSON.stringify({ cardIndex: cardIdx, modeId: room.modeId, victory: scoreRed >= scoreBlue }),
+      });
+      if (data?.reward) {
+        setFlippedCards((prev) => ({ ...prev, [cardIdx]: data.reward }));
+        return;
+      }
+    } catch {}
+    // Fallback local reward pool (ported from game_balance.lua)
+    const fallbackPool = [
+      { name: '强化石礼袋', icon: '💎', amount: 'x5', rarity: 'epic' },
+      { name: '高纯度稳压剂', icon: '🧪', amount: 'x2', rarity: 'rare' },
+      { name: '黄金战星金币', icon: '🪙', amount: '+1,200', rarity: 'common' },
+      { name: '远征首领勋章', icon: '🏅', amount: 'x3', rarity: 'epic' },
+      { name: '暗黑巨龙宠物蛋碎片', icon: '🐉', amount: 'x2', rarity: 'legendary' },
+      { name: '星币补给箱', icon: '✨', amount: '+180', rarity: 'rare' },
+      { name: '角色传承结晶', icon: '🔮', amount: 'x1', rarity: 'legendary' },
+      { name: '精良武器图纸', icon: '📜', amount: 'x1', rarity: 'rare' },
+      { name: '双倍经验勋章', icon: '⚡', amount: '+800 EXP', rarity: 'common' },
+    ];
+    const picked = fallbackPool[(cardIdx + scoreRed) % fallbackPool.length];
+    setFlippedCards((prev) => ({ ...prev, [cardIdx]: picked }));
+  };
+
+  const finishAndExit = () => {
+    void apiFetch('/battle/settle', {
+      method: 'POST',
+      body: JSON.stringify({
+        roomId: room.id ?? '',
+        modeName: room.modeName,
+        mapName: room.mapName,
+        kills: playerKills,
+        deaths: playerDeaths,
+        victory: scoreRed >= scoreBlue,
+      }),
+    }).catch(() => undefined).finally(() => onExit());
+  };
+
   const bounds = chosenMap?.bounds;
   const markerX = bounds?.length ? 50 + (position.x - bounds[0]) / bounds[2] * 100 : 50;
   const markerY = bounds?.length ? 50 - (position.z - bounds[1]) / bounds[3] * 100 : 50;
 
   return <main className={`battle-root${paused ? ' paused' : ''}${sandboxOpen ? ' sandbox-open' : ''}`} data-gameplay-ready={ready}>
-    {chosenMap && <BattleScene map={chosenMap} customMap={customMap} character={character} creation={creation} assets={assets}
-      avatarPreset={avatarPreset} weapons={weapons} slots={slots} loads={loads} health={healthRef} motion={motionRef}
-      active={control} paused={pausedRef} sandboxOpen={sandboxOpenRef} sandboxRules={sandboxRulesRef}
+    {chosenMap && <BattleScene
+      map={chosenMap}
+      customMap={customMap}
+      modeId={room.modeId || 'team'}
+      damageBonusMult={damageBonusMult}
+      hasPetCompanion={hasPetCompanion}
+      character={character}
+      creation={creation}
+      assets={assets}
+      avatarPreset={avatarPreset}
+      weapons={weapons}
+      slots={slots}
+      loads={loads}
+      health={healthRef}
+      motion={motionRef}
+      active={control}
+      paused={pausedRef}
+      sandboxOpen={sandboxOpenRef}
+      sandboxRules={sandboxRulesRef}
       onBotsChange={setBots}
-      onBotKill={() => {
+      onBotKill={(botName = '蓝方卫兵', weaponName = '武器') => {
+        setPlayerKills((k) => k + 1);
         setScoreRed((prev) => prev + 1);
+        pushKillFeed(`⚔️ [${character.name}] 使用 ${weaponName} 击杀了 [${botName}]`, '#34d399');
         wsRef.current?.sendJSON({ type: 'bot_kill', team: 'red' });
       }}
+      onObjectiveScore={(redDelta, blueDelta, feedText) => {
+        if (redDelta > 0) {
+          setScoreRed((prev) => prev + redDelta);
+          setObjectivePoints((p) => p + redDelta * 25);
+        }
+        if (blueDelta > 0) setScoreBlue((prev) => prev + blueDelta);
+        if (feedText) pushKillFeed(feedText, '#fbbf24');
+        wsRef.current?.sendJSON({ type: 'objective_action', redDelta, blueDelta, modeId: room.modeId });
+      }}
+      onObjectiveState={setObjectiveState}
       onHitMarker={triggerHitMarker}
       onRecoil={triggerRecoil}
-      onReady={() => setReady(true)} onPosition={reportPosition}
+      onReady={() => setReady(true)}
+      onPosition={reportPosition}
       otherPlayers={otherPlayersRef}
       roomPlayers={room.players}
       logDebug={logDebug}
@@ -1256,9 +1930,139 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
       onHeal={(amount) => setHealth((value) => Math.min(maxHealth, value + amount))}
       onPause={() => setPaused(true)} />}
 
-    {!ready && <div className="battle-loading" role="status">{error || `${room.mapName} · 战场加载中…`}</div>}
+    {!ready && <div className="battle-loading" role="status">{error || `${chosenMap?.name || room.mapName} · 战场加载中…`}</div>}
 
     {hurtFlash && <div className="battle-hurt-vignette" aria-hidden="true" />}
+
+    {/* Top Mode Objective Banner & Boss Health Bar */}
+    {ready && (
+      <div
+        style={{
+          position: 'fixed',
+          top: 76,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 18,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 6,
+          pointerEvents: 'none',
+        }}
+      >
+        <div
+          style={{
+            background: 'rgba(15, 23, 42, 0.84)',
+            border: '1px solid rgba(56, 189, 248, 0.45)',
+            borderRadius: 999,
+            padding: '5px 18px',
+            color: '#f8fafc',
+            fontSize: 13,
+            fontWeight: 'bold',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}
+        >
+          <span style={{ color: '#38bdf8' }}>[{room.modeName || '团队竞技'}]</span>
+          <span>{objectiveState.statusText}</span>
+          {damageBonusMult > 1 && (
+            <span style={{ color: '#fbbf24', fontSize: 11 }}>
+              ⚡ 强化加成 +{Math.round((damageBonusMult - 1) * 100)}%
+            </span>
+          )}
+        </div>
+
+        {/* Boss HP Bar for Expedition / Boss Mode */}
+        {objectiveState.modeId === 'boss' && objectiveState.bossMaxHp && (
+          <div
+            style={{
+              width: 420,
+              background: 'rgba(15, 23, 42, 0.92)',
+              border: '1px solid #ef4444',
+              borderRadius: 8,
+              padding: '6px 10px',
+              boxShadow: '0 6px 20px rgba(220, 38, 38, 0.35)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#fca5a5', fontWeight: 'bold', marginBottom: 4 }}>
+              <span>👹 {objectiveState.bossName}</span>
+              <span>
+                {objectiveState.bossHp} / {objectiveState.bossMaxHp} (阶段 {objectiveState.bossStage}/5)
+              </span>
+            </div>
+            <div style={{ width: '100%', height: 10, background: '#1e293b', borderRadius: 5, overflow: 'hidden' }}>
+              <div
+                style={{
+                  width: `${Math.max(0, Math.min(100, ((objectiveState.bossHp ?? 0) / objectiveState.bossMaxHp) * 100))}%`,
+                  height: '100%',
+                  background: 'linear-gradient(90deg, #dc2626, #f97316, #facc15)',
+                  transition: 'width 0.15s ease',
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* Top-Right Kill Feed */}
+    {killFeed.length > 0 && (
+      <div
+        style={{
+          position: 'fixed',
+          top: 150,
+          right: 18,
+          zIndex: 18,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 5,
+          pointerEvents: 'none',
+          maxWidth: 340,
+        }}
+      >
+        {killFeed.map((item) => (
+          <div
+            key={item.id}
+            style={{
+              background: 'rgba(9, 13, 22, 0.82)',
+              borderLeft: `3px solid ${item.color || '#38bdf8'}`,
+              padding: '5px 10px',
+              borderRadius: 6,
+              color: item.color || '#f8fafc',
+              fontSize: 12,
+              fontWeight: 600,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+            }}
+          >
+            {item.text}
+          </div>
+        ))}
+      </div>
+    )}
+
+    {/* Respawn Countdown Overlay */}
+    {respawnCountdown > 0 && (
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(127, 29, 29, 0.42)',
+          zIndex: 35,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#fff',
+          pointerEvents: 'none',
+        }}
+      >
+        <div style={{ fontSize: 28, fontWeight: 900, textShadow: '0 4px 16px #000' }}>
+          ⚠️ 阵亡重整中 · {respawnCountdown} 秒后于己方基地复活
+        </div>
+      </div>
+    )}
 
     <div className="battle-reticle" aria-hidden="true"
       style={recoilSpread > 0 ? { transform: `translate(-50%, -50%) scale(${1 + recoilSpread * 0.018})` } : undefined}>
@@ -1294,11 +2098,53 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
       <div className="battle-map-image" style={mapArt ? { backgroundImage: `url(${BASE}${mapArt})` } : undefined}>
         <span className="battle-map-marker" style={{ left: `${THREE.MathUtils.clamp(markerX, 5, 95)}%`, top: `${THREE.MathUtils.clamp(markerY, 5, 95)}%`, transform: `translate(-50%, -50%) rotate(${-position.yaw}rad)` }}>▲</span>
       </div>
-      <span className="battle-map-name">{room.mapName}</span>
+      <span className="battle-map-name">{chosenMap?.name || room.mapName}</span>
     </aside>
 
-    <div className="battle-touch-controls"><button onClick={fire}>开火</button><button onClick={() => control.current?.reload()}>换弹</button></div>
+    <div className="battle-touch-controls">
+      <button onClick={fire}>开火</button>
+      <button onClick={() => control.current?.reload()}>换弹</button>
+      <button onClick={() => control.current?.interactObjective()}>交互 [E]</button>
+    </div>
     <button className="battle-menu-button" aria-label="打开菜单" title="菜单 (Esc)" onClick={() => setPaused(true)}>☰</button>
+    <button
+      style={{
+        position: 'fixed',
+        top: 14,
+        left: 196,
+        zIndex: 25,
+        padding: '6px 12px',
+        borderRadius: 8,
+        border: '1px solid #38bdf8',
+        background: showScoreboard ? '#0284c7' : 'rgba(15, 23, 42, 0.85)',
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: 'bold',
+        cursor: 'pointer',
+      }}
+      onClick={() => setShowScoreboard((prev) => !prev)}
+    >
+      📊 战报 [Tab]
+    </button>
+    <button
+      style={{
+        position: 'fixed',
+        top: 14,
+        left: 298,
+        zIndex: 25,
+        padding: '6px 12px',
+        borderRadius: 8,
+        border: '1px solid #fbbf24',
+        background: 'rgba(120, 53, 15, 0.88)',
+        color: '#fef3c7',
+        fontSize: 12,
+        fontWeight: 'bold',
+        cursor: 'pointer',
+      }}
+      onClick={() => setShowSettlement(true)}
+    >
+      🏆 战局结算 / 翻牌抽奖
+    </button>
     <button className={`battle-sandbox-button${sandboxOpen ? ' active' : ''}`} aria-label="沙盒战术面板" title="沙盒与AI靶场控制 [F2]"
       onClick={() => {
         const next = !sandboxOpen;
@@ -1308,6 +2154,238 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
       }}>
       🧩 沙盒 [F2]
     </button>
+
+    {/* Tab Tactical Scoreboard Modal */}
+    {showScoreboard && !showSettlement && (
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(9, 13, 22, 0.72)',
+          zIndex: 42,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        onClick={() => setShowScoreboard(false)}
+      >
+        <div
+          style={{
+            width: 680,
+            background: 'linear-gradient(180deg, #0f172a 0%, #090d16 100%)',
+            border: '1px solid #334155',
+            borderRadius: 14,
+            padding: 20,
+            color: '#f8fafc',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.75)',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <h3 style={{ margin: 0, color: '#38bdf8' }}>
+              📊 实时战术积分榜 · {chosenMap?.name || room.mapName} ({room.modeName || '团队竞技'})
+            </h3>
+            <span style={{ fontSize: 13, color: '#94a3b8' }}>红队 {scoreRed} : {scoreBlue} 蓝队</span>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #334155', color: '#94a3b8', textAlign: 'left' }}>
+                <th style={{ padding: 8 }}>阵营</th>
+                <th style={{ padding: 8 }}>角色名称</th>
+                <th style={{ padding: 8 }}>击杀 (K)</th>
+                <th style={{ padding: 8 }}>死亡 (D)</th>
+                <th style={{ padding: 8 }}>目标贡献</th>
+                <th style={{ padding: 8 }}>综合评分</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={{ borderBottom: '1px solid #1e293b', background: 'rgba(239, 68, 68, 0.14)' }}>
+                <td style={{ padding: 8, color: '#f87171', fontWeight: 'bold' }}>红队 (MVP)</td>
+                <td style={{ padding: 8, fontWeight: 'bold' }}>{character.name}</td>
+                <td style={{ padding: 8, color: '#34d399' }}>{playerKills}</td>
+                <td style={{ padding: 8 }}>{playerDeaths}</td>
+                <td style={{ padding: 8, color: '#fbbf24' }}>{objectivePoints}</td>
+                <td style={{ padding: 8, fontWeight: 'bold' }}>{playerKills * 100 + objectivePoints + 200}</td>
+              </tr>
+              {bots.map((b, idx) => (
+                <tr key={b.id} style={{ borderBottom: '1px solid #1e293b', background: 'rgba(59, 130, 246, 0.1)' }}>
+                  <td style={{ padding: 8, color: '#60a5fa' }}>蓝队 AI</td>
+                  <td style={{ padding: 8 }}>{b.name}</td>
+                  <td style={{ padding: 8 }}>{idx === 0 ? scoreBlue : 0}</td>
+                  <td style={{ padding: 8 }}>{Math.max(0, Math.floor(playerKills / Math.max(1, bots.length)))}</td>
+                  <td style={{ padding: 8 }}>15</td>
+                  <td style={{ padding: 8 }}>{(idx === 0 ? scoreBlue : 0) * 80 + 100}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
+
+    {/* Authentic game_balance.lua Post-Match Settlement + 9-Card Flip Reward Screen */}
+    {showSettlement && (
+      <div
+        id="battle-settlement-modal"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(5, 8, 17, 0.88)',
+          zIndex: 60,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 20,
+        }}
+      >
+        <div
+          style={{
+            width: 820,
+            maxWidth: '96vw',
+            background: 'linear-gradient(160deg, #0f172a 0%, #1e1b4b 55%, #090d16 100%)',
+            border: '2px solid #f59e0b',
+            borderRadius: 16,
+            padding: 24,
+            color: '#f8fafc',
+            boxShadow: '0 25px 70px rgba(0,0,0,0.85)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div>
+              <div style={{ fontSize: 26, fontWeight: 900, color: scoreRed >= scoreBlue ? '#fbbf24' : '#93c5fd' }}>
+                {scoreRed >= scoreBlue ? '🏆 战役大捷 VICTORY!' : '🛡️ 虽败犹荣 MATCH COMPLETE'}
+              </div>
+              <div style={{ fontSize: 13, color: '#cbd5e1', marginTop: 4 }}>
+                地图: {chosenMap?.name || room.mapName} | 模式: {room.modeName || '团队竞技'} | 比分: 红队 {scoreRed} - {scoreBlue} 蓝队
+              </div>
+            </div>
+            <div style={{ textAlign: 'right', fontSize: 13, color: '#a7f3d0' }}>
+              <div>获得金币: <strong>+{350 + playerKills * 65 + objectivePoints}</strong> 🪙</div>
+              <div>获得经验: <strong>+{220 + playerKills * 45}</strong> EXP</div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.15fr', gap: 20 }}>
+            {/* Left: Player Match Summary (game_balance.lua) */}
+            <div style={{ background: 'rgba(9, 13, 22, 0.75)', borderRadius: 12, padding: 14, border: '1px solid #334155' }}>
+              <div style={{ fontWeight: 'bold', color: '#38bdf8', marginBottom: 10, fontSize: 14 }}>
+                📋 战局个人表现统计 (game_balance.lua)
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 13, marginBottom: 12 }}>
+                <div style={{ background: '#111827', padding: 10, borderRadius: 8 }}>
+                  <div style={{ color: '#94a3b8', fontSize: 11 }}>总击杀 (Kills)</div>
+                  <div style={{ fontSize: 20, fontWeight: 'bold', color: '#34d399' }}>{playerKills}</div>
+                </div>
+                <div style={{ background: '#111827', padding: 10, borderRadius: 8 }}>
+                  <div style={{ color: '#94a3b8', fontSize: 11 }}>阵亡次数 (Deaths)</div>
+                  <div style={{ fontSize: 20, fontWeight: 'bold', color: '#f87171' }}>{playerDeaths}</div>
+                </div>
+                <div style={{ background: '#111827', padding: 10, borderRadius: 8 }}>
+                  <div style={{ color: '#94a3b8', fontSize: 11 }}>模式目标贡献</div>
+                  <div style={{ fontSize: 20, fontWeight: 'bold', color: '#fbbf24' }}>{objectivePoints}</div>
+                </div>
+                <div style={{ background: '#111827', padding: 10, borderRadius: 8 }}>
+                  <div style={{ color: '#94a3b8', fontSize: 11 }}>强化火力加成</div>
+                  <div style={{ fontSize: 20, fontWeight: 'bold', color: '#a78bfa' }}>
+                    +{Math.round((damageBonusMult - 1) * 100)}%
+                  </div>
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.5 }}>
+                提示：点击右侧九宫格幸运卡牌（最多可翻开 3 张），即可领取本局专属强化石、稳压剂、稀有武器图纸或星币奖励！
+              </div>
+            </div>
+
+            {/* Right: 9-Card Flip Reward Grid (game_balance.lua 翻牌抽奖) */}
+            <div style={{ background: 'rgba(9, 13, 22, 0.75)', borderRadius: 12, padding: 14, border: '1px solid #334155' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, fontSize: 14 }}>
+                <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>🎴 战后幸运九宫格翻牌 (已翻 {Object.keys(flippedCards).length}/3)</span>
+                <span style={{ fontSize: 12, color: '#94a3b8' }}>点击卡牌翻开奖励</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                {Array.from({ length: 9 }).map((_, idx) => {
+                  const picked = flippedCards[idx];
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => void handleFlipRewardCard(idx)}
+                      style={{
+                        height: 78,
+                        borderRadius: 10,
+                        border: picked ? '2px solid #fbbf24' : '1px solid #475569',
+                        background: picked
+                          ? 'linear-gradient(135deg, #78350f 0%, #1e293b 100%)'
+                          : 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+                        color: '#fff',
+                        cursor: picked || Object.keys(flippedCards).length >= 3 ? 'default' : 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 6,
+                        transition: 'transform 0.15s',
+                      }}
+                    >
+                      {picked ? (
+                        <>
+                          <span style={{ fontSize: 22 }}>{picked.icon}</span>
+                          <span style={{ fontSize: 11, fontWeight: 'bold', color: '#fde68a', marginTop: 2 }}>
+                            {picked.name}
+                          </span>
+                          <span style={{ fontSize: 10, color: '#34d399' }}>{picked.amount}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ fontSize: 20 }}>🎴</span>
+                          <span style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>幸运翻牌 #{idx + 1}</span>
+                        </>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 18 }}>
+            <button
+              type="button"
+              onClick={() => {
+                setShowSettlement(false);
+                void document.body.requestPointerLock();
+              }}
+              style={{
+                padding: '10px 20px',
+                borderRadius: 8,
+                border: '1px solid #475569',
+                background: '#1e293b',
+                color: '#e2e8f0',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+              }}
+            >
+              继续留在战场
+            </button>
+            <button
+              type="button"
+              onClick={finishAndExit}
+              style={{
+                padding: '10px 26px',
+                borderRadius: 8,
+                border: '1px solid #fbbf24',
+                background: 'linear-gradient(90deg, #d97706, #ea580c)',
+                color: '#fff',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+              }}
+            >
+              ✅ 完成结算并返回大厅
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {sandboxOpen && !paused && <aside className="battle-sandbox-drawer" aria-label="局内沙盒战术面板">
       <h3>
@@ -1404,19 +2482,7 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
         onEffectsVolume={onEffectsVolume}
         onMotion={setMotion}
         onClose={() => { setPaused(false); void document.body.requestPointerLock(); }}
-        onExit={() => {
-          void apiFetch('/battle/settle', {
-            method: 'POST',
-            body: JSON.stringify({
-              roomId: room.id ?? '',
-              modeName: room.modeName,
-              mapName: room.mapName,
-              kills: scoreRed,
-              deaths: scoreBlue,
-              victory: scoreRed >= scoreBlue,
-            }),
-          }).catch(() => undefined).finally(() => onExit());
-        }}
+        onExit={finishAndExit}
         onQuit={onQuit}
       />
       {import.meta.env.DEV && <div className="battle-debug">{debugLog.map((log, index) => <p key={index}>{log}</p>)}</div>}

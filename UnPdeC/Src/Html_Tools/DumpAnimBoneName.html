@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>.ANIM骨骼名称提取</title>
+    <style>
+        body {
+            width: 800px;
+            margin: 20px auto;
+            font-family: Arial, sans-serif;
+            background-color: #f9f9f9;
+        }
+
+        .input-area {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 60px;
+            margin: 10px 0;
+            font-family: monospace;
+            padding: 12px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px 5px 5px 0;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        #fileLabel {
+            display: block;
+            padding: 40px 0;
+            background-color: #eef6ff;
+            color: black;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #fileLabel:hover {
+            background-color: #0056b3;
+        }
+
+        .out-div {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 10px 0;
+        }
+
+        #output {
+            background: #ffffff;
+            color: #000000;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 16px;
+            min-height: 100px;
+            max-height: 400px;
+            overflow: auto;
+            margin: 0 0 50px 0;
+            border: 1px solid #eee;
+        }
+
+        #copyBtn {
+            font-size: 18px;
+            background: #ffc107;
+            color: #212529;
+        }
+
+        h1,
+        h3 {
+            color: #333;
+            margin: 10px 0;
+        }
+
+        .tip {
+            font-size: 14px;
+            color: #28a745;
+            margin: 5px 0;
+        }
+
+        .stats {
+            font-size: 14px;
+            color: #555;
+            margin-top: 5px;
+        }
+
+        .dropzone {
+            border: 3px dashed #007bff;
+            text-align: center;
+            border-radius: 8px;
+            margin: 15px 0;
+            background-color: #f0f8ff;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .dropzone:hover {
+            background-color: #e1f0ff;
+        }
+
+        .drag-tip {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>.ANIM骨骼名称提取</h1>
+
+    <div class="input-area" id="dropZone">
+        <h3>📄 粘贴十六进制数据</h3>
+        <textarea id="hexInput" placeholder="例如：04000000726F6F74A60000008A040000...（支持空格/换行）"></textarea>
+
+        <h3>📂 拖拽或选择 .anim 文件</h3>
+        <div class="drag-tip">或直接将 .anim 文件拖拽到本区域</div>
+
+        <div class="dropzone" id="dropArea">
+            <input type="file" id="fileInput" accept=".anim" onchange="parseFromFile()">
+            <label for="fileInput" id="fileLabel">📁 点击选择 .anim 文件</label>
+        </div>
+        <!-- 📥 拖拽 .anim 文件到这里 -->
+    </div>
+
+    <div class="out-div">
+        <div>
+            <h3 style="display:inline; margin:0;">📋 解析结果</h3>
+            <span id="stats" class="stats"></span>
+        </div>
+        <button id="copyBtn" onclick="copyResult()" style="display:none">📋 一键复制</button>
+    </div>
+    <div id="output">
+        （粘贴数据或上传文件后自动解析）
+    </div>
+
+    <script>
+        const hexInput = document.getElementById('hexInput');
+        const statsDiv = document.getElementById('stats');
+        const dropZone = document.getElementById('dropZone');
+        const dropArea = document.getElementById('dropArea');
+
+        hexInput.addEventListener('input', () => {
+            debounceParseFromHex();
+        });
+
+        let debounceTimer;
+        function debounceParseFromHex() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                parseFromHex();
+            }, 300);
+        }
+
+        function parseFromHex() {
+            const hexStr = hexInput.value.trim();
+            const outputDiv = document.getElementById('output');
+            const copyBtn = document.getElementById('copyBtn');
+            statsDiv.textContent = '';
+
+            if (!hexStr) {
+                outputDiv.innerHTML = `ℹ️ 请粘贴十六进制数据或上传文件`;
+                copyBtn.style.display = 'none';
+                return;
+            }
+
+            try {
+                const { boneNames, animCount } = parseAnimBoneNamesFromHex(hexStr);
+                showResult(boneNames, outputDiv, copyBtn);
+                statsDiv.textContent = `✅ 共解析 ${boneNames.length} 个骨骼名称`;
+            } catch (e) {
+                outputDiv.innerHTML = `❌ 解析失败：${e.message}`;
+                copyBtn.style.display = 'none';
+                statsDiv.textContent = '';
+                console.error(e);
+            }
+        }
+
+        function parseFromFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            const outputDiv = document.getElementById('output');
+            const copyBtn = document.getElementById('copyBtn');
+            statsDiv.textContent = '';
+
+            if (!file) {
+                outputDiv.innerHTML = `❌ 请选择文件！`;
+                copyBtn.style.display = 'none';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const arrayBuffer = e.target.result;
+                try {
+                    const { boneNames, animCount } = parseAnimBoneNamesFromArrayBuffer(arrayBuffer);
+                    showResult(boneNames, outputDiv, copyBtn);
+                    statsDiv.textContent = `✅ 共解析 ${animCount} 个动画块，提取 ${boneNames.length} 个骨骼名称`;
+                } catch (e) {
+                    outputDiv.innerHTML = `❌ 解析失败：${e.message}`;
+                    copyBtn.style.display = 'none';
+                    statsDiv.textContent = '';
+                    console.error(e);
+                }
+            };
+            reader.onerror = function () {
+                outputDiv.innerHTML = `❌ 文件读取失败！`;
+                copyBtn.style.display = 'none';
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 拖拽功能
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight() {
+            dropArea.classList.add('highlight');
+            dropArea.style.backgroundColor = '#d0e8ff';
+        }
+
+        function unhighlight() {
+            dropArea.classList.remove('highlight');
+            dropArea.style.backgroundColor = '';
+        }
+
+        dropArea.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+
+            if (files.length > 0 && files[0].name.toLowerCase().endsWith('.anim')) {
+                const fileInput = document.getElementById('fileInput');
+                fileInput.files = files;
+                parseFromFile();
+            } else {
+                alert("请拖拽 .anim 文件！");
+            }
+        }
+
+        function parseAnimBoneNamesFromHex(hexStr) {
+            let cleanHex = hexStr.replace(/\s+/g, '').toLowerCase();
+            if (cleanHex.length % 2 !== 0) {
+                throw new Error("十六进制数据长度不是偶数");
+            }
+            const bytes = new Uint8Array(cleanHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+            return parseAnimBoneNamesFromBytes(bytes);
+        }
+
+        function parseAnimBoneNamesFromArrayBuffer(arrayBuffer) {
+            const bytes = new Uint8Array(arrayBuffer);
+            return parseAnimBoneNamesFromBytes(bytes);
+        }
+
+        function parseAnimBoneNamesFromBytes(bytes) {
+            const dataView = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            let offset = 0;
+            let boneNames = [];
+            let animCount = 0;
+
+            while (offset + 4 <= bytes.length) {
+                // 读名称长度
+                const nameLen = dataView.getUint32(offset, true);
+                offset += 4;
+
+                if (nameLen <= 0 || offset + nameLen > bytes.length) {
+                    break; // 数据异常，提前终止
+                }
+
+                // 读名称
+                const nameBytes = bytes.slice(offset, offset + nameLen);
+                offset += nameLen;
+                const decoder = new TextDecoder('utf-8');
+                const boneName = decoder.decode(nameBytes);
+                boneNames.push(boneName);
+
+                // 读帧数
+                if (offset + 4 > bytes.length) break;
+                const frameCount = dataView.getUint32(offset, true);
+                offset += 4;
+
+                // 读时间戳（跳过）
+                if (offset + 4 > bytes.length) break;
+                offset += 4;
+
+                // 跳过帧数据
+                const frameDataSize = frameCount * 0x1C;
+                if (offset + frameDataSize > bytes.length) {
+                    console.warn(`动画 "${boneName}" 帧数据越界，跳过后续`);
+                    break;
+                }
+                offset += frameDataSize;
+
+                animCount++;
+            }
+
+            return { boneNames, animCount };
+        }
+
+        function showResult(boneNames, outputDiv, copyBtn) {
+            const jsonOutput = JSON.stringify(boneNames, null, 2);
+            outputDiv.innerHTML = `<pre>${jsonOutput}</pre>`;
+            copyBtn.style.display = 'block';
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert("✅ 已复制到剪贴板！");
+            }).catch(err => {
+                console.error("复制失败:", err);
+                alert("❌ 请手动选择并复制文本。");
+            });
+        }
+
+        function copyResult() {
+            const outputDiv = document.querySelector("#output pre");
+            if (outputDiv) copyToClipboard(outputDiv.innerText);
+        }
+    </script>
+</body>
+
+</html>

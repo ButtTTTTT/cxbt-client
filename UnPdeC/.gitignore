@@ -1,0 +1,27 @@
+﻿################################################################################
+# 此 .gitignore 文件已由 Microsoft(R) Visual Studio 自动创建。
+################################################################################
+
+/.vs
+/.vscode
+/.trae
+/Src/PDEModelTools/src/.vscode
+/Src/PdePack/.codebuddy/.ignored_image
+/Src/PdePack/bin/Debug/net9.0
+/Src/PdePack/obj
+/Src/PdePack/UnPdeC
+/packages/nlohmann.json.3.11.2
+/Src/PdePack/.codebuddy
+/Src/PdePack/unluac/src
+/Src/PdePack/unluac/TEST_LUA
+/Src/PdePack/bin/Release/net9.0
+/Src/PdePack/PdePack.csproj.user
+/Src/PdePack/EXTEMP/Message.Avalonia-main
+/Src/PdePack/bin
+Src/Html_Tools/.vscode/settings.json
+Src/PDEModelTools/.joycode/
+Src/UnPdeC/.trae
+.arts/*
+Src/PDEModelTools/.arts/
+Src/PDEKit/bin/
+Src/PDEKit/obj/

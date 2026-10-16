@@ -563,12 +563,15 @@ export class PlayerEntity {
     };
 
     const buildClip = (data: any, name: string, upperOnly: boolean = false) => {
-      return new THREE.AnimationClip(name, data.duration ?? -1, data.tracks.flatMap((track: any) => {
+      const rawFps = data.fps || 60;
+      const effectiveFps = rawFps === 60 ? 96 : rawFps;
+      const effectiveDuration = data.duration ? data.duration * (rawFps / effectiveFps) : -1;
+      return new THREE.AnimationClip(name, effectiveDuration, data.tracks.flatMap((track: any) => {
         if (upperOnly && LOWER_BODY_BONES.has(track.name)) {
           return [];
         }
-        const positionTimes = track.positions.map((_: any, idx: number) => idx / data.fps);
-        const rotationTimes = track.rotations.map((_: any, idx: number) => idx / data.fps);
+        const positionTimes = track.positions.map((_: any, idx: number) => idx / effectiveFps);
+        const rotationTimes = track.rotations.map((_: any, idx: number) => idx / effectiveFps);
         return [
           new THREE.VectorKeyframeTrack(`${track.name}.position`, positionTimes, track.positions.flat()),
           new THREE.QuaternionKeyframeTrack(`${track.name}.quaternion`, rotationTimes, track.rotations.flat())

@@ -1,0 +1,483 @@
+<Window x:Class="FCM2.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:FCM2"
+        mc:Ignorable="d"
+        Title="FCM2 - Mesh/Skel/Anim 转 SMD 工具" 
+        Height="600" Width="950"
+        MinHeight="500" MinWidth="750"
+        AllowDrop="True"
+        Drop="Window_Drop" DragOver="Window_DragOver"
+        WindowStartupLocation="CenterScreen"
+        Background="#F5F5F5">
+
+    <Window.Resources>
+        <!-- 样式定义 -->
+        <Style x:Key="FileGroupBox" TargetType="GroupBox">
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#E0E0E0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GroupBox">
+                        <Grid>
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="8"/>
+                            <ContentPresenter Margin="{TemplateBinding Padding}"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="FileListBox" TargetType="ListBox">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Padding" Value="5"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="Bd" Background="Transparent" CornerRadius="4"
+                                            BorderThickness="0">
+                                        <ContentPresenter/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#F0F0F0"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#E3F2FD"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Background" Value="#2196F3"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="20,10"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#1976D2"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="#BDBDBD"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="SecondaryButton" TargetType="Button">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#616161"/>
+            <Setter Property="BorderBrush" Value="#E0E0E0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="15,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#F5F5F5"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="RemoveButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#9E9E9E"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="12">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="#F44336"/>
+                    <Setter Property="Background" Value="#FFEBEE"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- 标题颜色 -->
+        <SolidColorBrush x:Key="MeshColor" Color="#4CAF50"/>
+        <SolidColorBrush x:Key="SkelColor" Color="#FF9800"/>
+        <SolidColorBrush x:Key="AnimColor" Color="#9C27B0"/>
+    </Window.Resources>
+
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 标题区域 -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Text="FCM2 转换工具" FontSize="35" FontWeight="Bold" Foreground="#333"/>
+            <TextBlock Text="将 .mesh + .skel 导出为带骨骼的 .smd 文件，或将 .anim 导出为动画 .smd 文件" 
+                       FontSize="13" Foreground="#666" Margin="0,5,0,0"/>
+        </StackPanel>
+
+        <!-- 文件区域 -->
+        <Grid Grid.Row="1" Margin="0,0,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- 区域标题 -->
+            <TextBlock Grid.Row="0" Text="📁 文件选择区域" Foreground="#2196F3" FontSize="12" FontWeight="Bold" Margin="5,0,0,10"/>
+
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- MESH 文件 -->
+                <GroupBox Grid.Column="0" Style="{StaticResource FileGroupBox}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <Border Background="{StaticResource MeshColor}" CornerRadius="4" Padding="8,3" Margin="0,0,10,0">
+                                    <TextBlock Text="MESH" FontWeight="Bold" Foreground="White" FontSize="12" ToolTip="可以处理多个模型文件！"/>
+                                </Border>
+                                <TextBlock Text="模型文件" VerticalAlignment="Center" Foreground="#666" FontSize="13"/>
+                                <TextBlock Text="{Binding MeshFiles.Count, StringFormat={}({0})}" 
+                                           VerticalAlignment="Center" Foreground="#999" FontSize="12" Margin="5,0,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="2" Content="×" Style="{StaticResource SecondaryButton}" 
+                                    Command="{Binding ClearMeshFilesCommand}" Padding="10,2" FontSize="14" FontWeight="Bold" Margin="0,0,5,0"
+                                    ToolTip="清空 MESH 文件列表"/>
+                            <Button Grid.Column="3" Content="+" Style="{StaticResource SecondaryButton}" 
+                                    Command="{Binding AddMeshFilesCommand}" Padding="10,2" FontSize="14" FontWeight="Bold"
+                                    ToolTip="添加 MESH 模型文件"/>
+                        </Grid>
+
+                        <ListBox Grid.Row="1" ItemsSource="{Binding MeshFiles}" Style="{StaticResource FileListBox}"
+                                 MaxHeight="300">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding FileName}" 
+                                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding FileName}"
+                                                   VerticalAlignment="Center" FontSize="12"/>
+                                        <Button Grid.Column="1" Style="{StaticResource RemoveButton}"
+                                                Command="{Binding DataContext.RemoveMeshFileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}">
+                                            <Path Data="M 0,0 L 10,10 M 10,0 L 0,10" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                  StrokeThickness="2" Stretch="Uniform" Width="10" Height="10"/>
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <TextBlock Grid.Row="2" Text="拖拽 .mesh 文件到此处" 
+                                   Foreground="#999" FontSize="11" Margin="0,10,0,0" HorizontalAlignment="Center"/>
+                    </Grid>
+                </GroupBox>
+
+                <!-- SKEL 文件 -->
+                <GroupBox Grid.Column="1" Style="{StaticResource FileGroupBox}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <Border Background="{StaticResource SkelColor}" CornerRadius="4" Padding="8,3" Margin="0,0,10,0">
+                                    <TextBlock Text="SKEL" FontWeight="Bold" Foreground="White" FontSize="12" ToolTip="目前只能处理1个骨架！"/>
+                                </Border>
+                                <TextBlock Text="骨架文件" VerticalAlignment="Center" Foreground="#666" FontSize="13"/>
+                                <TextBlock Text="{Binding SkelFiles.Count, StringFormat={}({0})}" 
+                                           VerticalAlignment="Center" Foreground="#999" FontSize="12" Margin="5,0,0,0"/>
+                                <TextBlock Text="*" Foreground="#F44336" FontWeight="Bold" FontSize="14" Margin="3,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <Button Grid.Column="2" Content="×" Style="{StaticResource SecondaryButton}" 
+                                    Command="{Binding ClearSkelFilesCommand}" Padding="10,2" FontSize="14" FontWeight="Bold" Margin="0,0,5,0"
+                                    ToolTip="清空 SKEL 文件列表"/>
+                            <Button Grid.Column="3" Content="+" Style="{StaticResource SecondaryButton}" 
+                                    Command="{Binding AddSkelFilesCommand}" Padding="10,2" FontSize="14" FontWeight="Bold"
+                                    ToolTip="添加 SKEL 骨架文件"/>
+                        </Grid>
+
+                        <ListBox Grid.Row="1" ItemsSource="{Binding SkelFiles}" Style="{StaticResource FileListBox}"
+                                 MaxHeight="300">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding FileName}" 
+                                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding FileName}"
+                                                   VerticalAlignment="Center" FontSize="12"/>
+                                        <Button Grid.Column="1" Style="{StaticResource RemoveButton}"
+                                                Command="{Binding DataContext.RemoveSkelFileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}">
+                                            <Path Data="M 0,0 L 10,10 M 10,0 L 0,10" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                  StrokeThickness="2" Stretch="Uniform" Width="10" Height="10"/>
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <TextBlock Grid.Row="2" Text="必需 - 拖拽 .skel 文件到此处" 
+                                   Foreground="#999" FontSize="11" Margin="0,10,0,0" HorizontalAlignment="Center"/>
+                    </Grid>
+                </GroupBox>
+
+                <!-- ANIM 文件 - 独立处理，导出到原目录 -->
+                <GroupBox Grid.Column="2" Style="{StaticResource FileGroupBox}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <Border Background="{StaticResource AnimColor}" CornerRadius="4" Padding="8,3" Margin="0,0,10,0">
+                                    <TextBlock Text="ANIM" FontWeight="Bold" Foreground="White" FontSize="12"/>
+                                </Border>
+                                <TextBlock Text="动画文件" VerticalAlignment="Center" Foreground="#666" FontSize="13"/>
+                                <TextBlock Text="{Binding AnimFiles.Count, StringFormat={}({0})}" 
+                                           VerticalAlignment="Center" Foreground="#999" FontSize="12" Margin="5,0,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="2" Content="×" Style="{StaticResource SecondaryButton}" 
+                                    Command="{Binding ClearAnimFilesCommand}" Padding="10,2" FontSize="14" FontWeight="Bold" Margin="0,0,5,0"
+                                    ToolTip="清空 ANIM 文件列表"/>
+                            <Button Grid.Column="3" Content="+" Style="{StaticResource SecondaryButton}" 
+                                    Command="{Binding AddAnimFilesCommand}" Padding="10,2" FontSize="14" FontWeight="Bold"
+                                    ToolTip="添加 ANIM 动画文件"/>
+                        </Grid>
+
+                        <ListBox Grid.Row="1" ItemsSource="{Binding AnimFiles}" Style="{StaticResource FileListBox}"
+                                 MaxHeight="300">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding FileName}" 
+                                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding FileName}"
+                                                   VerticalAlignment="Center" FontSize="12"/>
+                                        <Button Grid.Column="1" Style="{StaticResource RemoveButton}"
+                                                Command="{Binding DataContext.RemoveAnimFileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}">
+                                            <Path Data="M 0,0 L 10,10 M 10,0 L 0,10" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                  StrokeThickness="2" Stretch="Uniform" Width="10" Height="10"/>
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <StackPanel Grid.Row="2" Margin="0,10,0,0">
+                            <TextBlock Text="可选 - 拖拽 .anim 文件到此处" 
+                                       Foreground="#999" FontSize="11" HorizontalAlignment="Center"/>
+                            <TextBlock Text="💡 独立处理，导出到原文件目录" 
+                                       Foreground="#9C27B0" FontSize="10" HorizontalAlignment="Center" Margin="0,3,0,0"
+                                       ToolTip="动画文件将单独处理，每个动画导出到其原文件所在的目录"/>
+                        </StackPanel>
+                    </Grid>
+                </GroupBox>
+            </Grid>
+        </Grid>
+
+        <!-- 底部控制区域 -->
+        <Grid Grid.Row="2" Margin="0,15,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- 名称标签按钮区域 -->
+            <ItemsControl Grid.Row="0" ItemsSource="{Binding NameTags}" 
+                          Visibility="{Binding NameTags.Count, Converter={StaticResource CountToVisibilityConverter}}"
+                          Margin="0,0,0,10">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Content="{Binding}" 
+                                Style="{StaticResource SecondaryButton}"
+                                Command="{Binding DataContext.AppendNameTagCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}"
+                                Margin="0,0,5,5" Padding="12,6" FontSize="12"
+                                ToolTip="点击追加到导出名称"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Mesh+Skel 输出设置 -->
+                <Grid Grid.Column="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- 标题提示 -->
+                    <TextBlock Grid.Row="0" Text="📦 Mesh+Skel 模型导出设置" Foreground="#FF9800" FontSize="12" FontWeight="Bold" Margin="0,0,0,8"/>
+
+                    <!-- 导出名称 -->
+                    <Grid Grid.Row="1" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="65"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="导出名称:" VerticalAlignment="Center" Foreground="#666" Margin="0,0,10,0"/>
+                        <TextBox Grid.Column="1" Text="{Binding ModelOutputName, UpdateSourceTrigger=PropertyChanged}"
+                                 Padding="8,6" FontSize="13"
+                                 VerticalContentAlignment="Center"
+                                 ToolTip="模型导出文件名 (仅针对 Mesh+Skel，动画使用原文件名)"/>
+                        <TextBlock Grid.Column="2" Text=".smd" VerticalAlignment="Center" Foreground="#666" Margin="5,0,0,0"/>
+                    </Grid>
+
+                    <!-- 输出目录 -->
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="65"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="输出目录:" VerticalAlignment="Center" Foreground="#666" Margin="0,0,10,0"/>
+                        <TextBlock Grid.Column="1" Text="{Binding OutputDirectory, Mode=OneWay}" 
+                                   VerticalAlignment="Center" Foreground="#333" FontSize="13"
+                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding OutputDirectory}"/>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <Button Content="打开" Style="{StaticResource SecondaryButton}" 
+                                    Command="{Binding OpenOutputCommand}" Margin="10,0,0,0" Padding="10,6"
+                                    ToolTip="打开输出目录"/>
+                            <Button Content="恢复" Style="{StaticResource SecondaryButton}" 
+                                    Command="{Binding ResetOutputCommand}" Margin="5,0,0,0" Padding="10,6"
+                                    ToolTip="恢复默认输出目录 (程序目录/SMDS)"/>
+                            <Button Content="浏览" Style="{StaticResource SecondaryButton}" 
+                                    Command="{Binding BrowseOutputCommand}" Margin="5,0,0,0" Padding="10,6"
+                                    ToolTip="选择自定义输出目录"/>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+
+                <!-- 操作按钮 + 提示 -->
+                <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="10,0,0,0">
+                    <Button Content="开始转换" Style="{StaticResource PrimaryButton}" 
+                            Command="{Binding ConvertCommand}"
+                            Width="120" Height="80" FontSize="20" ToolTip="开始导出 SMD 文件"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+
+        <!-- 状态栏 -->
+        <Border Grid.Row="3" Margin="0,15,0,0" Background="#E3F2FD" CornerRadius="4" Padding="10,8">
+            <Grid>
+                <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" Foreground="#1976D2" FontSize="12"/>
+                <ProgressBar IsIndeterminate="{Binding IsProcessing}" 
+                             Height="3" VerticalAlignment="Bottom"
+                             Background="Transparent" Foreground="#2196F3"
+                             Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVisibilityConverter}}"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
