@@ -290,12 +290,19 @@ export interface WeaponCombatProfile {
   pellets: number;
   spread: number;
   fireDelay: number;
+  fireTime?: number;
+  pauseTime?: number;
+  comboDelays?: [number, number, number];
   magCapacity: number;
   reloadTime: number;
   fireAudio: string;
   reloadAudio?: string;
   isAutomatic: boolean;
   headshotMultiplier: number;
+  isSaw?: boolean;
+  circular?: boolean;
+  doubleShots?: boolean;
+  isSight?: boolean;
 }
 
 export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
@@ -305,7 +312,9 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     damage: 115,
     pellets: 1,
     spread: 0.035,
+    fireTime: 0.08,
     fireDelay: 0.11,
+    pauseTime: 0,
     magCapacity: 30,
     reloadTime: 1.8,
     fireAudio: 'fire-smg',
@@ -319,7 +328,9 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     damage: 240,
     pellets: 1,
     spread: 0.012,
+    fireTime: 0.2333,
     fireDelay: 0.35,
+    pauseTime: 0.4,
     magCapacity: 12,
     reloadTime: 1.6,
     fireAudio: 'fire-pistol',
@@ -333,7 +344,9 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     damage: 135,
     pellets: 7,
     spread: 0.075,
-    fireDelay: 0.85,
+    fireTime: 0.3,
+    fireDelay: 0.7,
+    pauseTime: 0.85,
     magCapacity: 8,
     reloadTime: 2.2,
     fireAudio: 'fire-shotgun',
@@ -347,13 +360,16 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     damage: 1250,
     pellets: 1,
     spread: 0.002,
-    fireDelay: 1.25,
+    fireTime: 0.25,
+    fireDelay: 1.15,
+    pauseTime: 1.25,
     magCapacity: 5,
     reloadTime: 2.5,
     fireAudio: 'fire-sniperrifle',
     reloadAudio: 'reload_sniper',
     isAutomatic: false,
-    headshotMultiplier: 2.5
+    headshotMultiplier: 2.5,
+    isSight: true
   },
   machinegun_01: {
     name: '重机枪 (Machinegun)',
@@ -361,13 +377,16 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     damage: 130,
     pellets: 1,
     spread: 0.045,
+    fireTime: 0.1,
     fireDelay: 0.12,
+    pauseTime: 0,
     magCapacity: 80,
     reloadTime: 3.0,
     fireAudio: 'fire-machinegun',
     reloadAudio: 'reload_machinegun',
     isAutomatic: true,
-    headshotMultiplier: 2.0
+    headshotMultiplier: 2.0,
+    circular: true
   },
   knives_01: {
     name: '近战军刀 (Knives)',
@@ -375,7 +394,10 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     damage: 720,
     pellets: 1,
     spread: 0,
-    fireDelay: 0.45,
+    fireTime: 0.2333,
+    fireDelay: 0.4333,
+    pauseTime: 0.55,
+    comboDelays: [0.4333, 0.4, 0.4333],
     magCapacity: 0,
     reloadTime: 0,
     fireAudio: 'fire-knives',
@@ -388,10 +410,13 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     damage: 680,
     pellets: 1,
     spread: 0,
-    fireDelay: 0.48,
+    fireTime: 0.2333,
+    fireDelay: 0.4333,
+    pauseTime: 0.55,
+    comboDelays: [0.4333, 0.4, 0.4333],
     magCapacity: 0,
     reloadTime: 0,
-    fireAudio: 'fire-knives',
+    fireAudio: 'fire-stick',
     isAutomatic: true,
     headshotMultiplier: 1.6
   },
@@ -401,7 +426,10 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     damage: 520,
     pellets: 1,
     spread: 0,
-    fireDelay: 0.50,
+    fireTime: 0.2333,
+    fireDelay: 0.45,
+    pauseTime: 0.55,
+    comboDelays: [0.45, 0.42, 0.48],
     magCapacity: 0,
     reloadTime: 0,
     fireAudio: 'fire-shield',
@@ -414,7 +442,9 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     damage: 780,
     pellets: 1,
     spread: 0.008,
+    fireTime: 0.2,
     fireDelay: 0.75,
+    pauseTime: 0.75,
     magCapacity: 1,
     reloadTime: 1.0,
     fireAudio: 'fire-bow',
@@ -427,12 +457,15 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     damage: 850,
     pellets: 1,
     spread: 0.005,
+    fireTime: 0.2,
     fireDelay: 0.7,
+    pauseTime: 0.7,
     magCapacity: 1,
     reloadTime: 1.1,
     fireAudio: 'fire-crossbow',
     isAutomatic: false,
-    headshotMultiplier: 2.5
+    headshotMultiplier: 2.5,
+    isSight: true
   },
   rpg_01: {
     name: '火箭筒 (RPG)',
@@ -440,7 +473,9 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     damage: 1500,
     pellets: 1,
     spread: 0.01,
+    fireTime: 0.3,
     fireDelay: 1.4,
+    pauseTime: 1.4,
     magCapacity: 1,
     reloadTime: 2.2,
     fireAudio: 'fire-rpg',
@@ -454,7 +489,9 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     damage: 1100,
     pellets: 1,
     spread: 0.02,
+    fireTime: 0.3,
     fireDelay: 0.8,
+    pauseTime: 0.8,
     magCapacity: 6,
     reloadTime: 2.4,
     fireAudio: 'fire-grenadelauncher',
@@ -468,10 +505,12 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     damage: 75,
     pellets: 1,
     spread: 0.055,
-    fireDelay: 0.08,
+    fireTime: 0.08,
+    fireDelay: 0.1,
+    pauseTime: 0,
     magCapacity: 60,
     reloadTime: 2.0,
-    fireAudio: 'sprayer',
+    fireAudio: 'fire-sprayer',
     reloadAudio: 'reload_sprayer',
     isAutomatic: true,
     headshotMultiplier: 1.5
@@ -482,7 +521,9 @@ export const WEAPON_COMBAT_PROFILES: Record<string, WeaponCombatProfile> = {
     damage: 1350,
     pellets: 1,
     spread: 0.02,
+    fireTime: 0.3,
     fireDelay: 1.2,
+    pauseTime: 1.2,
     magCapacity: 1,
     reloadTime: 1.5,
     fireAudio: 'fire-grenade',
@@ -509,14 +550,56 @@ const FAMILY_PROFILE_MAP: Record<string, string> = {
 };
 
 /**
- * 根据任意武器 ID (如 smg_01, knives_47, crossbow_03) 解析对应的战斗性能配置
+ * 根据任意武器 ID (如 smg_01, knives_47, pistol_08, sniperrifle_57, crossbow_03) 解析对应的端游原版战斗性能配置
  */
 export function getWeaponCombatProfile(weaponId: string): WeaponCombatProfile {
   if (!weaponId) return WEAPON_COMBAT_PROFILES.smg_01;
-  if (WEAPON_COMBAT_PROFILES[weaponId]) return WEAPON_COMBAT_PROFILES[weaponId];
-  const family = weaponId.split('_')[0].toLowerCase();
+  const lower = weaponId.toLowerCase();
+  if (WEAPON_COMBAT_PROFILES[lower]) return WEAPON_COMBAT_PROFILES[lower];
+  const family = lower.split('_')[0];
   const mappedKey = FAMILY_PROFILE_MAP[family];
-  return (mappedKey && WEAPON_COMBAT_PROFILES[mappedKey]) || WEAPON_COMBAT_PROFILES.smg_01;
+  const base = (mappedKey && WEAPON_COMBAT_PROFILES[mappedKey]) || WEAPON_COMBAT_PROFILES.smg_01;
+
+  // 还原 AvatarStar_cache/mesh/weapon/*/script.lua 特殊武器专属参数
+  if (lower === 'knives_08' || lower === 'knives_47') {
+    return {
+      ...base,
+      name: '链锯军刀 (Chainsaw)',
+      damage: 420,
+      fireTime: 0.16,
+      fireDelay: 0.24,
+      pauseTime: 0.28,
+      fireAudio: 'fire-saw',
+      isSaw: true,
+    };
+  }
+  if (lower === 'pistol_08') {
+    return {
+      ...base,
+      name: '双持手枪 (Dual Pistols)',
+      pellets: 2,
+      spread: 0.022,
+      fireDelay: 0.26,
+      magCapacity: 24,
+      doubleShots: true,
+    };
+  }
+  if (lower === 'sniperrifle_57') {
+    return {
+      ...base,
+      name: '机瞄步枪 (Iron-Sight Rifle)',
+      fireDelay: 0.85,
+      magCapacity: 8,
+      isSight: false,
+    };
+  }
+  if (lower === 'smg_21' || lower === 'machinegun_42' || lower === 'grenadelauncher_21' || lower === 'grenadelauncher_54') {
+    return {
+      ...base,
+      circular: true,
+    };
+  }
+  return base;
 }
 
 /**

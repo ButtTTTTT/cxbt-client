@@ -9,11 +9,22 @@ export interface MapPresetItem {
   description: string;
 }
 
+export interface MapExtraMeshEntry {
+  scene: string;
+  collision?: string;
+  position?: number[];
+  rotation?: number[];
+  collide?: boolean;
+}
+
 export interface MapDefinition {
   name?: string;
   scene: string;
   collision?: string;
   airWalls?: string[];
+  waterMeshes?: string[];
+  extraMeshes?: MapExtraMeshEntry[];
+  deadAABBs?: number[][];
   minimap?: string;
   bounds?: number[];
   camera?: number[];
@@ -82,6 +93,50 @@ export async function getMapsDefinitions(): Promise<Record<string, MapDefinition
 }
 
 /**
+ * 统一挂载地图空气墙、水面材质、3D 建筑禁入盒 (DeadAABBs) 与全部附加子网格 (旗杆/香炉/占点台/旋转门/吊车/熔岩块)
+ */
+export async function mountMapExtraMeshesAndConfig(
+  def: MapDefinition,
+  assetsBaseUrl: string,
+  loader: any,
+  visualScene: any,
+  collisionScene: any | null,
+  collider: MapCollider
+): Promise<void> {
+  if (def.bounds) {
+    collider.setBounds(def.bounds);
+  }
+  collider.setDeadAABBs(def.deadAABBs ?? []);
+  collider.registerVisualScene(visualScene, def.airWalls ?? [], def.waterMeshes ?? []);
+  if (collisionScene) {
+    collider.registerCollisionScene(collisionScene);
+  }
+
+  if (Array.isArray(def.extraMeshes) && def.extraMeshes.length > 0) {
+    await Promise.all(
+      def.extraMeshes.map(async (item) => {
+        try {
+          const [extraVisualGltf, extraCollGltf] = await Promise.all([
+            loader.loadAsync(`${assetsBaseUrl}${item.scene}`).catch(() => null),
+            item.collision ? loader.loadAsync(`${assetsBaseUrl}${item.collision}`).catch(() => null) : Promise.resolve(null),
+          ]);
+          if (!extraVisualGltf?.scene) return;
+          visualScene.add(extraVisualGltf.scene);
+          collider.registerExtraMesh(extraVisualGltf.scene, {
+            position: item.position,
+            rotation: item.rotation,
+            collide: item.collide,
+            collisionScene: extraCollGltf?.scene ?? null,
+          });
+        } catch {
+          // 忽略单个附加子模型异常，保证主场景稳定
+        }
+      })
+    );
+  }
+}
+
+/**
  * 动态加载并挂载指定地图至场景与碰撞体
  */
 export async function loadMapIntoScene(
@@ -124,12 +179,13 @@ export async function loadMapIntoScene(
   }
 
   const baseUrl = import.meta.env.BASE_URL;
+  const assetsBaseUrl = `${baseUrl}assets/gameplay/`;
   const loader = new GLTFLoader();
 
   onProgress?.(`正在异步下载 [${preset.name}] 3D 地形与物理碰撞体...`);
 
-  const sceneUrl = `${baseUrl}assets/gameplay/${def.scene}`;
-  const collisionUrl = def.collision ? `${baseUrl}assets/gameplay/${def.collision}` : null;
+  const sceneUrl = `${assetsBaseUrl}${def.scene}`;
+  const collisionUrl = def.collision ? `${assetsBaseUrl}${def.collision}` : null;
 
   const [visualGltf, collisionGltf] = await Promise.all([
     loader.loadAsync(sceneUrl),
@@ -147,16 +203,9 @@ export async function loadMapIntoScene(
     }
   });
 
-  // 注册到物理碰撞器与空气墙检测系统
+  // 注册到物理碰撞器与空气墙检测系统，并加载全部附加子模型
   collider.reset();
-  if (def.bounds) {
-    collider.setBounds(def.bounds);
-  }
-
-  collider.registerVisualScene(visualScene, def.airWalls || []);
-  if (collisionScene) {
-    collider.registerCollisionScene(collisionScene);
-  }
+  await mountMapExtraMeshesAndConfig(def, assetsBaseUrl, loader, visualScene, collisionScene, collider);
 
   scene.add(visualScene);
 
@@ -171,11 +220,15 @@ export async function loadMapIntoScene(
     scene.background = new THREE.Color('#1e293b');
   }
 
-  // 计算安全地面出生点坐标 (优先使用已验证的 redSpawns / holdPoint，避免俯瞰相机把玩家刷在场外空中)
+  // 计算安全地面出生点坐标 (使用已验证的街道地面高度，避免高空天棚或屋顶误命中)
   const rawSpawn = def.redSpawns?.[0] ?? def.holdPoint ?? def.camera ?? [0, 2, 0];
   const spawnX = rawSpawn[0] ?? 0;
   const spawnZ = rawSpawn[2] ?? 0;
-  const floorY = collider.floorAt(spawnX, spawnZ, (rawSpawn[1] ?? 10) + 60) ?? collider.floorAt(0, 0, 90) ?? 0;
+  const hintY = rawSpawn[1] ?? 1.5;
+  const floorY =
+    collider.floorAt(spawnX, spawnZ, hintY + 3.2, 3.5) ??
+    collider.floorAt(spawnX, spawnZ, 24) ??
+    hintY;
   const spawnPoint = new THREE.Vector3(spawnX, floorY, spawnZ);
 
   onProgress?.(`[${def.name || preset.name}] 加载就绪！出生点: (${spawnX.toFixed(1)}, ${floorY.toFixed(1)}, ${spawnZ.toFixed(1)})`);

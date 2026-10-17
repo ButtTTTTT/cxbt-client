@@ -251,6 +251,12 @@ class BinaryCursor {
     return v;
   }
 
+  u16(): number {
+    const v = this.view.getUint16(this.offset, true);
+    this.offset += 2;
+    return v;
+  }
+
   f32(): number {
     const v = this.view.getFloat32(this.offset, true);
     this.offset += 4;
@@ -263,7 +269,6 @@ class BinaryCursor {
     if (len <= 0 || len > this.remaining) return '';
     const slice = this.bytes.subarray(this.offset, this.offset + len);
     this.offset += len;
-    // Strip trailing null bytes
     let end = slice.length;
     while (end > 0 && slice[end - 1] === 0) end--;
     return new TextDecoder('utf-8').decode(slice.subarray(0, end));
@@ -272,6 +277,19 @@ class BinaryCursor {
   skip(n: number): void {
     this.offset = Math.min(this.bytes.byteLength, this.offset + n);
   }
+}
+
+function decodeHalfFloat(h: number): number {
+  const s = (h >> 15) & 1;
+  const e = (h >> 10) & 0x1f;
+  const m = h & 0x3ff;
+  if (e === 0) {
+    return m === 0 ? (s ? -0 : 0) : (s ? -1 : 1) * Math.pow(2, -14) * (m / 1024);
+  }
+  if (e === 31) {
+    return m ? NaN : s ? -Infinity : Infinity;
+  }
+  return (s ? -1 : 1) * Math.pow(2, e - 15) * (1 + m / 1024);
 }
 
 export function parsePdeMeshBinary(rawBuffer: ArrayBuffer | Uint8Array): PdeMeshData {
@@ -286,112 +304,157 @@ export function parsePdeMeshBinary(rawBuffer: ArrayBuffer | Uint8Array): PdeMesh
 
   const typeFlag = cursor.u32(); // 1 = kStatic (52B/vert), 2 = kSkin (64B/vert)
   const meshType = typeFlag === 2 ? 'kSkin' : 'kStatic';
-  const vertexCount = cursor.u32();
+  const stride = meshType === 'kSkin' ? 64 : 52;
 
-  const positions = new Float32Array(vertexCount * 3);
-  const normals = new Float32Array(vertexCount * 3);
-  const uvs = new Float32Array(vertexCount * 2);
-  const uv2s = meshType === 'kStatic' ? new Float32Array(vertexCount * 2) : undefined;
-  const boneIndices = meshType === 'kSkin' ? new Uint16Array(vertexCount * 4) : undefined;
-  const boneWeights = meshType === 'kSkin' ? new Float32Array(vertexCount * 4) : undefined;
-
-  for (let i = 0; i < vertexCount; i++) {
-    // Position (x, y, z)
-    positions[i * 3 + 0] = cursor.f32();
-    positions[i * 3 + 1] = cursor.f32();
-    positions[i * 3 + 2] = cursor.f32();
-
-    if (meshType === 'kSkin') {
-      // Weights (3 floats, 4th derived) + 4 uint8 bone indices
-      const w0 = cursor.f32();
-      const w1 = cursor.f32();
-      const w2 = cursor.f32();
-      const w3 = Math.max(0, 1.0 - (w0 + w1 + w2));
-      const b0 = cursor.u8();
-      const b1 = cursor.u8();
-      const b2 = cursor.u8();
-      const b3 = cursor.u8();
-      if (boneWeights && boneIndices) {
-        boneWeights[i * 4 + 0] = w0;
-        boneWeights[i * 4 + 1] = w1;
-        boneWeights[i * 4 + 2] = w2;
-        boneWeights[i * 4 + 3] = w3;
-        boneIndices[i * 4 + 0] = b0;
-        boneIndices[i * 4 + 1] = b1;
-        boneIndices[i * 4 + 2] = b2;
-        boneIndices[i * 4 + 3] = b3;
-      }
+  if (meshType === 'kSkin') {
+    const boneCount = cursor.u32();
+    for (let b = 0; b < boneCount && cursor.remaining >= 4; b++) {
+      cursor.str();
     }
-
-    // Normal (nx, ny, nz)
-    normals[i * 3 + 0] = cursor.f32();
-    normals[i * 3 + 1] = cursor.f32();
-    normals[i * 3 + 2] = cursor.f32();
-
-    // Tangent (4 floats = 16B)
-    cursor.skip(16);
-
-    // UV1 (u, 1-v)
-    const u = cursor.f32();
-    const v = cursor.f32();
-    uvs[i * 2 + 0] = u;
-    uvs[i * 2 + 1] = 1.0 - v;
-
-    if (meshType === 'kStatic' && uv2s) {
-      const u2 = cursor.f32();
-      const v2 = cursor.f32();
-      uv2s[i * 2 + 0] = u2;
-      uv2s[i * 2 + 1] = 1.0 - v2;
-    }
+    const aabbCount = cursor.u32();
+    cursor.skip(aabbCount * 24);
+  } else {
+    // kStatic local AABB (6 floats = 24B)
+    cursor.skip(24);
   }
 
-  const indexCount = cursor.u32();
-  const indices = new Uint32Array(indexCount);
-  for (let i = 0; i < indexCount; i++) {
-    indices[i] = cursor.u32();
-  }
+  const primCount = cursor.remaining >= 4 ? cursor.u32() : 0;
 
+  const posChunks: number[] = [];
+  const normChunks: number[] = [];
+  const uvChunks: number[] = [];
+  const uv2Chunks: number[] = [];
+  const boneIdxChunks: number[] = [];
+  const boneWeightChunks: number[] = [];
+  const indexChunks: number[] = [];
   const materials: PdeMaterialData[] = [];
-  if (cursor.remaining >= 4) {
-    const matCount = cursor.u32();
-    for (let m = 0; m < matCount && cursor.remaining > 8; m++) {
-      const name = cursor.str();
-      const shaderPath = cursor.str();
-      const uniformCount = cursor.remaining >= 4 ? cursor.u32() : 0;
+  let totalVertices = 0;
+
+  for (let p = 0; p < primCount && cursor.remaining >= 25; p++) {
+    cursor.u32(); // triCount
+    const vertCount = cursor.u32();
+    cursor.u32(); // layer
+    cursor.u32(); // cullMode
+    cursor.u32(); // blendMode
+    cursor.u8(); // visible
+
+    let vbSize = cursor.u32();
+    if (vbSize !== vertCount * stride && cursor.remaining >= 4) {
+      // V2 extra u32 header before vbSize
+      vbSize = cursor.u32();
+    }
+
+    const vbStart = cursor.offset;
+    for (let v = 0; v < vertCount && cursor.offset + stride <= vbStart + vbSize; v++) {
+      cursor.offset = vbStart + v * stride;
+      const px = cursor.f32();
+      const py = cursor.f32();
+      const pz = cursor.f32();
+      posChunks.push(px, py, pz);
+
+      const nx = decodeHalfFloat(cursor.u16());
+      const ny = decodeHalfFloat(cursor.u16());
+      const nz = decodeHalfFloat(cursor.u16());
+      cursor.u16(); // nw
+      const nLen = Math.hypot(nx, ny, nz) || 1;
+      normChunks.push(nx / nLen, ny / nLen, nz / nLen);
+
+      // Skip half4 tangent (8B) + half4 binormal (8B) = 16B
+      cursor.skip(16);
+
+      if (meshType === 'kSkin') {
+        const b0 = cursor.u8();
+        const b1 = cursor.u8();
+        const b2 = cursor.u8();
+        const b3 = cursor.u8();
+        const w0 = cursor.f32();
+        const w1 = cursor.f32();
+        const w2 = cursor.f32();
+        const w3 = cursor.f32();
+        boneIdxChunks.push(b0, b1, b2, b3);
+        boneWeightChunks.push(w0, w1, w2, w3);
+
+        const u0 = decodeHalfFloat(cursor.u16());
+        const v0 = decodeHalfFloat(cursor.u16());
+        uvChunks.push(u0, 1.0 - v0);
+      } else {
+        const u0 = decodeHalfFloat(cursor.u16());
+        const v0 = decodeHalfFloat(cursor.u16());
+        const u1 = decodeHalfFloat(cursor.u16());
+        const v1 = decodeHalfFloat(cursor.u16());
+        uvChunks.push(u0, 1.0 - v0);
+        uv2Chunks.push(u1, 1.0 - v1);
+      }
+    }
+    cursor.offset = vbStart + vbSize;
+
+    const ibSize = cursor.u32();
+    const idxCount = Math.floor(ibSize / 4);
+    for (let i = 0; i < idxCount && cursor.remaining >= 4; i++) {
+      indexChunks.push(totalVertices + cursor.u32());
+    }
+    totalVertices += vertCount;
+
+    const hasMat = cursor.u8();
+    if (hasMat !== 0 && cursor.remaining >= 8) {
+      const vsCount = cursor.u32();
+      const vsNames: string[] = [];
+      for (let i = 0; i < vsCount; i++) vsNames.push(cursor.str());
+      const psCount = cursor.u32();
+      const psNames: string[] = [];
+      for (let i = 0; i < psCount; i++) psNames.push(cursor.str());
+
       const uniforms: Record<string, number[]> = {};
-      for (let u = 0; u < uniformCount && cursor.remaining >= 8; u++) {
-        const uName = cursor.str();
-        const byteSize = cursor.u32();
-        const floatCount = Math.floor(byteSize / 4);
-        const vals: number[] = [];
-        for (let f = 0; f < floatCount && cursor.remaining >= 4; f++) {
-          vals.push(cursor.f32());
+      for (let uGroup = 0; uGroup < 2; uGroup++) {
+        const lodCount = cursor.u32();
+        for (let l = 0; l < lodCount; l++) {
+          const uCount = cursor.u32();
+          for (let u = 0; u < uCount; u++) {
+            const uName = cursor.str();
+            const valCount = cursor.u32();
+            const vals: number[] = [];
+            for (let f = 0; f < valCount; f++) vals.push(cursor.f32());
+            if (l === 0) uniforms[uName] = vals;
+          }
         }
-        uniforms[uName] = vals;
       }
-      const texCount = cursor.remaining >= 4 ? cursor.u32() : 0;
+
       const textures: Array<{ slot: string; path: string }> = [];
-      for (let t = 0; t < texCount && cursor.remaining >= 8; t++) {
-        const slot = cursor.str();
-        const path = cursor.str();
-        textures.push({ slot, path });
+      const texLodCount = cursor.u32();
+      for (let l = 0; l < texLodCount; l++) {
+        const tCount = cursor.u32();
+        for (let t = 0; t < tCount; t++) {
+          const slot = cursor.str();
+          const texPath = cursor.str();
+          if (l === 0) textures.push({ slot, path: texPath });
+        }
       }
-      materials.push({ name, shaderPath, uniforms, textures });
+
+      materials.push({
+        name: `material_${p}`,
+        shaderPath: psNames[0] || vsNames[0] || '',
+        uniforms,
+        textures,
+      });
+    }
+
+    if (cursor.remaining >= 4) {
+      cursor.u32(); // collisionMode
     }
   }
 
   return {
     version,
     meshType,
-    vertexCount,
-    faceCount: Math.floor(indexCount / 3),
-    positions,
-    normals,
-    uvs,
-    uv2s,
-    boneIndices,
-    boneWeights,
-    indices,
+    vertexCount: totalVertices,
+    faceCount: Math.floor(indexChunks.length / 3),
+    positions: new Float32Array(posChunks),
+    normals: new Float32Array(normChunks),
+    uvs: new Float32Array(uvChunks),
+    uv2s: meshType === 'kStatic' ? new Float32Array(uv2Chunks) : undefined,
+    boneIndices: meshType === 'kSkin' ? new Uint16Array(boneIdxChunks) : undefined,
+    boneWeights: meshType === 'kSkin' ? new Float32Array(boneWeightChunks) : undefined,
+    indices: new Uint32Array(indexChunks),
     materials,
   };
 }

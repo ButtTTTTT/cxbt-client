@@ -25,6 +25,8 @@ import {
   getWeaponCombatProfile,
   getCustomMapById,
   mountCustomMapNodesIntoScene,
+  mountMapExtraMeshesAndConfig,
+  type MapExtraMeshEntry,
   type CustomMapBlueprint,
   type BotBehaviorMode,
   type BotSnapshot,
@@ -38,6 +40,9 @@ type MapDefinition = {
   collision: string | null;
   minimap: string | null;
   airWalls: string[];
+  waterMeshes?: string[] | null;
+  extraMeshes?: MapExtraMeshEntry[] | null;
+  deadAABBs?: number[][] | null;
   bounds: number[] | null;
   camera: number[] | null;
   fog: number[] | null;
@@ -387,19 +392,27 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
         return new THREE.Vector3(customMap.spawnPoint[0], customMap.spawnPoint[1], customMap.spawnPoint[2]);
       }
       const list = team === 'red' ? map.redSpawns : map.blueSpawns;
-      const fallback = map.holdPoint ?? map.camera ?? [0, 2, 0];
+      const fallback = map.holdPoint ?? map.camera ?? [0, 1.5, 0];
       const raw = (list && list[index % list.length]) || fallback;
       const sx = raw[0] ?? 0;
+      const hintY = raw[1] ?? 1.5;
       const sz = raw[2] ?? 0;
-      const ground = mapCollider.floorAt(sx, sz, (raw[1] ?? 12) + 65) ?? mapCollider.floorAt(0, 0, 90) ?? 0;
+      const ground =
+        mapCollider.floorAt(sx, sz, hintY + 3.2, 3.5) ??
+        mapCollider.floorAt(sx, sz, 24) ??
+        hintY;
       return new THREE.Vector3(sx, ground, sz);
     };
 
     const resolveHoldPointVec = () => {
-      const hp = map.holdPoint ?? map.redSpawns?.[0] ?? map.camera ?? [0, 1, 0];
+      const hp = map.holdPoint ?? map.redSpawns?.[0] ?? map.camera ?? [0, 1.2, 0];
       const hx = hp[0] ?? 0;
+      const hintY = hp[1] ?? 1.2;
       const hz = hp[2] ?? 0;
-      const hy = mapCollider.floorAt(hx, hz, (hp[1] ?? 12) + 65) ?? (hp[1] ?? 0);
+      const hy =
+        mapCollider.floorAt(hx, hz, hintY + 3.2, 3.5) ??
+        mapCollider.floorAt(hx, hz, 24) ??
+        hintY;
       return new THREE.Vector3(hx, hy, hz);
     };
 
@@ -603,7 +616,12 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
       const family = weaponId.split('_')[0] ?? '';
       const kind = weaponKind(weaponId);
       const profile = getWeaponCombatProfile(weaponId);
-      const fireIntervalMs = profile.fireDelay * 1000;
+      const nextComboIdx = comboStep % 3;
+      const stageDelaySec =
+        kind === 'melee' && profile.comboDelays
+          ? profile.comboDelays[nextComboIdx] ?? profile.fireDelay
+          : profile.fireDelay;
+      const fireIntervalMs = stageDelaySec * 1000;
       const baseDelay = sandboxRules.current.noCooldown ? Math.min(85, fireIntervalMs) : fireIntervalMs;
       const delay = baseDelay * (family === 'machinegun' ? Math.max(0.35, 1 - passives.fireRate / 100) : 1);
       const now = performance.now();
@@ -624,16 +642,20 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
         localPlayer.syncFacingToCamera(cameraController.yaw);
       }
 
+      let fireAudioKey = profile.fireAudio;
       if (kind === 'melee') {
         comboStep += 1;
+        const stageNum = ((comboStep - 1) % 3) + 1;
         mount.dataset.attackStep = String(comboStep);
-        localPlayer.attack(((comboStep - 1) % 3) + 1);
+        localPlayer.attack(profile.isSaw ? 1 : stageNum);
+        if (family === 'shield' && stageNum === 2) fireAudioKey = 'fire-shield2';
+        else if (family === 'shield' && stageNum === 3) fireAudioKey = 'fire-shield3';
       } else {
         comboStep = 0;
         mount.dataset.attackStep = '0';
         localPlayer.attack();
       }
-      audio.play(profile.fireAudio, 0.55);
+      audio.play(fireAudioKey, 0.55);
       recoilRef.current(kind === 'melee' ? 6 : Math.min(26, 7 + profile.spread * 220));
 
       for (const hitbox of botManager.getAliveHitboxes()) {
@@ -1021,7 +1043,8 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
       if (event.button === 2) {
         const curWeaponId = weapons[selected]?.id ?? '';
         const curFamily = curWeaponId.split('_')[0] ?? '';
-        if (curFamily === 'sniperrifle' || curFamily === 'crossbow') {
+        const curProfile = getWeaponCombatProfile(curWeaponId);
+        if ((curFamily === 'sniperrifle' || curFamily === 'crossbow') && curProfile.isSight !== false) {
           isScoped = !isScoped;
           camera.fov = isScoped ? (curFamily === 'sniperrifle' ? 22 : 32) : 65;
           camera.updateProjectionMatrix();
@@ -1118,9 +1141,8 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
       visual = mapGltf.scene;
       collision = collisionGltf?.scene ?? null;
 
-      // 注册场景网格与物理碰撞
-      mapCollider.registerVisualScene(visual, map.airWalls);
-      if (collision) mapCollider.registerCollisionScene(collision);
+      // 注册场景网格、水面着色器、3D 建筑禁入盒 (DeadAABBs)、附加子模型与物理碰撞
+      await mountMapExtraMeshesAndConfig(map as any, BASE, loader, visual, collision, mapCollider);
       scene.add(visual);
 
       // 如果当前房间选择了沙盒自制自定义地图，挂载全部自定义地形块、模型、NPC人物与怪物BOSS
@@ -1218,14 +1240,22 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
           return g;
         };
 
-        const redFlagPos = safeSpawn.clone().add(new THREE.Vector3(2.2, 0, 2.2));
-        redFlagPos.y = mapCollider.floorAt(redFlagPos.x, redFlagPos.z, redFlagPos.y + 30) ?? safeSpawn.y;
+        const rawRedFlag = map.redFlag;
+        const redFlagPos = rawRedFlag?.length
+          ? new THREE.Vector3(rawRedFlag[0] ?? safeSpawn.x, rawRedFlag[1] ?? safeSpawn.y, rawRedFlag[2] ?? safeSpawn.z)
+          : safeSpawn.clone().add(new THREE.Vector3(2.2, 0, 2.2));
+        redFlagPos.y = mapCollider.floorAt(redFlagPos.x, redFlagPos.z, redFlagPos.y + 3.2, 3.5) ?? safeSpawn.y;
         redFlagMesh = makeFlagMesh(0xef4444);
         redFlagMesh.position.copy(redFlagPos);
         objectiveGroup.add(redFlagMesh);
 
+        const rawBlueFlag = map.blueFlag;
+        const blueFlagPos = rawBlueFlag?.length
+          ? new THREE.Vector3(rawBlueFlag[0] ?? holdVec.x, rawBlueFlag[1] ?? holdVec.y, rawBlueFlag[2] ?? holdVec.z)
+          : holdVec.clone();
+        blueFlagPos.y = mapCollider.floorAt(blueFlagPos.x, blueFlagPos.z, blueFlagPos.y + 3.2, 3.5) ?? holdVec.y;
         blueFlagMesh = makeFlagMesh(0x3b82f6);
-        blueFlagMesh.position.copy(holdVec);
+        blueFlagMesh.position.copy(blueFlagPos);
         objectiveGroup.add(blueFlagMesh);
 
         carriedFlagMesh = makeFlagMesh(0x3b82f6);
@@ -1246,7 +1276,7 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
         for (const coords of rawT) {
           const tx = coords[0] ?? holdVec.x;
           const tz = coords[2] ?? holdVec.z;
-          const ty = mapCollider.floorAt(tx, tz, (coords[1] ?? 10) + 45) ?? holdVec.y;
+          const ty = mapCollider.floorAt(tx, tz, (coords[1] ?? 1.5) + 3.2, 3.5) ?? holdVec.y;
           const chestGroup = new THREE.Group();
           const box = new THREE.Mesh(
             new THREE.BoxGeometry(0.95, 0.72, 0.68),
@@ -1274,7 +1304,7 @@ function BattleScene({ map, customMap, modeId, damageBonusMult, hasPetCompanion,
         sites.forEach((sc, idx) => {
           const bx = sc[0] ?? holdVec.x;
           const bz = sc[2] ?? holdVec.z;
-          const by = mapCollider.floorAt(bx, bz, (sc[1] ?? 10) + 45) ?? holdVec.y;
+          const by = mapCollider.floorAt(bx, bz, (sc[1] ?? 1.5) + 3.2, 3.5) ?? holdVec.y;
           const pad = new THREE.Mesh(
             new THREE.CylinderGeometry(2.6, 2.6, 0.16, 28),
             new THREE.MeshStandardMaterial({

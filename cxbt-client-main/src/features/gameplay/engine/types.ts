@@ -20,8 +20,10 @@ export interface MovementInput {
 }
 
 export interface CollisionEnvironment {
-  floorAt?: (x: number, z: number, fromY: number) => number | undefined;
+  floorAt?: (x: number, z: number, fromY: number, maxStepUp?: number) => number | undefined;
+  ceilingAt?: (x: number, z: number, fromY: number, maxDist?: number) => number | undefined;
   isBlocked?: (from: any, to: any) => boolean;
+  resolveMovement?: (from: any, to: any, isGrounded?: boolean) => { x: number; z: number; floorY?: number; blocked: boolean };
   bounds?: number[] | null;
 }
 

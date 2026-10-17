@@ -1167,33 +1167,54 @@ export class PlayerEntity {
       }
     }
 
-    // 6. 碰撞环境阻挡与地图边界适配
+    // 6. 碰撞环境阻挡、墙壁平滑滑动与防卡死脱困
     if (this.collisionEnv) {
-      const bounds = this.collisionEnv.bounds;
-      if (bounds && bounds.length >= 4) {
-        const [cx, cz, w, d] = bounds;
-        const halfW = w / 2;
-        const halfD = d / 2;
-        if (this.candidatePos.x < cx - halfW || this.candidatePos.x > cx + halfW ||
-            this.candidatePos.z < cz - halfD || this.candidatePos.z > cz + halfD) {
-          this.candidatePos.x = currentPos.x;
-          this.candidatePos.z = currentPos.z;
+      if (this.collisionEnv.resolveMovement) {
+        const resolved = this.collisionEnv.resolveMovement(currentPos, this.candidatePos, this.isGrounded);
+        currentPos.x = resolved.x;
+        currentPos.z = resolved.z;
+        if (this.isGrounded) {
+          if (resolved.floorY !== undefined) {
+            currentPos.y = resolved.floorY;
+          } else if (this.collisionEnv.floorAt) {
+            const belowFloor = this.collisionEnv.floorAt(currentPos.x, currentPos.z, currentPos.y + 0.6, 0.82);
+            if (belowFloor !== undefined) {
+              if (currentPos.y - belowFloor > 0.85) {
+                this.isGrounded = false;
+              } else {
+                currentPos.y = belowFloor;
+              }
+            }
+          }
         }
-      }
+      } else {
+        const bounds = this.collisionEnv.bounds;
+        if (bounds && bounds.length >= 4) {
+          const [cx, cz, w, d] = bounds;
+          const halfW = w / 2;
+          const halfD = d / 2;
+          if (this.candidatePos.x < cx - halfW || this.candidatePos.x > cx + halfW ||
+              this.candidatePos.z < cz - halfD || this.candidatePos.z > cz + halfD) {
+            this.candidatePos.x = currentPos.x;
+            this.candidatePos.z = currentPos.z;
+          }
+        }
 
-      const floor = this.collisionEnv.floorAt ? this.collisionEnv.floorAt(
-        this.candidatePos.x,
-        this.candidatePos.z,
-        currentPos.y + (this.isGrounded ? 2.4 : 0.3)
-      ) : undefined;
+        const floor = this.collisionEnv.floorAt ? this.collisionEnv.floorAt(
+          this.candidatePos.x,
+          this.candidatePos.z,
+          currentPos.y + (this.isGrounded ? 1.1 : 0.55),
+          this.isGrounded ? 0.82 : 0.55
+        ) : undefined;
 
-      const blocked = this.collisionEnv.isBlocked ? this.collisionEnv.isBlocked(currentPos, this.candidatePos) : false;
+        const blocked = this.collisionEnv.isBlocked ? this.collisionEnv.isBlocked(currentPos, this.candidatePos) : false;
 
-      if (!blocked && (floor === undefined || !this.isGrounded || Math.abs(floor - currentPos.y) < 0.75)) {
-        currentPos.x = this.candidatePos.x;
-        currentPos.z = this.candidatePos.z;
-        if (this.isGrounded && floor !== undefined) {
-          currentPos.y = floor;
+        if (!blocked && (floor === undefined || floor - currentPos.y <= (this.isGrounded ? 0.82 : 0.55))) {
+          currentPos.x = this.candidatePos.x;
+          currentPos.z = this.candidatePos.z;
+          if (this.isGrounded && floor !== undefined && Math.abs(floor - currentPos.y) <= 0.85) {
+            currentPos.y = floor;
+          }
         }
       }
     } else {
@@ -1202,26 +1223,39 @@ export class PlayerEntity {
       currentPos.z = this.candidatePos.z;
     }
 
-    // 7. 垂直跳跃与重力物理
+    // 7. 垂直跳跃、顶棚防穿模与重力物理
     if (this.isJumping || !this.isGrounded) {
       this.jumpVelocity += this.gravity * delta;
       currentPos.y += this.jumpVelocity * delta;
 
-      // 检查下方地面
-      let groundY = 0; // 沙盒默认地平面 Y = 0
-      if (this.collisionEnv && this.collisionEnv.floorAt) {
-        const queriedFloor = this.collisionEnv.floorAt(currentPos.x, currentPos.z, currentPos.y + 0.3);
-        if (queriedFloor !== undefined) {
-          groundY = queriedFloor;
+      // 上升阶段头顶天花板碰撞检测，防止跳入空心屋顶
+      if (this.jumpVelocity > 0 && this.collisionEnv?.ceilingAt) {
+        const ceilY = this.collisionEnv.ceilingAt(currentPos.x, currentPos.z, currentPos.y, 1.95);
+        if (ceilY !== undefined && currentPos.y + 1.72 >= ceilY) {
+          currentPos.y = Math.min(currentPos.y, ceilY - 1.75);
+          this.jumpVelocity = 0;
         }
       }
 
-      if (this.jumpVelocity <= 0 && currentPos.y <= groundY) {
+      // 检查下方地面（严格限制查询起点为角色脚下附近，避免命中头顶屋顶或高空封盖）
+      let groundY: number | undefined = this.collisionEnv ? undefined : 0;
+      if (this.collisionEnv && this.collisionEnv.floorAt) {
+        groundY = this.collisionEnv.floorAt(currentPos.x, currentPos.z, currentPos.y + 0.65, 0.65);
+      }
+
+      if (groundY !== undefined && this.jumpVelocity <= 0 && currentPos.y <= groundY) {
         currentPos.y = groundY;
         this.jumpVelocity = 0;
         this.isJumping = false;
         this.isGrounded = true;
         this.events.onLand?.();
+      } else if (currentPos.y < -35) {
+        // 深渊防跌落安全兜底
+        const safeY = this.collisionEnv?.floorAt?.(currentPos.x, currentPos.z, 24) ?? 0;
+        currentPos.y = safeY;
+        this.jumpVelocity = 0;
+        this.isJumping = false;
+        this.isGrounded = true;
       }
     }
   }
