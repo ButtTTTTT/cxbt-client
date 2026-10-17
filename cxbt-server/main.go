@@ -38,6 +38,7 @@ func main() {
 
 	RegisterRoutes(r)
 	RegisterPdeFeatureRoutes(r)
+	RegisterVoiceAndLuaRoutes(r)
 	r.GET("/ws", ServeWs)
 	r.GET("/webrtc", ServeWebRTC)
 

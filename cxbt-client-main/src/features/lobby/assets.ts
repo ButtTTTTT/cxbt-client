@@ -26,6 +26,7 @@ export type LobbyAssets = {
   maps: { id: string; name: string; cover: string | null; roomImage: string | null; coverCard?: boolean }[];
   items: InventoryItem[];
   weapons: Record<string, CreationWeapon>;
+  attachments?: Record<string, CreationAttachment>;
   counts: Record<InventoryCategory, number>;
 };
 export const lobbyUrl = (path: string) => `${import.meta.env.BASE_URL}assets/lobby/${path}`;
@@ -43,6 +44,23 @@ export async function loadLobbyAssets(signal?: AbortSignal): Promise<LobbyAssets
   assets.items = [...cards.map((card): InventoryItem => ({
     id: card.id, name: card.name, icon: card.icon, category: 'avatars', avatarCard: card,
   })), ...assets.items];
+  const attachmentMap: Record<string, CreationAttachment> = { ...(assets.attachments ?? {}) };
+  for (const item of assets.items) {
+    if (item.attachment) {
+      const enriched: CreationAttachment = {
+        ...item.attachment,
+        label: item.attachment.label || item.name,
+        icon: item.attachment.icon || item.icon,
+      };
+      item.attachment = enriched;
+      attachmentMap[item.id] = { ...enriched, id: item.id };
+      if (!item.id.startsWith('piece_') || !attachmentMap[enriched.id]) {
+        attachmentMap[enriched.id] = enriched;
+      }
+    }
+  }
+  assets.attachments = attachmentMap;
   assets.counts.avatars = assets.items.filter((item) => item.category === 'avatars').length;
   return assets;
 }
+

@@ -451,7 +451,9 @@ export default function ModelViewer() {
     }
 
     const currentSuite = suite || WEAPON_SUITES.find(s => s.id === activeWeaponId);
-    const animPath = (currentSuite?.actions as any)?.[actionKey] || currentSuite?.actions?.idle;
+    const animPath = actionKey.startsWith('lobby:')
+      ? `${import.meta.env.BASE_URL}assets/lobby/animations/${actionKey.slice(6)}.json`
+      : (currentSuite?.actions as any)?.[actionKey] || currentSuite?.actions?.idle;
 
     if (!animPath) {
       setStatus(`动作 [${actionKey}] 未配置资源文件`);
@@ -471,15 +473,17 @@ export default function ModelViewer() {
           mainSkeletonRef.current.bones.forEach((b: any, idx: number) => boneIndices.set(b.name, idx));
         }
 
-        const clip = new THREE.AnimationClip(actionKey, data.duration ?? -1, data.tracks.flatMap((track: any) => {
-          if (boneIndices.size > 0 && !boneIndices.has(track.name)) return [];
-          const positionTimes = track.positions.map((_: any, index: number) => index / data.fps);
-          const rotationTimes = track.rotations.map((_: any, index: number) => index / data.fps);
-          return [
-            new THREE.VectorKeyframeTrack(`${track.name}.position`, positionTimes, track.positions.flat()),
-            new THREE.QuaternionKeyframeTrack(`${track.name}.quaternion`, rotationTimes, track.rotations.flat())
-          ];
-        }));
+        const clip = data.tracks?.[0]?.times
+          ? THREE.AnimationClip.parse(data)
+          : new THREE.AnimationClip(actionKey, data.duration ?? -1, (data.tracks || []).flatMap((track: any) => {
+              if (boneIndices.size > 0 && !boneIndices.has(track.name)) return [];
+              const positionTimes = track.positions.map((_: any, index: number) => index / data.fps);
+              const rotationTimes = track.rotations.map((_: any, index: number) => index / data.fps);
+              return [
+                new THREE.VectorKeyframeTrack(`${track.name}.position`, positionTimes, track.positions.flat()),
+                new THREE.QuaternionKeyframeTrack(`${track.name}.quaternion`, rotationTimes, track.rotations.flat())
+              ];
+            }));
 
         mixer.stopAllAction();
         const nextAction = mixer.clipAction(clip);
@@ -774,6 +778,32 @@ export default function ModelViewer() {
               {availableActionKeys.map(key => (
                 <option key={key} value={key}>
                   ▶️ {ACTION_LABELS[key] || key}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="── 19 项社交表情动作 (Gestures) ──">
+              {Array.from({ length: 19 }, (_, i) => i + 1).map(n => (
+                <option key={`g-${n}`} value={`lobby:gesture-${n}`}>
+                  🎭 社交动作 #{n} (gesture-{n})
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="── 16 项造型卡展示姿态 (Card Poses) ──">
+              {Array.from({ length: 8 }, (_, i) => i + 1).map(n => (
+                <option key={`cp-${n}`} value={`lobby:card/pose_${n}`}>
+                  🃏 卡片登场姿态 #{n} (card/pose_{n})
+                </option>
+              ))}
+              {Array.from({ length: 8 }, (_, i) => i + 1).map(n => (
+                <option key={`ci-${n}`} value={`lobby:card/idle_${n}`}>
+                  🃏 卡片待机姿态 #{n} (card/idle_{n})
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="── 角色更衣室姿态 (Avatar Room) ──">
+              {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
+                <option key={`ap-${n}`} value={`lobby:avatar/avatar_pose_${n}`}>
+                  🪞 更衣室展示姿态 #{n} (avatar_pose_{n})
                 </option>
               ))}
             </optgroup>

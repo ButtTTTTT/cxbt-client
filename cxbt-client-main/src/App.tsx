@@ -41,6 +41,65 @@ function App() {
     return () => removeEventListener('popstate', navigate);
   }, []);
 
+  useEffect(() => {
+    const onGlobalKeyDown = (event: KeyboardEvent) => {
+      // 唯一保留的浏览器快捷键：F11 全屏切换
+      if (event.code === 'F11' || event.key === 'F11') {
+        return;
+      }
+
+      const isInputTarget =
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        event.target instanceof HTMLSelectElement;
+
+      const isFunctionKey = /^F([1-9]|10|12)$/.test(event.code) || /^F([1-9]|10|12)$/.test(event.key);
+      const isBrowserNavKey =
+        event.key === 'BrowserBack' ||
+        event.key === 'BrowserForward' ||
+        event.key === 'BrowserRefresh' ||
+        event.key === 'BrowserStop' ||
+        event.key === 'BrowserSearch' ||
+        event.key === 'BrowserFavorites' ||
+        event.key === 'BrowserHome' ||
+        event.key === 'ContextMenu';
+
+      if (isFunctionKey || isBrowserNavKey || event.altKey || event.metaKey) {
+        event.preventDefault();
+        return;
+      }
+
+      if (event.ctrlKey) {
+        // 输入框内仅放行复制/粘贴/全选/剪切，其余 Ctrl+W/R/T/N/S/D/F/P/U/H/J 等全部屏蔽
+        const allowedInInput = isInputTarget && ['KeyA', 'KeyC', 'KeyV', 'KeyX', 'KeyZ'].includes(event.code);
+        if (!allowedInInput) {
+          event.preventDefault();
+        }
+        return;
+      }
+
+      if (!isInputTarget && (event.code === 'Tab' || event.code === 'Backspace')) {
+        event.preventDefault();
+      }
+    };
+
+    const onFullscreenChange = () => {
+      const nav = navigator as any;
+      if (document.fullscreenElement && nav.keyboard?.lock) {
+        nav.keyboard.lock().catch(() => {});
+      } else if (!document.fullscreenElement && nav.keyboard?.unlock) {
+        nav.keyboard.unlock();
+      }
+    };
+
+    window.addEventListener('keydown', onGlobalKeyDown, { capture: true });
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => {
+      window.removeEventListener('keydown', onGlobalKeyDown, { capture: true });
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+    };
+  }, []);
+
   const quit = () => {
     clearToken();
     setIsAuth(false);

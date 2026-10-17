@@ -106,9 +106,25 @@ func saveCharacterHandler(c *gin.Context) {
 	err := DB.Unscoped().Where("user_id = ?", userID).First(&existing).Error
 	if err == nil {
 		existing.DeletedAt.Valid = false
-		existing.Name = req.Name
-		existing.JobID = req.JobID
+		if req.Name != "" {
+			existing.Name = req.Name
+		}
+		if req.JobID != "" {
+			existing.JobID = req.JobID
+		}
 		existing.Appearance = req.Appearance
+		if req.EquippedWeapons != "" {
+			existing.EquippedWeapons = req.EquippedWeapons
+		}
+		if req.ActiveWing != "" {
+			existing.ActiveWing = req.ActiveWing
+		}
+		if req.ActivePet != "" {
+			existing.ActivePet = req.ActivePet
+		}
+		if req.QuickbarJSON != "" {
+			existing.QuickbarJSON = req.QuickbarJSON
+		}
 		if existing.Level <= 0 {
 			existing.Level = 1
 		}
@@ -123,6 +139,9 @@ func saveCharacterHandler(c *gin.Context) {
 		}
 		if existing.Power <= 0 {
 			existing.Power = 1500
+		}
+		if existing.LuckDrawStamina <= 0 {
+			existing.LuckDrawStamina = 100
 		}
 		if err := DB.Unscoped().Save(&existing).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -150,6 +169,9 @@ func saveCharacterHandler(c *gin.Context) {
 		if req.Power <= 0 {
 			req.Power = 1500
 		}
+		if req.LuckDrawStamina <= 0 {
+			req.LuckDrawStamina = 100
+		}
 		if err := DB.Create(&req).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -159,12 +181,18 @@ func saveCharacterHandler(c *gin.Context) {
 }
 
 func getRoomsHandler(c *gin.Context) {
+	if val, exists := c.Get("userId"); exists {
+		if uid, ok := val.(uint); ok && uid > 0 {
+			TouchPlayerActivity(uid)
+		}
+	}
 	rooms := GetAllRoomsFromStore()
 	c.JSON(http.StatusOK, rooms)
 }
 
 func createRoomHandler(c *gin.Context) {
 	userID := c.MustGet("userId").(uint)
+	TouchPlayerActivity(userID)
 
 	var req struct {
 		RoomConfig
@@ -178,6 +206,9 @@ func createRoomHandler(c *gin.Context) {
 	config.ID = fmt.Sprintf("room-%d", userID)
 	config.HostID = userID
 	config.State = "Waiting"
+
+	// Remove player from any other rooms before creating this room
+	RemovePlayerFromAllOtherRooms(userID, config.ID)
 
 	var char SavedCharacter
 	DB.Where("user_id = ?", userID).First(&char)
@@ -206,3 +237,4 @@ func createRoomHandler(c *gin.Context) {
 	SaveRoomToStore(config)
 	c.JSON(http.StatusOK, config)
 }
+

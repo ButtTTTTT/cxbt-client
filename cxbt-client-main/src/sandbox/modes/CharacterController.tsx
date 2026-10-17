@@ -65,6 +65,12 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
   const selectedWeaponSkinIdRef = useRef<string>('');
   selectedWeaponSkinIdRef.current = selectedWeaponSkinId;
 
+  const [selectedWingId, setSelectedWingId] = useState<string>(
+    () => localStorage.getItem('avatarstar.activeWing') || 'wing01_indie'
+  );
+  const selectedWingIdRef = useRef<string>(selectedWingId);
+  selectedWingIdRef.current = selectedWingId;
+
   // 动作套件与选项
   const [activeSuiteId, setActiveSuiteId] = useState<string>(WEAPON_SUITES[0].id);
   const activeSuiteIdRef = useRef<string>(WEAPON_SUITES[0].id);
@@ -325,11 +331,10 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
     player.attack();
     battleAudioRef.current?.play(profile.fireAudio, 0.7);
 
-    // 枪口亮光与火花
+    // 枪口世界坐标与当前武器 ID
     const muzzlePos = player.getMuzzlePosition();
-    if (profile.kind !== 'melee') {
-      combatEffects?.triggerMuzzleFlash(muzzlePos, 0.06);
-    }
+    const activeWepId = selectedWeaponSkinIdRef.current || currentSuite.id;
+    const family = activeWepId.split('_')[0];
 
     // 准星后坐力扩散
     setRecoilSpread(prev => Math.min(22, prev + 5));
@@ -341,7 +346,7 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
       const forward = cameraModeRef.current === 'tps' && tpsCamera
         ? tpsCamera.getForwardDirection().clone()
         : new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-      combatEffects?.spawnMeleeSlash(playerPos, forward, Math.floor(now / 150) % 3 + 1);
+      combatEffects?.spawnMeleeSlash(playerPos, forward, Math.floor(now / 150) % 3 + 1, activeWepId);
       let hitAny = false;
 
       botManager?.bots.forEach(bot => {
@@ -378,13 +383,17 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
       aimDir.set(Math.sin(player.modelGroup.rotation.y), 0, Math.cos(player.modelGroup.rotation.y));
     }
 
+    if (family !== 'sprayer' && family !== 'grenade') {
+      combatEffects?.triggerMuzzleFlash(muzzlePos, 0.08, aimDir, activeWepId);
+    }
+
     const targets: any[] = [
       ...(botManager?.getAliveHitboxes() ?? []),
       ...(mapColliderRef.current?.collisionMeshes ?? [])
     ];
     const raycaster = new THREE.Raycaster();
 
-    // 3. 投射物武器 (RPG / Bow / Grenade) —— 从枪口朝准星落点汇聚发射
+    // 3. 投射物武器 (RPG / Bow / Crossbow / Grenade) —— 从枪口朝准星落点汇聚发射
     if (profile.kind === 'rocket' || profile.kind === 'arrow' || profile.kind === 'grenade') {
       let launchDir = aimDir.clone();
       if (cameraModeRef.current === 'tps') {
@@ -396,21 +405,44 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
           : camera.position.clone().addScaledVector(aimDir, 85);
         launchDir = targetPoint.clone().sub(muzzlePos).normalize();
       }
-      projectileSystemRef.current?.spawn(profile.kind, muzzlePos, launchDir);
+      const subType = family === 'crossbow' ? 'syringe' : 'default';
+      projectileSystemRef.current?.spawn(profile.kind, muzzlePos, launchDir, subType, activeWepId);
       if (currentMagAmmoRef.current <= 0) reloadWeapon();
       return;
     }
 
     // 4. 实时射线检定枪弹 (SMG, Pistol, Shotgun, Sniper, Machinegun, Sprayer) + 3D 曳光弹轨
     const pelletsCount = profile.pellets;
-    const family = currentSuite.id.split('_')[0];
-    const tracerColor = family === 'sprayer'
-      ? 0x34d399
-      : family === 'sniperrifle'
-        ? 0x38bdf8
-        : family === 'machinegun'
-          ? 0xfb923c
-          : 0xfde047;
+
+    // 燃烧器 / 生化喷射器 (sprayer_01..45): 1:1 复刻 vfx_shenghua_atomizing_attack1_3rd.vfx 三层烈焰粒子喷流 + 扇形灼烧伤害
+    if (family === 'sprayer') {
+      combatEffects?.spawnSprayerMistCone(muzzlePos, aimDir);
+      const pPos = player.modelGroup.position;
+      botManager?.bots.forEach(bot => {
+        if (bot.hp <= 0) return;
+        const botPos = bot.entity.modelGroup.position;
+        const toBot = botPos.clone().sub(pPos);
+        const dist = toBot.length();
+        if (dist <= 9.8 && (dist < 1.5 || toBot.normalize().dot(aimDir) >= 0.58)) {
+          const dmg = Math.floor(profile.damage * (0.9 + Math.random() * 0.25));
+          bot.entity.takeDamage(dmg);
+          triggerHitmarker(false);
+          combatEffects?.spawnFloatingDamage(botPos.clone().add(new THREE.Vector3(0, 1.8, 0)), dmg, false);
+          combatEffects?.spawnImpactSpark(botPos.clone().add(new THREE.Vector3(0, 1.1, 0)), 0xf97316);
+          setStatus(`🔥 燃烧器烈焰喷流命中 [${bot.name}]！造成 ${dmg} 点火焰伤害`);
+        }
+      });
+      if (currentMagAmmoRef.current <= 0) {
+        reloadWeapon();
+      }
+      return;
+    }
+
+    const tracerColor = family === 'sniperrifle'
+      ? 0x38bdf8
+      : family === 'machinegun'
+        ? 0xfb923c
+        : 0xfde047;
 
     for (let p = 0; p < pelletsCount; p++) {
       const pelletDir = aimDir.clone();
@@ -633,9 +665,14 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
           }))
         : suite.parts;
 
+      const initWingVal = selectedWingIdRef.current === 'none'
+        ? undefined
+        : (lobbyAssetsRef.current?.attachments?.[selectedWingIdRef.current] || selectedWingIdRef.current);
+
       await Promise.all([
         player.loadAnimations(suite.actions),
-        partsToEquip ? player.equipWeaponParts(partsToEquip, 0, skinWeapon?.id || suite.id) : Promise.resolve([])
+        partsToEquip ? player.equipWeaponParts(partsToEquip, 0, skinWeapon?.id || suite.id) : Promise.resolve([]),
+        player.equipWing(initWingVal)
       ]);
       setStatus(`✅ 已切换角色为 ${displayName}`);
     } catch (err) {
@@ -818,7 +855,7 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
       onFootstep: (idx) => battleAudio.play(`step${idx}`, 0.3),
       onJump: () => {
         battleAudio.play('jump', 0.45);
-        setStatus('实体触发起跳事件 (onJump)');
+        setStatus(player.isFlying ? '✈️ 展翼升空飞行！(空格爬升 / Ctrl俯冲 / B键收翼)' : '实体触发起跳事件 (空中再按空格可展翼飞行)');
       },
       onLand: () => {
         battleAudio.play('land', 0.35);
@@ -858,9 +895,13 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
         modelRef.current = built.root;
 
         const initialSuite = WEAPON_SUITES[0];
+        const initWing = selectedWingIdRef.current === 'none'
+          ? undefined
+          : (lobbyAssetsRef.current?.attachments?.[selectedWingIdRef.current] || selectedWingIdRef.current);
         await Promise.all([
           player.loadAnimations(initialSuite.actions),
-          initialSuite.parts ? player.equipWeaponParts(initialSuite.parts, 0, initialSuite.id) : Promise.resolve([])
+          initialSuite.parts ? player.equipWeaponParts(initialSuite.parts, 0, initialSuite.id) : Promise.resolve([]),
+          player.equipWing(initWing)
         ]);
         setAvailableActions(Object.keys(initialSuite.actions));
 
@@ -877,22 +918,56 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
       .catch(err => setStatus(`引擎加载失败: ${err}`));
 
     // 键盘与鼠标事件
-    const keys = { w: false, a: false, s: false, d: false, space: false };
+    const keys = { w: false, a: false, s: false, d: false, space: false, ctrl: false };
     const direction = new THREE.Vector3();
 
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    };
+
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'SELECT') return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+
+      // 局内全局屏蔽浏览器快捷键（防止 Ctrl+W 关闭标签页、Ctrl+R 刷新、Ctrl+S 保存、Ctrl+D 收藏等）
+      const gameAndShortcutCodes = [
+        'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyT', 'KeyF', 'KeyE', 'KeyQ',
+        'KeyB', 'KeyC', 'KeyZ', 'KeyX', 'KeyG', 'KeyH', 'KeyV', 'KeyY', 'KeyP',
+        'KeyN', 'KeyU', 'KeyI', 'KeyO', 'KeyJ', 'KeyK', 'KeyL',
+        'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab',
+        'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6',
+        'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10',
+      ];
+      if (e.ctrlKey || e.altKey || e.metaKey || gameAndShortcutCodes.includes(e.code)) {
+        if (e.code !== 'F12') {
+          e.preventDefault();
+        }
+      }
 
       if (e.code === 'KeyW') keys.w = true;
       if (e.code === 'KeyA') keys.a = true;
       if (e.code === 'KeyS') keys.s = true;
       if (e.code === 'KeyD') keys.d = true;
+      if (e.code === 'ControlLeft' || e.code === 'ControlRight' || e.code === 'KeyC' || (e.code === 'ShiftLeft' && player.isFlying)) keys.ctrl = true;
       if (e.code === 'Space') {
         e.preventDefault();
         keys.space = true;
-        player.jump();
+        if (!e.repeat) {
+          player.jump();
+        }
       }
-      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+      if (e.code === 'KeyB' && !e.repeat) {
+        if (player.hasWings) {
+          const nextFly = player.toggleFlying();
+          battleAudio.play(nextFly ? 'jump' : 'land', 0.45);
+          setStatus(nextFly ? '✈️ 已开启展翼飞行！(空格爬升 / Shift或C或Ctrl俯冲 / B键收翼)' : '🛬 已收起双翼恢复地面行动');
+        } else {
+          setStatus('⚠️ 请先在左侧面板装备翅膀，再按 B 键或二段跳开启飞行！');
+        }
+      }
+      if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && !player.isFlying) {
         player.roll();
       }
       if (e.code === 'KeyJ') {
@@ -917,6 +992,7 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
       if (e.code === 'KeyS') keys.s = false;
       if (e.code === 'KeyD') keys.d = false;
       if (e.code === 'Space') keys.space = false;
+      if (e.code === 'ControlLeft' || e.code === 'ControlRight' || e.code === 'KeyC' || e.code === 'ShiftLeft') keys.ctrl = false;
     };
 
     let isDragging = false;
@@ -931,7 +1007,14 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
           lastX = e.clientX;
           lastY = e.clientY;
           if (!document.pointerLockElement) {
-            renderer.domElement.requestPointerLock?.();
+            Promise.resolve(renderer.domElement.requestPointerLock?.()).catch(() => {});
+            try {
+              (navigator as any).keyboard?.lock?.([
+                'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyT', 'KeyF', 'KeyE', 'KeyQ',
+                'KeyB', 'KeyC', 'KeyZ', 'KeyX', 'KeyG', 'KeyH', 'KeyV', 'Tab', 'Space',
+                'Digit1', 'Digit2', 'Digit3', 'Digit4',
+              ])?.catch?.(() => undefined);
+            } catch {}
           }
           fireWeapon();
         } else if (e.button === 2) {
@@ -971,8 +1054,9 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
       }
     };
 
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    window.addEventListener('keyup', onKeyUp, { capture: true });
+    window.addEventListener('beforeunload', onBeforeUnload);
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointermove', onPointerMove);
@@ -1022,8 +1106,20 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
             player.modelGroup.position.z - camera.position.z
           );
 
+      player.flyAscendInput = keys.space ? 1 : keys.ctrl ? -1 : 0;
+      if (player.isFlying && noCooldownRef.current && player.flyEnergy <= 5) {
+        player.flyEnergy = player.maxFlyEnergy;
+      }
+
       player.setInput(direction, cameraYaw, keys.space);
       player.update(delta);
+
+      if (player.hasWings && player.isAlive) {
+        const wingTips = player.getWingTipPositions();
+        if (wingTips) {
+          combatEffects.spawnWingTrail(wingTips.left, wingTips.right, player.activeWingId, player.isFlying);
+        }
+      }
 
       if (player.modelGroup.position.y < -35) {
         const sp = currentMapSessionRef.current?.spawnPoint || new THREE.Vector3(0, 0, 0);
@@ -1094,7 +1190,8 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
         yawRef.current.textContent = `${deg >= 0 ? deg.toFixed(0) : (360 + deg).toFixed(0)}°`;
       }
       if (motionRef.current) {
-        motionRef.current.textContent = player.isJumping ? '跳跃腾空' 
+        motionRef.current.textContent = player.isFlying ? '✈️ 展翼飞行'
+          : player.isJumping ? '跳跃腾空' 
           : player.isRolling ? '战术翻滚' 
           : player.isMoving ? '奔跑移动' : '地面静止';
       }
@@ -1122,8 +1219,10 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
 
     return () => {
       cancelAnimationFrame(animationId);
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('keydown', onKeyDown, { capture: true });
+      window.removeEventListener('keyup', onKeyUp, { capture: true });
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      try { (navigator as any).keyboard?.unlock?.(); } catch {}
       window.removeEventListener('resize', handleResize);
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointerup', onPointerUp);
@@ -1242,7 +1341,37 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
     }
   };
 
+  const handleWingChange = async (wingId: string) => {
+    setSelectedWingId(wingId);
+    selectedWingIdRef.current = wingId;
+    try {
+      localStorage.setItem('avatarstar.activeWing', wingId);
+    } catch { /* ignore */ }
+    const player = playerRef.current;
+    if (!player) return;
+    if (!wingId || wingId === 'none') {
+      await player.equipWing(undefined);
+      setStatus('已卸下背饰翅膀并关闭飞行模式');
+      return;
+    }
+    const att = lobbyAssetsRef.current?.attachments?.[wingId] || wingId;
+    await player.equipWing(att);
+    const wingLabel = typeof att === 'object' ? att.label : wingId;
+    setStatus(`🕊️ 已穿戴原版翅膀 [${wingLabel}]！按 B 键或二段跳 (Space×2) 即可展翼飞行`);
+  };
+
   const triggerJump = () => playerRef.current?.jump();
+  const triggerToggleFlight = () => {
+    const player = playerRef.current;
+    if (!player) return;
+    if (!player.hasWings) {
+      setStatus('⚠️ 请先在上方下拉框选择佩戴一款翅膀，再开启展翼飞行！');
+      return;
+    }
+    const nextFly = player.toggleFlying();
+    battleAudioRef.current?.play(nextFly ? 'jump' : 'land', 0.45);
+    setStatus(nextFly ? '✈️ 已开启展翼飞行！(空格爬升 / Ctrl俯冲 / B键收翼)' : '🛬 已收起双翼恢复地面行动');
+  };
   const triggerRoll = () => playerRef.current?.roll();
   const triggerDamage = () => triggerPlayerHurt(600);
   const triggerRevive = () => {
@@ -1716,6 +1845,43 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
           </select>
         </div>
 
+        {/* 4c. 45 款原版翅膀背饰与展翼飞行系统 */}
+        <div style={{ marginBottom: '12px' }}>
+          <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px', color: '#38bdf8' }}>
+            🕊️ 原版翅膀背饰与展翼飞行 (Space×2 / B键)：
+          </label>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <select
+              id="wing-skin-select"
+              style={{ flex: 1, padding: '7px 10px', background: '#0f172a', color: 'white', border: '1px solid #38bdf8', borderRadius: '6px', fontSize: '12px' }}
+              value={selectedWingId}
+              onChange={e => handleWingChange(e.target.value)}>
+              <option value="none">🚫 不佩戴翅膀 (关闭飞行)</option>
+              {lobbyAssets && Object.values(lobbyAssets.attachments || {})
+                .filter(att => att.id.startsWith('wing'))
+                .map(att => (
+                  <option key={att.id} value={att.id}>
+                    🕊️ {att.label} [{att.id}]
+                  </option>
+                ))}
+            </select>
+            <button
+              id="btn-toggle-flight"
+              onClick={triggerToggleFlight}
+              style={{
+                ...btnStyle,
+                background: 'linear-gradient(135deg, #0284c7, #2563eb)',
+                color: '#ffffff',
+                border: '1px solid #38bdf8',
+                fontWeight: 'bold',
+                whiteSpace: 'nowrap'
+              }}
+              title="按 B 键或二段跳 (Space×2) 亦可开启/收起展翼飞行">
+              ✈️ 飞行(B)
+            </button>
+          </div>
+        </div>
+
         {/* 5. 动作选项模式 */}
         <div style={{ marginBottom: '12px' }}>
           <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '4px', color: '#cbd5e1' }}>
@@ -1737,9 +1903,12 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
         {/* 6. 动作与战斗测试按钮组 */}
         <div style={{ marginBottom: '12px' }}>
           <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>⚡ 动作与战斗快捷测试：</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginBottom: '6px' }}>
-            <button onClick={triggerJump} style={btnStyle} title="按空格键 Space 亦可触发">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginBottom: '6px' }}>
+            <button onClick={triggerJump} style={btnStyle} title="按空格键 Space 亦可触发 (空中再按触发二段跳飞行)">
               🦘 跳跃
+            </button>
+            <button onClick={triggerToggleFlight} style={{ ...btnStyle, color: '#38bdf8', fontWeight: 'bold' }} title="按 B 键或二段跳开启展翼飞行">
+              ✈️ 飞行
             </button>
             <button onClick={triggerRoll} style={btnStyle} title="按 Shift 键亦可触发">
               ⚡ 翻滚
@@ -1753,7 +1922,7 @@ export default function CharacterController({ initialMapId }: { initialMapId?: s
                 fontWeight: 'bold'
               }}
               title="按 J 键或鼠标左键亦可触发">
-              ⚔️ 开火/攻击
+              ⚔️ 开火
             </button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>

@@ -46,6 +46,11 @@ func ServeWebRTC(c *gin.Context) {
 
 	roomID := c.Query("roomId")
 
+	// Handle incoming WebRTC voice audio tracks
+	peerConnection.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+		log.Printf("WebRTC Audio Track received for roomID=%s: codec=%s ssrc=%d", roomID, track.Codec().MimeType, track.SSRC())
+	})
+
 	// Handle DataChannel
 	peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
 		log.Printf("New DataChannel opened for roomID=%s", roomID)

@@ -1,10 +1,107 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { LUA_WEAPON_PROJECTILE_MODELS } from './luaMasterData';
 
 export type WeaponKind = 'melee' | 'grenade' | 'rocket' | 'arrow' | 'bullet';
 export type ProjectileSubType = 'default' | 'syringe' | 'gasbomb' | 'dynamite';
 
+const gltfLoader = new GLTFLoader();
+const texLoader = new THREE.TextureLoader();
+const projectileGlbCache = new Map<string, any>();
+const projectileGlbLoading = new Set<string>();
+const projectileVfxTex: Record<string, any> = {};
+
+function ensureProjectileVfxTextures() {
+  if (Object.keys(projectileVfxTex).length > 0) return;
+  const baseUrl = `${import.meta.env.BASE_URL || '/'}assets/gameplay/vfx/`;
+  for (const name of [
+    'vfx_smoke3',
+    'vfx_smoke12',
+    'vfx_smoke_white',
+    'vfx_spark_group',
+    'vfx_star2',
+    'vfx_glow_9',
+    'vfx_glow_7',
+    'vfx_glow_green',
+    'vfx_radial_flare_05',
+  ]) {
+    texLoader.load(
+      `${baseUrl}${name}.png`,
+      (tex: any) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        projectileVfxTex[name] = tex;
+      },
+      undefined,
+      () => undefined
+    );
+  }
+}
+
+function resolveProjectileGlbUrl(weaponId?: string, kind?: WeaponKind, subType?: ProjectileSubType): string | null {
+  const wId = (weaponId || '').toLowerCase();
+  if (wId && LUA_WEAPON_PROJECTILE_MODELS[wId]) {
+    return LUA_WEAPON_PROJECTILE_MODELS[wId];
+  }
+  if (kind === 'rocket') return LUA_WEAPON_PROJECTILE_MODELS['rpg_01'] || '/assets/gameplay/projectiles/rpg_01_rpgbullet_01.glb';
+  if (kind === 'arrow') {
+    return subType === 'syringe'
+      ? LUA_WEAPON_PROJECTILE_MODELS['crossbow_01'] || '/assets/gameplay/projectiles/crossbow_01_crossbowbullet_01.glb'
+      : LUA_WEAPON_PROJECTILE_MODELS['bow_01'] || '/assets/gameplay/projectiles/bow_01_arrow_01.glb';
+  }
+  if (kind === 'grenade') {
+    return subType === 'gasbomb'
+      ? LUA_WEAPON_PROJECTILE_MODELS['sprayer_01'] || '/assets/gameplay/projectiles/sprayer_01_sprayerbullet_01.glb'
+      : LUA_WEAPON_PROJECTILE_MODELS['grenadelauncher_01'] || '/assets/gameplay/projectiles/grenadelauncherbullet_01_rv1_lod0.glb';
+  }
+  return null;
+}
+
+function attachRealGlbProjectile(container: any, url: string, kind: Exclude<WeaponKind, 'melee'>) {
+  const mountClone = (template: any) => {
+    const clone = template.clone(true);
+    const box = new THREE.Box3().setFromObject(clone);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+    const targetSize = kind === 'arrow' ? 0.85 : kind === 'rocket' ? 0.65 : 0.36;
+    const scale = targetSize / maxDim;
+    clone.scale.setScalar(scale);
+    clone.rotation.x = Math.PI / 2;
+    container.add(clone);
+  };
+
+  const cached = projectileGlbCache.get(url);
+  if (cached) {
+    mountClone(cached);
+    return;
+  }
+  if (!projectileGlbLoading.has(url)) {
+    projectileGlbLoading.add(url);
+    gltfLoader.load(
+      url,
+      (gltf) => {
+        projectileGlbLoading.delete(url);
+        if (gltf?.scene) {
+          projectileGlbCache.set(url, gltf.scene);
+          mountClone(gltf.scene);
+        }
+      },
+      undefined,
+      () => {
+        projectileGlbLoading.delete(url);
+      }
+    );
+  }
+}
+
 export function weaponKind(id: string): WeaponKind {
-  const family = id.split('_')[0];
+  const lower = (id || '').toLowerCase();
+  if (lower.startsWith('ba0')) {
+    if (lower.includes('machinegun') || lower.includes('armrt')) return 'bullet';
+    if (lower.includes('grenade')) return 'grenade';
+    return 'rocket';
+  }
+  const family = lower.split('_')[0];
   if (['knives', 'shield', 'stick'].includes(family)) return 'melee';
   if (['grenade', 'grenadelauncher'].includes(family)) return 'grenade';
   if (family === 'rpg') return 'rocket';
@@ -22,49 +119,49 @@ type Projectile = {
 };
 
 /**
- * 构建《创想兵团》(Avatar Star) 1:1 风格 3D 投射物实体网格:
- * - rocket: 火箭弹 (弹体 + 红色弹头 + 4片尾翼 + 尾部喷射火焰核心)
- * - grenade / gasbomb / dynamite: 菠萝高爆手雷 / 生化毒气弹罐 / 矿工炸药包
- * - arrow / syringe: 复合弓发光箭矢 / 生化十字弩生命抽取针筒
+ * 构建《创想兵团》(Avatar Star) 1:1 真实解密 .mesh (.glb) 投射物实体 + 尾焰核心:
+ * - rocket: 挂载 rpgbullet_XX.glb + 尾部喷射火焰核心
+ * - grenade / gasbomb / dynamite: 挂载 grenadelauncherbullet_XX.glb / sprayerbullet_XX.glb / grenade_XX.glb
+ * - arrow / syringe: 挂载 arrow_XX.glb / crossbowbullet_XX.glb
  * - bullet: 亮金曳光弹丸
  */
-function buildProjectileMesh(kind: Exclude<WeaponKind, 'melee'>, subType: ProjectileSubType = 'default'): any {
+function buildProjectileMesh(
+  kind: Exclude<WeaponKind, 'melee'>,
+  subType: ProjectileSubType = 'default',
+  weaponId?: string
+): any {
   const group = new THREE.Group();
+  const glbUrl = resolveProjectileGlbUrl(weaponId, kind, subType);
+  if (glbUrl) {
+    attachRealGlbProjectile(group, glbUrl, kind);
+  }
 
   if (kind === 'rocket') {
     const body = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.065, 0.065, 0.45, 10),
+      new THREE.CylinderGeometry(0.055, 0.055, 0.38, 10),
       new THREE.MeshPhongMaterial({ color: 0x475569, emissive: 0x0f172a, shininess: 40 })
     );
     group.add(body);
 
     const warhead = new THREE.Mesh(
-      new THREE.ConeGeometry(0.08, 0.22, 10),
+      new THREE.ConeGeometry(0.075, 0.2, 10),
       new THREE.MeshPhongMaterial({ color: 0xef4444, emissive: 0x450a0a, shininess: 50 })
     );
-    warhead.position.y = 0.33;
+    warhead.position.y = 0.29;
     group.add(warhead);
 
-    const finMat = new THREE.MeshPhongMaterial({ color: 0xf59e0b });
-    for (let i = 0; i < 4; i++) {
-      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.02), finMat);
-      fin.position.y = -0.18;
-      fin.rotation.y = (i * Math.PI) / 2;
-      group.add(fin);
-    }
-
     const flame = new THREE.Mesh(
-      new THREE.ConeGeometry(0.085, 0.32, 8),
+      new THREE.ConeGeometry(0.085, 0.34, 8),
       new THREE.MeshBasicMaterial({ color: 0xff9800, transparent: true, opacity: 0.94 })
     );
     flame.rotation.x = Math.PI;
-    flame.position.y = -0.36;
+    flame.position.y = -0.34;
     group.add(flame);
   } else if (kind === 'grenade') {
     const isGas = subType === 'gasbomb';
     const isDynamite = subType === 'dynamite';
     const sphere = new THREE.Mesh(
-      isDynamite ? new THREE.CylinderGeometry(0.11, 0.11, 0.32, 10) : new THREE.SphereGeometry(0.145, 12, 10),
+      isDynamite ? new THREE.CylinderGeometry(0.1, 0.1, 0.28, 10) : new THREE.SphereGeometry(0.125, 12, 10),
       new THREE.MeshPhongMaterial({
         color: isGas ? 0x10b981 : isDynamite ? 0xdc2626 : 0x3f6212,
         emissive: isGas ? 0x065f46 : isDynamite ? 0x7f1d1d : 0x14532d,
@@ -74,72 +171,40 @@ function buildProjectileMesh(kind: Exclude<WeaponKind, 'melee'>, subType: Projec
     group.add(sphere);
 
     const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.15, 0.024, 8, 16),
+      new THREE.TorusGeometry(0.14, 0.022, 8, 16),
       new THREE.MeshBasicMaterial({ color: isGas ? 0xa855f7 : 0xfacc15 })
     );
     ring.rotation.x = Math.PI / 2;
     group.add(ring);
-
-    const fuse = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.04, 0.05, 0.08, 8),
-      new THREE.MeshPhongMaterial({ color: 0xd97706 })
-    );
-    fuse.position.y = 0.15;
-    group.add(fuse);
-
-    const spark = new THREE.Mesh(
-      new THREE.SphereGeometry(0.05, 8, 8),
-      new THREE.MeshBasicMaterial({ color: isGas ? 0x4ade80 : 0xff3b30 })
-    );
-    spark.position.y = 0.2;
-    group.add(spark);
   } else if (kind === 'arrow') {
     if (subType === 'syringe') {
-      // 十字弩：生化玻璃针筒 + 翠绿/紫红生命抽取药液 + 钢针尖 + 尾翼
       const glassTube = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.036, 0.036, 0.52, 10),
-        new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.88 })
+        new THREE.CylinderGeometry(0.032, 0.032, 0.48, 10),
+        new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.85 })
       );
       group.add(glassTube);
 
-      const plunger = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.048, 0.048, 0.08, 8),
-        new THREE.MeshBasicMaterial({ color: 0xc084fc })
-      );
-      plunger.position.y = -0.28;
-      group.add(plunger);
-
       const needle = new THREE.Mesh(
-        new THREE.ConeGeometry(0.035, 0.24, 8),
+        new THREE.ConeGeometry(0.032, 0.22, 8),
         new THREE.MeshBasicMaterial({ color: 0xf43f5e })
       );
-      needle.position.y = 0.36;
+      needle.position.y = 0.34;
       group.add(needle);
     } else {
-      // 复合弓箭矢：箭杆 + 发光棱锥箭头 + 三片尾羽
       const shaft = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.02, 0.02, 0.76, 8),
+        new THREE.CylinderGeometry(0.018, 0.018, 0.72, 8),
         new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
       );
       group.add(shaft);
 
       const tip = new THREE.Mesh(
-        new THREE.ConeGeometry(0.052, 0.16, 6),
+        new THREE.ConeGeometry(0.048, 0.15, 6),
         new THREE.MeshBasicMaterial({ color: 0xfacc15 })
       );
-      tip.position.y = 0.44;
+      tip.position.y = 0.42;
       group.add(tip);
-
-      const featherMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e, side: THREE.DoubleSide });
-      for (let i = 0; i < 3; i++) {
-        const f = new THREE.Mesh(new THREE.BoxGeometry(0.095, 0.15, 0.008), featherMat);
-        f.position.y = -0.28;
-        f.rotation.y = (i * Math.PI * 2) / 3;
-        group.add(f);
-      }
     }
   } else {
-    // 曳光弹丸：亮金色流光弹体 + 高亮外层光晕
     const core = new THREE.Mesh(
       new THREE.CylinderGeometry(0.026, 0.016, 0.68, 8),
       new THREE.MeshBasicMaterial({ color: 0xfef08a })
@@ -157,33 +222,36 @@ function buildProjectileMesh(kind: Exclude<WeaponKind, 'melee'>, subType: Projec
   return group;
 }
 
-export function createProjectileSystem(scene: any, targets: () => any[],
+export function createProjectileSystem(
+  scene: any,
+  targets: () => any[],
   onExplosion: (point: any, radius: number, subType?: ProjectileSubType) => void,
-  onHit?: (hit: any, kind: WeaponKind, subType: ProjectileSubType) => void) {
+  onHit?: (hit: any, kind: WeaponKind, subType: ProjectileSubType) => void
+) {
   const projectiles: Projectile[] = [];
   const impacts: { mesh: any; lifetime: number }[] = [];
   const raycaster = new THREE.Raycaster();
   const up = new THREE.Vector3(0, 1, 0);
 
+  const stepVec = new THREE.Vector3();
+  const rayDir = new THREE.Vector3();
+  const nearbyTargets: any[] = [];
+
   const release = (obj: any) => {
     scene.remove(obj);
-    obj.traverse?.((child: any) => {
-      if (child.isMesh) {
-        child.geometry?.dispose();
-        if (Array.isArray(child.material)) {
-          child.material.forEach((m: any) => m?.dispose());
-        } else {
-          child.material?.dispose();
-        }
-      }
-    });
+    if (obj?.material) {
+      obj.material.dispose?.();
+    }
+    if (obj?.geometry) {
+      obj.geometry.dispose?.();
+    }
   };
 
   const impact = (point: any, explosive: boolean, subType: ProjectileSubType = 'default') => {
     if (explosive) onExplosion(point, subType === 'gasbomb' ? 5.5 : 4.2, subType);
     const isGas = subType === 'gasbomb';
     const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(explosive ? 1.25 : 0.16, 12, 10),
+      new THREE.SphereGeometry(explosive ? 1.25 : 0.16, 10, 8),
       new THREE.MeshBasicMaterial({
         color: isGas ? 0x10b981 : explosive ? 0xff7b1c : 0xfde047,
         transparent: true,
@@ -196,8 +264,16 @@ export function createProjectileSystem(scene: any, targets: () => any[],
     impacts.push({ mesh, lifetime: explosive ? 0.32 : 0.14 });
   };
 
-  const spawn = (kind: Exclude<WeaponKind, 'melee'>, origin: any, aim: any, subType: ProjectileSubType = 'default') => {
-    const mesh = buildProjectileMesh(kind, subType);
+  ensureProjectileVfxTextures();
+
+  const spawn = (
+    kind: Exclude<WeaponKind, 'melee'>,
+    origin: any,
+    aim: any,
+    subType: ProjectileSubType = 'default',
+    weaponId?: string
+  ) => {
+    const mesh = buildProjectileMesh(kind, subType, weaponId);
     const direction = aim.clone().normalize();
     const speed = kind === 'grenade' ? 17 : kind === 'rocket' ? 32 : kind === 'arrow' ? 48 : 78;
     const velocity = direction.clone().multiplyScalar(speed);
@@ -208,10 +284,14 @@ export function createProjectileSystem(scene: any, targets: () => any[],
       mesh.quaternion.setFromUnitVectors(up, direction);
     }
     scene.add(mesh);
-    projectiles.push({ mesh, velocity, lifetime: kind === 'grenade' ? 2.4 : 2.0, kind, subType, trailTimer: 0 });
+    const lifetime = kind === 'grenade' ? 2.4 : kind === 'bullet' ? 0.35 : 1.8;
+    projectiles.push({ mesh, velocity, lifetime, kind, subType, trailTimer: 0 });
   };
 
   const update = (delta: number) => {
+    const hasCollidingProjectiles = projectiles.some((p) => p.kind !== 'bullet');
+    const allTargets = hasCollidingProjectiles ? targets() : [];
+
     for (let index = projectiles.length - 1; index >= 0; index -= 1) {
       const projectile = projectiles[index];
       projectile.lifetime -= delta;
@@ -221,11 +301,10 @@ export function createProjectileSystem(scene: any, targets: () => any[],
         projectile.mesh.rotation.z += 6 * delta;
       }
 
-      // 火箭弹、手雷/毒气弹、弓箭/十字弩针筒专属尾迹粒子 (s_rpg_trail / s_bow_trail / s_crossbow_trail)
       if (projectile.kind === 'rocket' || projectile.kind === 'grenade' || projectile.kind === 'arrow') {
         projectile.trailTimer -= delta;
         if (projectile.trailTimer <= 0) {
-          projectile.trailTimer = projectile.kind === 'arrow' ? 0.018 : 0.024;
+          projectile.trailTimer = projectile.kind === 'arrow' ? 0.032 : 0.036;
           const isGas = projectile.subType === 'gasbomb';
           const isSyringe = projectile.subType === 'syringe';
           const puffColor = projectile.kind === 'rocket'
@@ -233,34 +312,92 @@ export function createProjectileSystem(scene: any, targets: () => any[],
             : isGas
               ? 0x34d399
               : projectile.kind === 'grenade'
-                ? 0x94a3b8
+                ? 0xcbd5e1
                 : isSyringe
-                  ? 0xc084fc
+                  ? 0x34d399
                   : 0x38bdf8;
-          const puff = new THREE.Mesh(
-            projectile.kind === 'arrow'
-              ? new THREE.TorusGeometry(0.08, 0.016, 6, 12)
-              : new THREE.SphereGeometry(projectile.kind === 'rocket' ? 0.095 : 0.055, 6, 6),
-            new THREE.MeshBasicMaterial({
-              color: puffColor,
-              transparent: true,
-              opacity: 0.72,
-              depthWrite: false
-            })
-          );
-          puff.position.copy(projectile.mesh.position);
-          if (projectile.kind === 'arrow') {
-            puff.quaternion.copy(projectile.mesh.quaternion);
+
+          const trailTex = projectile.kind === 'rocket'
+            ? (projectileVfxTex.vfx_smoke3 || projectileVfxTex.vfx_smoke12)
+            : projectile.kind === 'arrow'
+              ? (isSyringe ? projectileVfxTex.vfx_glow_green : projectileVfxTex.vfx_glow_9 || projectileVfxTex.vfx_radial_flare_05)
+              : (isGas ? projectileVfxTex.vfx_glow_green : projectileVfxTex.vfx_smoke_white);
+
+          if (trailTex) {
+            const sp = new THREE.Sprite(
+              new THREE.SpriteMaterial({
+                map: trailTex,
+                color: puffColor,
+                transparent: true,
+                opacity: projectile.kind === 'rocket' ? 0.85 : 0.78,
+                blending: projectile.kind === 'arrow' || projectile.kind === 'rocket' ? THREE.AdditiveBlending : THREE.NormalBlending,
+                depthWrite: false,
+                rotation: Math.random() * Math.PI * 2
+              })
+            );
+            sp.position.copy(projectile.mesh.position);
+            const s = projectile.kind === 'rocket' ? 0.42 : projectile.kind === 'arrow' ? 0.34 : 0.26;
+            sp.scale.set(s, s, s);
+            scene.add(sp);
+            impacts.push({ mesh: sp, lifetime: projectile.kind === 'arrow' ? 0.18 : 0.28 });
           }
-          scene.add(puff);
-          impacts.push({ mesh: puff, lifetime: projectile.kind === 'arrow' ? 0.16 : 0.22 });
+
+          if (projectile.kind === 'arrow' || projectile.kind === 'rocket') {
+            const ring = new THREE.Mesh(
+              new THREE.TorusGeometry(projectile.kind === 'rocket' ? 0.11 : 0.08, 0.016, 6, 12),
+              new THREE.MeshBasicMaterial({
+                color: projectile.kind === 'rocket' ? 0xfef08a : puffColor,
+                transparent: true,
+                opacity: 0.75,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+              })
+            );
+            ring.position.copy(projectile.mesh.position);
+            ring.quaternion.copy(projectile.mesh.quaternion);
+            scene.add(ring);
+            impacts.push({ mesh: ring, lifetime: 0.15 });
+          }
         }
       }
 
-      const step = projectile.velocity.clone().multiplyScalar(delta);
-      raycaster.set(projectile.mesh.position, step.clone().normalize());
-      raycaster.far = step.length();
-      const hit = raycaster.intersectObjects(targets(), true)[0];
+      stepVec.copy(projectile.velocity).multiplyScalar(delta);
+      const stepLen = stepVec.length();
+      let hit: any = undefined;
+
+      if (projectile.kind !== 'bullet' && stepLen > 0.0001 && allTargets.length > 0) {
+        const pos = projectile.mesh.position;
+        const minX = Math.min(pos.x, pos.x + stepVec.x) - 0.3;
+        const maxX = Math.max(pos.x, pos.x + stepVec.x) + 0.3;
+        const minY = Math.min(pos.y, pos.y + stepVec.y) - 0.3;
+        const maxY = Math.max(pos.y, pos.y + stepVec.y) + 0.3;
+        const minZ = Math.min(pos.z, pos.z + stepVec.z) - 0.3;
+        const maxZ = Math.max(pos.z, pos.z + stepVec.z) + 0.3;
+
+        nearbyTargets.length = 0;
+        for (let t = 0; t < allTargets.length; t++) {
+          const m = allTargets[t];
+          const wb = m?.userData?._worldBox;
+          if (wb) {
+            if (
+              wb.max.x < minX || wb.min.x > maxX ||
+              wb.max.y < minY || wb.min.y > maxY ||
+              wb.max.z < minZ || wb.min.z > maxZ
+            ) {
+              continue;
+            }
+          }
+          nearbyTargets.push(m);
+        }
+
+        if (nearbyTargets.length > 0) {
+          rayDir.copy(stepVec).multiplyScalar(1 / stepLen);
+          raycaster.set(pos, rayDir);
+          raycaster.far = stepLen;
+          hit = raycaster.intersectObjects(nearbyTargets, false)[0];
+        }
+      }
+
       if (hit || projectile.lifetime <= 0) {
         if (hit && onHit) {
           onHit(hit, projectile.kind, projectile.subType);
@@ -270,13 +407,14 @@ export function createProjectileSystem(scene: any, targets: () => any[],
           projectile.kind === 'grenade' || projectile.kind === 'rocket',
           projectile.subType
         );
-        release(projectile.mesh);
+        scene.remove(projectile.mesh);
         projectiles.splice(index, 1);
         continue;
       }
-      projectile.mesh.position.add(step);
+      projectile.mesh.position.add(stepVec);
       if (projectile.kind !== 'grenade') {
-        projectile.mesh.quaternion.setFromUnitVectors(up, projectile.velocity.clone().normalize());
+        rayDir.copy(projectile.velocity).normalize();
+        projectile.mesh.quaternion.setFromUnitVectors(up, rayDir);
       }
     }
     for (let index = impacts.length - 1; index >= 0; index -= 1) {
@@ -291,11 +429,10 @@ export function createProjectileSystem(scene: any, targets: () => any[],
   };
 
   const dispose = () => {
-    projectiles.forEach(({ mesh }) => release(mesh));
+    projectiles.forEach(({ mesh }) => scene.remove(mesh));
     impacts.forEach(({ mesh }) => release(mesh));
     projectiles.length = 0;
     impacts.length = 0;
   };
   return { spawn, update, dispose, count: () => projectiles.length };
 }
-

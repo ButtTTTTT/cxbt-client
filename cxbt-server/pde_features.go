@@ -74,6 +74,12 @@ func RegisterPdeFeatureRoutes(r *gin.Engine) {
 			"crcKeyHex":     fmt.Sprintf("0x%08X", crcKey),
 			"nativeAnimFps": 96.0,
 			"mapCount":      47,
+			"totalExported": 21419,
+			"meshCount":     2318,
+			"skelCount":     138,
+			"animCount":     2677,
+			"cacheUiCount":  169,
+			"audioCount":    504,
 			"formats":       []string{".mesh (0x0100)", ".skel (0x0600)", ".anim (0x0500)", ".cache (pack_ver=2)"},
 		})
 	})
@@ -113,16 +119,23 @@ func RegisterPdeFeatureRoutes(r *gin.Engine) {
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
 	{
-		// 2. LuckDraw 42-Tile Dice Board Game (ported from scripts/lobby/luckDraw.lua)
+		// 2. LuckDraw 42-Tile Dice Board Game (ported from scripts/lobby/luckDraw.lua, persisted in MySQL 8)
 		protected.GET("/luckdraw/state", func(c *gin.Context) {
 			userID := c.GetUint("userId")
+			char := getOrCreateCharacter(userID)
 			luckDrawMu.Lock()
-			pos := userBoardPos[userID]
-			stamina, ok := userStamina[userID]
-			if !ok {
-				stamina = 100
-				userStamina[userID] = 100
+			pos := char.LuckDrawPos
+			if p, ok := userBoardPos[userID]; ok && p > pos {
+				pos = p
 			}
+			stamina := char.LuckDrawStamina
+			if stamina <= 0 {
+				stamina = 100
+				char.LuckDrawStamina = 100
+				_ = DB.Save(&char).Error
+			}
+			userBoardPos[userID] = pos
+			userStamina[userID] = stamina
 			luckDrawMu.Unlock()
 			c.JSON(http.StatusOK, gin.H{
 				"position":   pos,
@@ -140,16 +153,15 @@ func RegisterPdeFeatureRoutes(r *gin.Engine) {
 			}
 
 			luckDrawMu.Lock()
-			stamina, ok := userStamina[userID]
-			if !ok {
-				stamina = 100
-			}
+			stamina := char.LuckDrawStamina
 			if stamina < 10 {
 				stamina = 100 // Auto refill stamina for smooth gameplay
 			}
 			stamina -= 10
 			dice := rand.Intn(6) + 1
-			newPos := (userBoardPos[userID] + dice) % 42
+			newPos := (char.LuckDrawPos + dice) % 42
+			char.LuckDrawPos = newPos
+			char.LuckDrawStamina = stamina
 			userBoardPos[userID] = newPos
 			userStamina[userID] = stamina
 			luckDrawMu.Unlock()
@@ -232,20 +244,20 @@ func RegisterPdeFeatureRoutes(r *gin.Engine) {
 				MapID string
 				Name  string
 			}{
-				"stage_1":    {MapID: "level1", Name: "第一关 · 荒漠前哨 (暴君)"},
-				"stage_2":    {MapID: "level11", Name: "第二关 · 炽热熔炉 (赤焰督军)"},
-				"stage_3":    {MapID: "level18", Name: "第三关 · 迷雾神庙 (魅影鬼王)"},
-				"stage_4":    {MapID: "level25", Name: "第四关 · 极寒要塞 (冰霜巨龙)"},
-				"stage_5":    {MapID: "level40", Name: "第五关 · 暗黑圣殿 (阿瓦塔魔神)"},
-				"level10001": {MapID: "level1", Name: "远征第一章：暴走机甲核心"},
-				"level10002": {MapID: "level11", Name: "远征第二章：暗黑巨龙巢穴"},
-				"level10003": {MapID: "level18", Name: "远征第三章：变异领主实验室"},
-				"level10008": {MapID: "level25", Name: "远征第八章：星界祭坛"},
-				"level10009": {MapID: "level40", Name: "远征终章：终焉泰坦王座"},
+				"stage_1":    {MapID: "level10001", Name: "远征第一章 · 海盗要塞 (海盗船长)"},
+				"stage_2":    {MapID: "level10002", Name: "远征第二章 · 机械矿坑 (挖掘机甲)"},
+				"stage_3":    {MapID: "level10003", Name: "远征第三章 · 黄金金字塔 (远古法老王)"},
+				"stage_4":    {MapID: "level10008", Name: "远征第四章 · 星界祭坛 (熔岩魔像)"},
+				"stage_5":    {MapID: "level10009", Name: "远征终章 · 炼狱熔炉王座 (终焉熔岩巨兽)"},
+				"level10001": {MapID: "level10001", Name: "远征第一章 · 海盗要塞 (海盗船长)"},
+				"level10002": {MapID: "level10002", Name: "远征第二章 · 机械矿坑 (挖掘机甲)"},
+				"level10003": {MapID: "level10003", Name: "远征第三章 · 黄金金字塔 (远古法老王)"},
+				"level10008": {MapID: "level10008", Name: "远征第四章 · 星界祭坛 (熔岩魔像)"},
+				"level10009": {MapID: "level10009", Name: "远征终章 · 炼狱熔炉王座 (终焉熔岩巨兽)"},
 			}
 			info, ok := stageMaps[req.StageID]
 			if !ok {
-				info = stageMaps["stage_1"]
+				info = stageMaps["level10001"]
 			}
 
 			diffLabel := "普通"
@@ -263,6 +275,9 @@ func RegisterPdeFeatureRoutes(r *gin.Engine) {
 			}
 
 			roomID := fmt.Sprintf("expedition_%d_%d", userID, time.Now().UnixNano()%100000)
+			TouchPlayerActivity(userID)
+			RemovePlayerFromAllOtherRooms(userID, roomID)
+
 			room := RoomConfig{
 				ID:         roomID,
 				Name:       fmt.Sprintf("【%s远征】%s", diffLabel, info.Name),
@@ -287,6 +302,7 @@ func RegisterPdeFeatureRoutes(r *gin.Engine) {
 				},
 			}
 			SaveRoomToStore(room)
+			EnsurePlayerInGameState(roomID, userID, "red")
 
 			c.JSON(http.StatusOK, gin.H{
 				"message":    "远征副本已开启",

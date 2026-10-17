@@ -72,7 +72,10 @@ export default function PracticeRoom({ assets, hostName, hostIcon, weaponIds, in
     try {
       const data: ApiRoom[] = await apiFetch('/rooms') ?? [];
       setRoomList(data);
-      setCreatedRoom(previous => previous ? data.find(room => room.id === previous.id) ?? previous : undefined);
+      setCreatedRoom(previous => {
+        if (!previous) return undefined;
+        return data.find(room => room.id === previous.id);
+      });
     } catch (error) { console.error(error); }
   }, []);
   useEffect(() => {
@@ -90,7 +93,13 @@ export default function PracticeRoom({ assets, hostName, hostIcon, weaponIds, in
   const joinRoom = async (room: ApiRoom) => {
     try {
       const joined: ApiRoom = await apiFetch(`/rooms/${room.id}/join`, { method: 'POST', body: JSON.stringify({ password: '', weaponIds }) });
-      setCreatedRoom(joined ?? room);
+      const targetRoom = joined ?? room;
+      if (targetRoom.state === 'Playing') {
+        onStatus(`已热加入激战房间 · ${targetRoom.name}`);
+        onStart(targetRoom);
+        return;
+      }
+      setCreatedRoom(targetRoom);
       onStatus(`已进入房间 · ${room.name}`);
     } catch (error) { onStatus(error instanceof Error ? error.message : '进入失败'); }
   };

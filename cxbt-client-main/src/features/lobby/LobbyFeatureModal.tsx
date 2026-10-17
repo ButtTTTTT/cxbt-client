@@ -23,9 +23,23 @@ const RECHARGE_PACKAGES = [
 ];
 
 const PET_LIST = [
-  { id: 'pet_dog', name: '机械战犬 · 雷克斯', desc: '全天候侦察型机械伙伴，提升主人护甲穿透与生命上限', bonusPower: 180 },
-  { id: 'pet_dragon', name: '星际幼龙 · 烈焰', desc: '来自阿瓦塔火山带的稀有飞龙，喷射高能等离子吐息', bonusPower: 260 },
-  { id: 'pet_fairy', name: '治愈光灵 · 露娜', desc: '纳米医疗伴侣，持续提供战地生命恢复与护盾充能', bonusPower: 220 },
+  { id: 'pet_dog01', modelId: 'dog01', texture: '../gameplay/textures/mesh/pet/dog01/tex_dog01b_trinket_c.png', name: '机械战犬 · 雷克斯 (dog01)', desc: '全天候侦察型机械伴侣，提升主人护甲穿透与生命上限', bonusPower: 180 },
+  { id: 'pet_dragon', modelId: 'dragon', texture: '../gameplay/textures/mesh/pet/dragon/tex_dragon01b_trinket_c.png', name: '星际幼龙 · 烈焰 (dragon)', desc: '来自阿瓦塔火山带的稀有飞龙，喷射高能等离子吐息', bonusPower: 260 },
+  { id: 'pet_dragon02', modelId: 'dragon02', texture: '../gameplay/textures/mesh/pet/dragon02/tex_dragon02b_trinket_c.png', name: '苍穹冰龙 · 霜翼 (dragon02)', desc: '极寒领域守护幼龙，释放寒霜减速立场', bonusPower: 270 },
+  { id: 'pet_dragon03', modelId: 'dragon03', texture: '../gameplay/textures/mesh/pet/dragon03/tex_dragon03b_trinket_c.png', name: '翡翠毒龙 · 碧鳞 (dragon03)', desc: '生化丛林变异飞龙，强化毒素腐蚀伤害', bonusPower: 275 },
+  { id: 'pet_dragon04', modelId: 'dragon04', texture: '../gameplay/textures/mesh/pet/dragon04/tex_dragon04a_trinket_c.png', name: '黄金圣龙 · 辉耀 (dragon04)', desc: '皇家金甲幼龙，提供全队暴击率与护甲加成', bonusPower: 300 },
+  { id: 'pet_dragon05', modelId: 'dragon05', texture: '../gameplay/textures/mesh/pet/dragon05/tex_dragon05a_trinket_c.png', name: '紫晶魔龙 · 暗影 (dragon05)', desc: '暗黑虚空幼龙，强化隐身突袭与暴击伤害', bonusPower: 310 },
+  { id: 'pet_dragon06', modelId: 'dragon06', texture: '../gameplay/textures/mesh/pet/dragon06/tex_dragon06a_trinket_c.png', name: '赤血狂龙 · 破军 (dragon06)', desc: '狂暴战意飞龙，大幅提升重火器爆炸威力', bonusPower: 320 },
+  { id: 'pet_dragon07', modelId: 'dragon07', texture: '../gameplay/textures/mesh/pet/dragon07/tex_dragon07a_trinket_c.png', name: '雷霆电龙 · 脉冲 (dragon07)', desc: '电磁风暴伴侣，提升移动速度与换弹效率', bonusPower: 330 },
+  { id: 'pet_dragon08', modelId: 'dragon08', texture: '../gameplay/textures/mesh/pet/dragon08/tex_dragon08a_trinket_d.png', name: '星骸骨龙 · 冥渊 (dragon08)', desc: '远古遗迹苏醒的骸骨幼龙，具备吸血回复加成', bonusPower: 340 },
+  { id: 'pet_dragon09', modelId: 'dragon09', texture: '../gameplay/textures/mesh/pet/dragon09/tex_dragon09b_trinket_d.png', name: '炼狱翼龙 · 焚天 (dragon09)', desc: '熔岩核心孕育的领主级飞龙，全属性大幅增幅', bonusPower: 360 },
+  { id: 'pet_dragon10', modelId: 'dragon10', texture: '../gameplay/textures/mesh/pet/dragon10/tex_dragon10a_trinket_d.png', name: '终焉圣龙 · 创世 (dragon10)', desc: '阿瓦塔星球传说级守护神龙，提供最高战力增幅', bonusPower: 400 },
+  { id: 'pet_bird', modelId: 'bird', texture: '../gameplay/textures/mesh/pet/bird/tex_bird01b_trinket_c.png', name: '侦察机械鸟 · 猎鹰 (bird)', desc: '高空索敌伴侣，提升远程狙击精准度', bonusPower: 190 },
+  { id: 'pet_bird02', modelId: 'bird02', texture: '../gameplay/textures/mesh/pet/bird02/tex_bird02b_trinket_d.png', name: '烈火凤凰 · 涅槃 (bird02)', desc: '浴火重生的神鸟伴侣，持续提供战地生命恢复', bonusPower: 280 },
+  { id: 'pet_fish', modelId: 'fish', texture: '../gameplay/textures/mesh/pet/fish/tex_fish01b_trinket_c.png', name: '深海飞鱼 · 泡泡 (fish)', desc: '浮空水系灵宠，降低技能冷却时间', bonusPower: 200 },
+  { id: 'pet_egg', modelId: 'egg', texture: '../gameplay/textures/mesh/pet/egg/text.png', name: '神秘龙蛋 · 起源 (egg)', desc: '蕴含未知星际能量的浮空龙蛋，提供幸运掉率加成', bonusPower: 160 },
+  { id: 'pet_human01', modelId: 'human01', texture: '../gameplay/textures/mesh/pet/human01/tex_human01b_trinket_c.png', name: '治愈光灵 · 露娜 (human01)', desc: '纳米医疗人形伴侣，持续提供战地生命恢复与护盾充能', bonusPower: 250 },
+  { id: 'pet_monster', modelId: 'monster', texture: '../gameplay/textures/mesh/pet/monster/tex_monster01b_trinket_c.png', name: '迷你小恶魔 · 库奇 (monster)', desc: '古灵精怪的虚空小恶魔，干扰敌方瞄准并提升暴击', bonusPower: 240 },
 ];
 
 const MANUFACTURE_BLUEPRINTS = [
@@ -38,11 +52,11 @@ const MANUFACTURE_BLUEPRINTS = [
 ];
 
 const EXPEDITION_STAGES = [
-  { id: 'stage_1', name: '第一关 · 荒漠前哨', bossName: '重装机甲 · 暴君', mapId: 'level1', hp: 8000, recPower: 1500, drop: '黄金战星金币 +2,500 · 强化石 x3' },
-  { id: 'stage_2', name: '第二关 · 炽热熔炉', bossName: '熔岩领主 · 赤焰督军', mapId: 'level11', hp: 14000, recPower: 1850, drop: '高纯度稳压剂 x2 · 远征勋章 x4' },
-  { id: 'stage_3', name: '第三关 · 迷雾神庙', bossName: '远古石像 · 魅影鬼王', mapId: 'level18', hp: 22000, recPower: 2200, drop: '精良武器图纸 x2 · 星币 +120' },
-  { id: 'stage_4', name: '第四关 · 极寒要塞', bossName: '冰霜巨龙 · 零度深渊', mapId: 'level25', hp: 32000, recPower: 2600, drop: '暗黑巨龙宠物碎片 x3 · 角色传承结晶 x1' },
-  { id: 'stage_5', name: '第五关 · 暗黑圣殿', bossName: '终焉主宰 · 阿瓦塔魔神', mapId: 'level40', hp: 48000, recPower: 3200, drop: '黄金AK47成品箱 · 宝石 +150 · 传说勋章' },
+  { id: 'level10001', name: '远征第一章 · 海盗要塞', bossName: '海盗船长 · 铁钩杰克 (boss_01_01)', mapId: 'level10001', hp: 12000, recPower: 1500, drop: '黄金战星金币 +2,500 · 强化石 x3' },
+  { id: 'level10002', name: '远征第二章 · 机械矿坑', bossName: '暴走挖掘机甲 · 泰坦 (boss_02_01)', mapId: 'level10002', hp: 18000, recPower: 1850, drop: '高纯度稳压剂 x2 · 远征勋章 x4' },
+  { id: 'level10003', name: '远征第三章 · 黄金金字塔', bossName: '远古法老王 · 阿努比斯 (boss_03_01)', mapId: 'level10003', hp: 26000, recPower: 2200, drop: '精良武器图纸 x2 · 星币 +120' },
+  { id: 'level10008', name: '远征第四章 · 星界祭坛', bossName: '熔岩魔像分身 · 炎魔 (boss_04_02)', mapId: 'level10008', hp: 36000, recPower: 2600, drop: '暗黑巨龙宠物碎片 x3 · 角色传承结晶 x1' },
+  { id: 'level10009', name: '远征终章 · 炼狱熔炉王座', bossName: '终焉熔岩巨兽 · 阿瓦塔主宰 (boss_04_01)', mapId: 'level10009', hp: 52000, recPower: 3200, drop: '黄金AK47成品箱 · 宝石 +150 · 传说勋章' },
 ];
 
 export default function LobbyFeatureModal({
@@ -87,7 +101,10 @@ export default function LobbyFeatureModal({
     })),
   });
 
-  const [shopTab, setShopTab] = useState<'weapons' | 'avatars' | 'wings' | 'items'>('weapons');
+  const [shopTab, setShopTab] = useState<'weapons' | 'avatars' | 'wings' | 'items' | 'parts'>('weapons');
+  const [avatarParts, setAvatarParts] = useState<any[]>([]);
+  const [partSlotFilter, setPartSlotFilter] = useState<string>('all');
+  const [partSearch, setPartSearch] = useState<string>('');
   const [auctionList, setAuctionList] = useState<any[]>([]);
   const [auctionItemName, setAuctionItemName] = useState('');
   const [auctionPrice, setAuctionPrice] = useState('5000');
@@ -101,7 +118,9 @@ export default function LobbyFeatureModal({
   const [mailReceiver, setMailReceiver] = useState('');
   const [mailTitle, setMailTitle] = useState('');
   const [mailContent, setMailContent] = useState('');
-  const [activePet, setActivePet] = useState<string>('pet_dog');
+  const [activePet, setActivePet] = useState<string>(() => {
+    try { return 'pet_' + (localStorage.getItem('avatarstar.activePet') || 'dragon'); } catch { return 'pet_dragon'; }
+  });
 
   const notify = (msg: string) => {
     setToast(msg);
@@ -120,9 +139,18 @@ export default function LobbyFeatureModal({
     if (title === '冒险远征') setActivitySubTab('expedition');
     else if (title === '幸运寻宝') setActivitySubTab('luckdraw');
     else if (title === '军衔') setActivitySubTab('rank');
+    else if (title === '造型屋') setShopTab('parts');
 
     const loadModule = async () => {
       try {
+        if (title === '商城' || title === '造型屋') {
+          fetch(`${import.meta.env.BASE_URL}assets/avatar-parts/catalog.json`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((cat) => {
+              if (cat && Array.isArray(cat.parts)) setAvatarParts(cat.parts);
+            })
+            .catch(() => undefined);
+        }
         if (title === '公会') {
           const data = await apiFetch('/guilds');
           if (data) setGuildsData(data);
@@ -170,11 +198,18 @@ export default function LobbyFeatureModal({
 
   const shopItems = useMemo(() => {
     const all = assets.items || [];
-    if (shopTab === 'weapons') return all.filter((i) => i.weapon).slice(0, 16);
-    if (shopTab === 'avatars') return all.filter((i) => i.avatarCard).slice(0, 16);
-    if (shopTab === 'wings') return all.filter((i) => i.attachment).slice(0, 16);
-    return all.filter((i) => i.category === 'items' || i.category === 'gestures').slice(0, 16);
+    if (shopTab === 'weapons') return all.filter((i) => i.weapon).slice(0, 80);
+    if (shopTab === 'avatars') return all.filter((i) => i.avatarCard).slice(0, 80);
+    if (shopTab === 'wings') return all.filter((i) => i.attachment).slice(0, 80);
+    return all.filter((i) => i.category === 'items' || i.category === 'gestures').slice(0, 80);
   }, [assets.items, shopTab]);
+
+  const filteredAvatarParts = useMemo(() => {
+    const kw = partSearch.trim().toLowerCase();
+    return avatarParts
+      .filter((p) => (partSlotFilter === 'all' || p.slot === partSlotFilter) && (!kw || p.id.toLowerCase().includes(kw) || p.name.toLowerCase().includes(kw)))
+      .slice(0, 60);
+  }, [avatarParts, partSlotFilter, partSearch]);
 
   const avatarCardsList = useMemo(() => {
     const cards = (assets.items || []).filter((i) => i.avatarCard).slice(0, 12);
@@ -494,53 +529,139 @@ export default function LobbyFeatureModal({
           )}
 
           {/* 商城系统 */}
-          {title === '商城' && (
+          {(title === '商城' || title === '造型屋') && (
             <>
               <div className="lobby-feature-subtabs">
                 <button className={shopTab === 'weapons' ? 'active' : ''} onClick={() => setShopTab('weapons')}>武器军械</button>
                 <button className={shopTab === 'avatars' ? 'active' : ''} onClick={() => setShopTab('avatars')}>百变造型卡</button>
                 <button className={shopTab === 'wings' ? 'active' : ''} onClick={() => setShopTab('wings')}>炫酷飞翼</button>
                 <button className={shopTab === 'items' ? 'active' : ''} onClick={() => setShopTab('items')}>战术道具</button>
+                <button className={shopTab === 'parts' ? 'active' : ''} onClick={() => setShopTab('parts')}>🧩 1392件解密3D部件</button>
               </div>
-              <div className="lobby-feature-grid">
-                {shopItems.map((item, idx) => {
-                  const price = 2500 + (idx % 5) * 800;
-                  return (
-                    <div key={item.id} className="lobby-feature-card">
-                      <img src={lobbyUrl(item.icon)} alt="" style={{ width: 44, height: 44, objectFit: 'contain' }} />
-                      <div className="lobby-feature-card-info" style={{ flex: 1 }}>
-                        <strong>{item.name}</strong>
-                        <small>编号: {item.id} · 购买立享战力 +80</small>
-                        <small style={{ color: '#fbbf24' }}>售价: {price} 金币</small>
-                      </div>
+              {shopTab === 'parts' ? (
+                <>
+                  <div className="lobby-feature-row-form" style={{ flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                    {[
+                      ['all', '全部部位(1392)'],
+                      ['hair', '发型'],
+                      ['helmet', '头盔/帽'],
+                      ['mask', '面具/脸饰'],
+                      ['cloth', '上衣战甲'],
+                      ['pant', '下装战裤'],
+                      ['shoulder', '肩甲'],
+                      ['wrist', '护腕'],
+                      ['gloves', '战术手套'],
+                      ['boot', '战靴'],
+                    ].map(([slotKey, slotName]) => (
                       <button
-                        className="lobby-feature-btn"
-                        onClick={async () => {
-                          try {
-                            const res = await apiFetch('/shop/buy', {
-                              method: 'POST',
-                              body: JSON.stringify({
-                                itemId: item.id,
-                                itemName: item.name,
-                                category: item.category,
-                                price,
-                                currency: 'coins',
-                              }),
-                            });
-                            if (res?.character) syncChar(res.character);
-                            onSelectBagItem?.(item);
-                            notify(`成功入手【${item.name}】并已穿戴预览！`);
-                          } catch (e: any) {
-                            notify(e.message || '购买失败');
-                          }
-                        }}
+                        key={slotKey}
+                        className={`lobby-feature-btn ${partSlotFilter === slotKey ? '' : 'secondary'}`}
+                        style={{ padding: '4px 10px', fontSize: 12 }}
+                        onClick={() => setPartSlotFilter(slotKey)}
                       >
-                        购买并穿戴
+                        {slotName}
                       </button>
-                    </div>
-                  );
-                })}
-              </div>
+                    ))}
+                    <input
+                      placeholder="搜索 1392 件解密 3D 部件编号或名称..."
+                      value={partSearch}
+                      onChange={(e) => setPartSearch(e.target.value)}
+                      style={{ maxWidth: 240, marginLeft: 'auto' }}
+                    />
+                  </div>
+                  <div className="lobby-feature-grid">
+                    {filteredAvatarParts.map((part: any, idx: number) => {
+                      const price = 1800 + (idx % 4) * 600;
+                      return (
+                        <div key={part.id} className="lobby-feature-card">
+                          <div className="lobby-feature-card-info" style={{ flex: 1 }}>
+                            <strong>{part.name}</strong>
+                            <small>部位: {part.slotLabel || part.slot} · 3D网格: {part.id}.glb</small>
+                            <small style={{ color: '#fbbf24' }}>售价: {price} 金币</small>
+                          </div>
+                          <button
+                            className="lobby-feature-btn"
+                            onClick={async () => {
+                              try {
+                                const res = await apiFetch('/shop/buy', {
+                                  method: 'POST',
+                                  body: JSON.stringify({
+                                    itemId: part.id,
+                                    itemName: part.name,
+                                    category: 'avatars',
+                                    price,
+                                    currency: 'coins',
+                                  }),
+                                });
+                                if (res?.character) syncChar(res.character);
+                              } catch {
+                                // Still allow 3D live preview even if offline
+                              }
+                              onSelectBagItem?.({
+                                id: part.id,
+                                name: part.name,
+                                category: 'avatars',
+                                icon: 'icons/avatar_card01.png',
+                                attachment: {
+                                  id: part.id,
+                                  model: part.modelUrl,
+                                  texture: part.textureUrl,
+                                  bone: 'avatar_part',
+                                  animation: null,
+                                  characterAnimation: null,
+                                },
+                              });
+                              notify(`已穿戴解密 3D 部件【${part.name}】至大厅角色模型！`);
+                            }}
+                          >
+                            穿戴3D预览
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="lobby-feature-grid">
+                  {shopItems.map((item, idx) => {
+                    const price = 2500 + (idx % 5) * 800;
+                    return (
+                      <div key={item.id} className="lobby-feature-card">
+                        <img src={lobbyUrl(item.icon)} alt="" style={{ width: 44, height: 44, objectFit: 'contain' }} />
+                        <div className="lobby-feature-card-info" style={{ flex: 1 }}>
+                          <strong>{item.name}</strong>
+                          <small>编号: {item.id} · 购买立享战力 +80</small>
+                          <small style={{ color: '#fbbf24' }}>售价: {price} 金币</small>
+                        </div>
+                        <button
+                          className="lobby-feature-btn"
+                          onClick={async () => {
+                            try {
+                              const res = await apiFetch('/shop/buy', {
+                                method: 'POST',
+                                body: JSON.stringify({
+                                  itemId: item.id,
+                                  itemName: item.name,
+                                  category: item.category,
+                                  price,
+                                  currency: 'coins',
+                                }),
+                              });
+                              if (res?.character) syncChar(res.character);
+                              onSelectBagItem?.(item);
+                              notify(`成功入手【${item.name}】并已穿戴预览！`);
+                            } catch (e: any) {
+                              notify(e.message || '购买失败');
+                            }
+                          }}
+                        >
+                          购买并穿戴
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </>
           )}
 
@@ -1079,12 +1200,27 @@ export default function LobbyFeatureModal({
                     className="lobby-feature-btn"
                     onClick={async () => {
                       setActivePet(pet.id);
+                      try { localStorage.setItem('avatarstar.activePet', pet.modelId); } catch {}
+                      onSelectBagItem?.({
+                        id: pet.id,
+                        name: pet.name,
+                        category: 'equipment',
+                        icon: 'icons/pet_skill01.png',
+                        attachment: {
+                          id: pet.id,
+                          model: `../gameplay/mesh/pet/${pet.modelId}.mesh.glb`,
+                          texture: pet.texture,
+                          bone: 'pet',
+                          animation: `../gameplay/animations/pet/${pet.modelId}/idle.json`,
+                          characterAnimation: null,
+                        },
+                      });
                       const res = await apiFetch('/character/online-reward', { method: 'POST' });
                       if (res?.character) syncChar(res.character);
-                      notify(`已安排【${pet.name}】出战跟随，战斗力大幅提升！`);
+                      notify(`已安排【${pet.name}】3D 出战跟随，战斗力大幅提升！`);
                     }}
                   >
-                    {activePet === pet.id ? '出战中 · 喂食强化' : '召唤出战'}
+                    {activePet === pet.id ? '出战中 · 3D预览/喂食' : '召唤3D出战'}
                   </button>
                 </div>
               ))}

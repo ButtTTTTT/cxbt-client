@@ -41,6 +41,82 @@ var (
 	activeGames   = make(map[string]context.CancelFunc)
 )
 
+func StopGameLoop(roomID string) {
+	activeGamesMu.Lock()
+	if cancel, exists := activeGames[roomID]; exists {
+		cancel()
+		delete(activeGames, roomID)
+	}
+	activeGamesMu.Unlock()
+}
+
+func EnsurePlayerInGameState(roomID string, userID uint, defaultTeam string) GameState {
+	if defaultTeam == "" {
+		defaultTeam = "red"
+	}
+	state, ok := GetGameFromStore(roomID)
+	needLoop := false
+	if !ok {
+		state = GameState{
+			RoomID:    roomID,
+			ScoreRed:  0,
+			ScoreBlue: 0,
+			StartTime: time.Now(),
+			Duration:  10 * time.Minute,
+			Players:   make(map[uint]*PlayerState),
+		}
+		needLoop = true
+	}
+	if state.Players == nil {
+		state.Players = make(map[uint]*PlayerState)
+	}
+
+	if room, rOk := GetRoomFromStore(roomID); rOk {
+		for id, rp := range room.Players {
+			t := rp.Team
+			if t == "" {
+				t = "red"
+			}
+			if existing, pOk := state.Players[id]; !pOk {
+				state.Players[id] = &PlayerState{
+					UserID:  id,
+					Team:    t,
+					HP:      3201,
+					MaxHP:   3201,
+					Ammo:    30,
+					IsAlive: true,
+				}
+			} else if existing.Team != t {
+				existing.Team = t
+			}
+		}
+	}
+
+	if userID > 0 {
+		if _, pOk := state.Players[userID]; !pOk {
+			state.Players[userID] = &PlayerState{
+				UserID:  userID,
+				Team:    defaultTeam,
+				HP:      3201,
+				MaxHP:   3201,
+				Ammo:    30,
+				IsAlive: true,
+			}
+		}
+	}
+
+	SaveGameToStore(roomID, state)
+	if needLoop {
+		activeGamesMu.Lock()
+		_, running := activeGames[roomID]
+		activeGamesMu.Unlock()
+		if !running {
+			go StartGameLoop(roomID)
+		}
+	}
+	return state
+}
+
 // StartGameLoop ticks 20 times per second for game state auth
 func StartGameLoop(roomID string) {
 	activeGamesMu.Lock()
@@ -67,6 +143,13 @@ func StartGameLoop(roomID string) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			room, hasRoom := GetRoomFromStore(roomID)
+			if !hasRoom || len(room.Players) == 0 {
+				DeleteRoomFromStore(roomID)
+				DeleteGameFromStore(roomID)
+				return
+			}
+
 			state, ok := GetGameFromStore(roomID)
 			if !ok {
 				return
@@ -180,16 +263,20 @@ func EndGame(roomID string, state *GameState) {
 	})
 
 	if hasRoom {
-		room.State = "Waiting"
-		SaveRoomToStore(room)
+		if len(room.Players) == 0 {
+			DeleteRoomFromStore(roomID)
+		} else {
+			room.State = "Waiting"
+			SaveRoomToStore(room)
+		}
 	}
 
 	DeleteGameFromStore(roomID)
 }
 
 func HandleBotKill(roomID string, team string) {
-	state, ok := GetGameFromStore(roomID)
-	if !ok || state.Over {
+	state := EnsurePlayerInGameState(roomID, 0, team)
+	if state.Over {
 		return
 	}
 	if team == "blue" {
@@ -207,9 +294,9 @@ func HandleBotKill(roomID string, team string) {
 	})
 }
 
-func HandleObjectiveAction(roomID string, redDelta int, blueDelta int) {
-	state, ok := GetGameFromStore(roomID)
-	if !ok || state.Over {
+func HandleObjectiveAction(roomID string, redDelta int, blueDelta int, rawMsg map[string]interface{}) {
+	state := EnsurePlayerInGameState(roomID, 0, "red")
+	if state.Over {
 		return
 	}
 	if redDelta > 0 {
@@ -220,6 +307,12 @@ func HandleObjectiveAction(roomID string, redDelta int, blueDelta int) {
 	}
 	SaveGameToStore(roomID, state)
 
+	if rawMsg != nil {
+		rawMsg["score_red"] = state.ScoreRed
+		rawMsg["score_blue"] = state.ScoreBlue
+		PublishChannelJSON("room_channel:"+roomID, rawMsg)
+	}
+
 	PublishChannelJSON("room_channel:"+roomID, map[string]interface{}{
 		"type":       "tick",
 		"time_left":  int((state.Duration - time.Since(state.StartTime)).Seconds()),
@@ -228,30 +321,53 @@ func HandleObjectiveAction(roomID string, redDelta int, blueDelta int) {
 	})
 }
 
-
 // HandleHit processes a shot from an attacker to a target
-func HandleHit(roomID string, attackerID uint, targetID uint, damage int) {
-	state, ok := GetGameFromStore(roomID)
-	if !ok {
+func HandleHit(roomID string, attackerID uint, targetID uint, damage int, weaponName string, crit bool) {
+	if attackerID == 0 || targetID == 0 || attackerID == targetID {
 		return
+	}
+	state := EnsurePlayerInGameState(roomID, attackerID, "red")
+	if _, ok := state.Players[targetID]; !ok {
+		state = EnsurePlayerInGameState(roomID, targetID, "blue")
 	}
 
 	target, exists := state.Players[targetID]
 	attacker, aExists := state.Players[attackerID]
 
-	if !exists || !aExists || !target.IsAlive || target.Team == attacker.Team {
+	if !exists || !aExists || !target.IsAlive {
 		return
 	}
 
+	if damage <= 0 {
+		damage = 100
+	}
 	target.HP -= damage
 	if target.HP <= 0 {
 		target.HP = 0
 	}
 
+	attackerName := fmt.Sprintf("战士#%d", attackerID)
+	victimName := fmt.Sprintf("战士#%d", targetID)
+	if room, rOk := GetRoomFromStore(roomID); rOk {
+		if ap, ok := room.Players[attackerID]; ok && ap.Username != "" {
+			attackerName = ap.Username
+		}
+		if vp, ok := room.Players[targetID]; ok && vp.Username != "" {
+			victimName = vp.Username
+		}
+	}
+	if weaponName == "" {
+		weaponName = "战术武器"
+	}
+
 	PublishChannelJSON("room_channel:"+roomID, map[string]interface{}{
-		"type":   "health_update",
-		"userId": targetID,
-		"hp":     target.HP,
+		"type":         "health_update",
+		"userId":       targetID,
+		"attackerId":   attackerID,
+		"attackerName": attackerName,
+		"hp":           target.HP,
+		"damage":       damage,
+		"crit":         crit,
 	})
 
 	if target.HP <= 0 {
@@ -259,20 +375,29 @@ func HandleHit(roomID string, attackerID uint, targetID uint, damage int) {
 		target.Deaths++
 		attacker.Kills++
 
-		if attacker.Team == "red" {
-			state.ScoreRed++
-		} else {
+		if attacker.Team == "blue" {
 			state.ScoreBlue++
+		} else {
+			state.ScoreRed++
 		}
 
 		PublishChannelJSON("room_channel:"+roomID, map[string]interface{}{
-			"type":   "kill",
-			"killer": fmt.Sprint(attackerID),
-			"victim": fmt.Sprint(targetID),
+			"type":       "kill",
+			"killer":     fmt.Sprint(attackerID),
+			"killerId":   attackerID,
+			"killerName": attackerName,
+			"victim":     fmt.Sprint(targetID),
+			"victimId":   targetID,
+			"victimName": victimName,
+			"weaponName": weaponName,
+			"score_red":  state.ScoreRed,
+			"score_blue": state.ScoreBlue,
+			"kills":      attacker.Kills,
+			"deaths":     target.Deaths,
 		})
 
 		go func(rID string, uID uint) {
-			time.Sleep(5 * time.Second)
+			time.Sleep(3 * time.Second)
 			st, ok2 := GetGameFromStore(rID)
 			if !ok2 {
 				return
@@ -296,3 +421,4 @@ func HandleHit(roomID string, attackerID uint, targetID uint, damage int) {
 
 	SaveGameToStore(roomID, state)
 }
+

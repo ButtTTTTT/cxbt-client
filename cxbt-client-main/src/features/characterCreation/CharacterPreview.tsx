@@ -117,9 +117,14 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
     };
 
     const build = async () => {
-      const [body, bodyMap, idleResponse] = await Promise.all([
-        loadModel(assets.models.body01), loadTexture(preset.body), fetch(assetUrl(animation ?? 'idle.json')),
+      const [body, bodyMap, rawIdleResponse] = await Promise.all([
+        loadModel(assets.models.body01),
+        loadTexture(preset.body),
+        fetch(assetUrl(animation ?? 'idle.json')).catch(() => null),
       ]);
+      const idleResponse = (rawIdleResponse && rawIdleResponse.ok)
+        ? rawIdleResponse
+        : await fetch(assetUrl('idle.json'));
       if (!idleResponse.ok) throw new Error('待机动画加载失败');
       const idle: IdleData = await idleResponse.json();
       if (disposed) return;
@@ -201,54 +206,90 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
         accessories.forEach((part, index) => { part.visible = selected.includes(index); });
       };
       controllerRef.current(appearanceRef.current);
-      const makeClip = (data: IdleData, name: string, boneNames: { has: (name: string) => boolean } = boneIndices) => new THREE.AnimationClip(name, data.duration ?? -1, data.tracks.flatMap((track) => {
+      const makeClip = (data: IdleData, name: string, boneNames: { has: (name: string) => boolean } = boneIndices) => new THREE.AnimationClip(name, (data.duration && data.duration > 0) ? data.duration : -1, data.tracks.flatMap((track) => {
         if (!boneNames.has(track.name)) return [];
         const times = track.positions.map((_, index) => index / data.fps);
         return [new THREE.VectorKeyframeTrack(`${track.name}.position`, times, track.positions.flat()),
           new THREE.QuaternionKeyframeTrack(`${track.name}.quaternion`, times, track.rotations.flat())];
       }));
       if (attachment) {
-        const [model, map] = await Promise.all([loadModel(attachment.model), attachment.texture ? loadTexture(attachment.texture) : Promise.resolve(null)]);
+        const [model, map] = await Promise.all([loadModel(attachment.model), attachment.texture ? loadTexture(attachment.texture).catch(() => null) : Promise.resolve(null)]);
         if (disposed) return;
         attachmentRoot = model;
         const attachmentMaterial = material(map);
         attachmentMaterial.side = THREE.DoubleSide;
         attachmentMaterial.alphaTest = 0.1;
-        model.traverse((object: any) => {
-          if (!object.isMesh) return;
-          object.material.dispose();
-          object.material = attachmentMaterial;
-          object.frustumCulled = false;
-        });
-        // Indie rigs use chest as their attachment origin. Their inverse bind
-        // matrices retain the source root offset; resetting the root bone
-        // normalizes the skinned mesh without applying that offset twice.
-        const anchor = model.getObjectByName(attachment.bone);
-        const parentIndex = boneIndices.get(attachment.bone);
-        if (!anchor || parentIndex === undefined) throw new Error('装备挂点缺失');
-        anchor.position.set(0, 0, 0);
-        anchor.quaternion.identity();
-        anchor.scale.set(1, 1, 1);
-        // The avatar chest's bind axes differ from the indie rig's Y-up frame.
-        // Cancel that bind rotation, retaining subsequent avatar motion.
-        root.updateMatrixWorld(true);
-        const host = skeleton.bones[parentIndex];
-        const offset = new THREE.Group();
-        host.getWorldQuaternion(offset.quaternion).invert();
-        offset.add(model);
-        host.add(offset);
-        if (attachment.animation) {
-          const response = await fetch(assetUrl(attachment.animation));
-          if (!response.ok) throw new Error('装备动画加载失败');
-          const data: IdleData = await response.json();
-          if (disposed) return;
-          const names = new Set<string>();
-          model.traverse((object: any) => { if (object.isBone && object !== anchor) names.add(object.name); });
-          const clip = makeClip(data, attachment.id, names);
-          if (!clip.tracks.length) throw new Error('装备动画与独立骨骼不匹配');
-          attachmentMixer = new THREE.AnimationMixer(model);
-          attachmentMixer.clipAction(clip).play();
-          attachmentMixer.update(0);
+
+        if (attachment.bone === 'pet') {
+          model.traverse((object: any) => {
+            if (!object.isMesh) return;
+            if (map) {
+              object.material.dispose();
+              object.material = attachmentMaterial;
+            }
+            object.frustumCulled = false;
+          });
+          model.position.set(0.58, 0.32, 0.22);
+          model.scale.setScalar(0.95);
+          root.add(model);
+          if (attachment.animation) {
+            const response = await fetch(assetUrl(attachment.animation));
+            if (response.ok) {
+              const data: IdleData = await response.json();
+              if (disposed) return;
+              const names = new Set<string>();
+              model.traverse((object: any) => { if (object.isBone) names.add(object.name); });
+              const clip = makeClip(data, attachment.id, names);
+              if (clip.tracks.length) {
+                attachmentMixer = new THREE.AnimationMixer(model);
+                attachmentMixer.clipAction(clip).play();
+                attachmentMixer.update(0);
+              }
+            }
+          }
+        } else if (attachment.bone === 'arm_r' || attachment.bone.startsWith('finger') || attachment.bone === 'avatar_part') {
+          await addPart(attachment.model, attachmentMaterial, 5);
+        } else {
+          model.traverse((object: any) => {
+            if (!object.isMesh) return;
+            object.material.dispose();
+            object.material = attachmentMaterial;
+            object.frustumCulled = false;
+          });
+          // Indie rigs use chest as their attachment origin. Their inverse bind
+          // matrices retain the source root offset; resetting the root bone
+          // normalizes the skinned mesh without applying that offset twice.
+          const anchor = model.getObjectByName(attachment.bone) ?? model.children.find((c: any) => c.isBone);
+          const parentIndex = boneIndices.get(attachment.bone) ?? boneIndices.get('chest');
+          if (parentIndex === undefined) throw new Error('装备挂点缺失');
+          if (anchor) {
+            anchor.position.set(0, 0, 0);
+            anchor.quaternion.identity();
+            anchor.scale.set(1, 1, 1);
+          }
+          // The avatar chest's bind axes differ from the indie rig's Y-up frame.
+          // Cancel that bind rotation, retaining subsequent avatar motion.
+          root.updateMatrixWorld(true);
+          const host = skeleton.bones[parentIndex];
+          const offset = new THREE.Group();
+          host.getWorldQuaternion(offset.quaternion).invert();
+          offset.add(model);
+          host.add(offset);
+          if (attachment.animation) {
+            const response = await fetch(assetUrl(attachment.animation)).catch(() => null);
+            if (response && response.ok) {
+              const data: IdleData = await response.json();
+              if (disposed) return;
+              const names = new Set<string>();
+              model.traverse((object: any) => { if (object.isBone && object !== anchor) names.add(object.name); });
+              const clip = makeClip(data, attachment.id, names);
+              if (clip.tracks.length) {
+                attachmentMixer = new THREE.AnimationMixer(model);
+                attachmentMixer.clipAction(clip).play();
+                attachmentMixer.update(0);
+              }
+            }
+          }
         }
       }
       const weaponModels = await Promise.all(weapons.map(async (weapon) => {

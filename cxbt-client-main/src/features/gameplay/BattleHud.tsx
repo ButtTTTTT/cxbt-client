@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { BATTLE_QUICK_KEYS } from './hud';
 import type { BattleSlot } from './skills';
 import './BattleHud.css';
@@ -14,7 +14,7 @@ function HudNumber({ value, className = '' }: { value: number | string; classNam
 }
 
 export default function BattleHud({ scoreRed, scoreBlue, time, health, maxHealth, shield, ammo, magazine, melee,
-  slots, cooldowns, selectedSlot, onSelect }: {
+  slots, cooldowns, selectedSlot, isFlying = false, onSelect }: {
   scoreRed: number;
   scoreBlue: number;
   time: string;
@@ -24,10 +24,11 @@ export default function BattleHud({ scoreRed, scoreBlue, time, health, maxHealth
   ammo: number;
   magazine: number;
   melee: boolean;
-  /** Lobby quickbar mirrored slot for slot: weapons, active skills and empty slots. */
+  /** Lobby quickbar mirrored slot for slot: weapons, active skills, flight gear (wings) and empty slots. */
   slots: BattleSlot[];
   cooldowns: number[];
   selectedSlot: number;
+  isFlying?: boolean;
   onSelect: (slot: number) => void;
 }) {
   const [scale, setScale] = useState(() => Math.min(1, innerWidth / 1160));
@@ -62,13 +63,27 @@ export default function BattleHud({ scoreRed, scoreBlue, time, health, maxHealth
             return <span key={key} className="battle-slot empty" aria-label={`${key} 空格`}><small>{key}</small></span>;
           }
           const skill = slot.kind === 'skill';
-          const icon = skill ? `${LOBBY}${slot.load.skill.icon}` : `${CREATION}${slot.weapon.icon}`;
-          const label = skill ? slot.load.skill.name : slot.weapon.label;
+          const isWing = slot.kind === 'wing';
+          const isItem = slot.kind === 'item';
+          const icon = isWing || isItem
+            ? `${LOBBY}${slot.icon}`
+            : skill
+              ? `${LOBBY}${slot.load.skill.icon}`
+              : slot.lobbyIcon
+                ? `${LOBBY}${slot.lobbyIcon}`
+                : `${CREATION}${slot.weapon.icon}`;
+          const label = isWing || isItem
+            ? slot.label
+            : skill
+              ? slot.load.skill.name
+              : slot.label || slot.weapon.label;
           const cooldown = skill ? cooldowns[index] ?? 0 : 0;
           const total = skill ? slot.load.cooldown : 1;
-          const active = index === selectedSlot;
-          return <button key={key} type="button" className={`battle-slot${active ? ' active' : ''}${skill ? ' battle-skill' : ''}`}
-            aria-label={`${key} · ${label}${skill ? '（技能）' : ''}`} aria-pressed={active} title={`${key} · ${label}`}
+          const active = index === selectedSlot || (isWing && isFlying);
+          return <button key={key} type="button" className={`battle-slot${active ? ' active' : ''}${skill ? ' battle-skill' : ''}${isWing ? ' battle-wing' : ''}`}
+            aria-label={`${key} · ${label}${skill ? '（技能）' : isWing ? '（飞行器·点击/按键切换展翼飞行）' : ''}`}
+            aria-pressed={active}
+            title={`${key} · ${label}${isWing ? ' (点击或按快捷键展翼飞行 / 长按空格滑翔爬升)' : ''}`}
             onClick={() => onSelect(index)}>
             <small>{key}</small>
             <img src={icon} alt="" />

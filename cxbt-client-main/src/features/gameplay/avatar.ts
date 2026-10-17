@@ -29,10 +29,15 @@ export type BattleAvatar = {
   setMoving: (moving: boolean) => void;
   setWeapon: (index: number) => void;
   jump: () => void;
+  doubleJump?: () => void;
+  setFlying?: (flying: boolean) => void;
   roll: () => void;
   /** Plays one hit of the weapon combo; melee weapons carry up to three hits. */
   attack: (step?: number) => void;
   spurt: () => void;
+  hit?: () => void;
+  die?: () => void;
+  playSkillAnim?: (skillAnimName: string) => Promise<void>;
   /** Fades the avatar while the stealth skill is active. */
   setGhost: (on: boolean) => void;
   /** Freezes or resumes the animation mixer (影像调整 · 播放角色动作). */
@@ -40,6 +45,7 @@ export type BattleAvatar = {
   reload: () => void;
   getMuzzlePosition?: (outTarget?: any) => any;
   setAttachment?: (attachment?: CreationAttachment | null) => Promise<void>;
+  getWingTipPositions?: () => { left: any; right: any; wingId: string } | null;
   playGesture?: (animationPath: string) => Promise<void>;
   dispose: () => void;
 };
@@ -81,6 +87,13 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
   if (!skeleton) throw new Error('角色骨骼缺失');
   const bones = skeleton;
   const boneIndices = new Map<string, number>(bones.bones.map((bone: any, index: number) => [bone.name, index]));
+  root.updateMatrixWorld(true);
+  const bindQuats = new Map<string, any>();
+  for (const b of bones.bones) {
+    const q = new THREE.Quaternion();
+    b.getWorldQuaternion(q);
+    bindQuats.set(b.name, q);
+  }
   const addPart = async (path: string, partMaterial: any, offset?: number[]) => {
     const part = await loadModel(path);
     const group = new THREE.Group();
@@ -142,7 +155,7 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
   const makeClip = (data: ClipData, name: string, boneNameSet: { has: (name: string) => boolean } = boneIndices) => {
     const rawFps = data.fps || 60;
     const effectiveFps = rawFps === 60 ? 96 : rawFps;
-    const effectiveDuration = data.duration ? data.duration * (rawFps / effectiveFps) : -1;
+    const effectiveDuration = (data.duration && data.duration > 0) ? data.duration * (rawFps / effectiveFps) : -1;
     return new THREE.AnimationClip(name, effectiveDuration,
       data.tracks.flatMap((track) => {
         if (!boneNameSet.has(track.name)) return [];
@@ -158,24 +171,47 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
     if (!response.ok) throw new Error(`动画加载失败: ${name}`);
     return makeClip(await response.json() as ClipData, name);
   };
+  const [commonDeathClip, commonHitClip, flyHoverClip, flyMoveClip, flyJumpClip, flyTakeoffClip] = await Promise.all([
+    fetchClip('gameplay:common-death.json', 'common-death').catch(() => null),
+    fetchClip('gameplay:common-hit.json', 'common-hit').catch(() => null),
+    fetchClip('gameplay:fly-fly.json', 'fly-hover').catch(() => null),
+    fetchClip('gameplay:fly-fly01.json', 'fly-move').catch(() => null),
+    fetchClip('gameplay:fly-jumpfly.json', 'fly-jump').catch(() => null),
+    fetchClip('gameplay:fly-takeoff.json', 'fly-takeoff').catch(() => null),
+  ]);
+  const skillClipCache = new Map<string, { full: any; upper: any }>();
+  for (const sName of ['stdblast', 'stdcatch', 'stdeat', 'stdoutcry', 'stdtleibao_01_bomboff', 'stdtleibao_01_bombon', 'stdtread']) {
+    void fetchClip(`gameplay:skill_anim-${sName}.json`, `skill-${sName}`)
+      .then((c) => {
+        if (c) skillClipCache.set(sName, { full: c, upper: makeUpperBodyClip(c) });
+      })
+      .catch(() => undefined);
+  }
+
   const entries = await Promise.all(effectiveWeapons.map(async (weapon) => {
-    const set = weapon.animation.match(/thirdperson-male-(.+)-stdidle/)?.[1] ?? weapon.id;
+    const set = weapon.animation.match(/thirdperson-male-(.+)-stdidle/)?.[1]
+      ?? weapon.animation.match(/animations\/(.+)\.json$/)?.[1]
+      ?? weapon.id;
     // Melee sets ship stdshoot1/2/3 as the -attack/-attack2/-attack3 combo clips.
     const attackSources = [weapon.actions?.attack ?? `gameplay:${set}-attack.json`,
       `gameplay:${set}-attack2.json`, `gameplay:${set}-attack3.json`];
-    const [idle, run, jump, roll, spurt, reload] = await Promise.all([
-      fetchClip(weapon.animation, `${weapon.id}-idle`),
+    const reloadSource = weapon.actions?.reload ?? `gameplay:${set}-reload.json`;
+    const [idle, run, jump, roll, spurt, reload, hit, change] = await Promise.all([
+      fetchClip(`gameplay:${set}-idle.json`, `${weapon.id}-idle`).catch(() => fetchClip(weapon.animation, `${weapon.id}-idle`)),
       fetchClip(`gameplay:${set}-run.json`, `${weapon.id}-run`).catch(() => fetchClip(weapon.animation, `${weapon.id}-run-fallback`)),
       fetchClip(`gameplay:${set}-jump.json`, `${weapon.id}-jump`).catch(() => null),
       fetchClip(`gameplay:${set}-roll.json`, `${weapon.id}-roll`).catch(() => null),
       fetchClip(`gameplay:${set}-spurt.json`, `${weapon.id}-spurt`).catch(() => null),
-      weapon.actions?.reload ? fetchClip(weapon.actions.reload, `${weapon.id}-reload`).catch(() => null) : Promise.resolve(null),
+      fetchClip(reloadSource, `${weapon.id}-reload`).catch(() => fetchClip(`gameplay:${set}-reload.json`, `${weapon.id}-reload`).catch(() => null)),
+      fetchClip(`gameplay:${set}-hit.json`, `${weapon.id}-hit`).catch(() => commonHitClip),
+      fetchClip(`gameplay:${set}-change.json`, `${weapon.id}-change`).catch(() => null),
     ]);
     const attacks = (await Promise.all(attackSources.map((path, index) =>
       fetchClip(path, `${weapon.id}-attack${index + 1}`).catch(() => null))))
       .filter((clip) => Boolean(clip));
     const upperAttacks = attacks.map(makeUpperBodyClip);
     const upperReload = makeUpperBodyClip(reload);
+    const upperChange = makeUpperBodyClip(change);
 
     const parts: any[] = [];
     for (const part of weapon.parts ?? []) {
@@ -206,14 +242,21 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
         parts.push(stylized);
       }
     }
-    return { idle, run, jump, roll, reload, spurt, attacks, upperAttacks, upperReload, parts };
+    return { idle, run, jump, roll, reload, spurt, hit, change, upperChange, attacks, upperAttacks, upperReload, parts };
   }));
   const ghostState = new Map<any, { transparent: boolean; opacity: number; depthWrite: boolean }>();
   const mixer = new THREE.AnimationMixer(root);
   let attachmentGroup: any = null;
   let attachmentMixer: any = null;
+  let wingIdleClip: any = null;
+  let wingFlyClip: any = null;
+  let wingJumpClip: any = null;
+  let wingLeftNode: any = null;
+  let wingRightNode: any = null;
+  let activeWingId = '';
   let selected = 0;
   let moving = false;
+  let flying = false;
   let action: any = null;
   let upperAction: any = null;
   let transient = 0;
@@ -238,11 +281,41 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
     transient = once ? clip.duration : 0;
   };
 
+  const syncWingAnim = (mode: 'idle' | 'fly' | 'jump') => {
+    if (!attachmentMixer) return;
+    attachmentMixer.stopAllAction();
+    if (mode === 'fly') {
+      const clip = wingFlyClip ?? wingJumpClip ?? wingIdleClip;
+      if (clip) {
+        attachmentMixer.timeScale = wingFlyClip ? 1.45 : 2.35;
+        attachmentMixer.clipAction(clip).reset().play();
+      }
+    } else if (mode === 'jump') {
+      const clip = wingJumpClip ?? wingFlyClip ?? wingIdleClip;
+      if (clip) {
+        attachmentMixer.timeScale = 1.85;
+        attachmentMixer.clipAction(clip).reset().play();
+      }
+    } else if (wingIdleClip) {
+      attachmentMixer.timeScale = 1.0;
+      attachmentMixer.clipAction(wingIdleClip).reset().play();
+    }
+  };
+
+  const getBaseClip = () => {
+    if (flying) {
+      return moving
+        ? (flyMoveClip ?? flyHoverClip ?? entries[selected].run)
+        : (flyHoverClip ?? flyMoveClip ?? entries[selected].idle);
+    }
+    return moving ? entries[selected].run : entries[selected].idle;
+  };
+
   const playUpper = (upperClip: any, fullClip: any) => {
-    if (moving && upperClip) {
-      // 保持下半身播放 run，上半身叠加攻击/换弹动作 (边走路边射击)
-      const runClip = entries[selected].run;
-      const runAct = mixer.clipAction(runClip);
+    if ((moving || flying) && upperClip) {
+      // 保持下半身播放 run 或飞行姿态，上半身叠加攻击/换弹动作 (边移动/飞行边射击)
+      const legClip = getBaseClip();
+      const runAct = mixer.clipAction(legClip);
       if (action !== runAct) {
         runAct.reset();
         runAct.setLoop(THREE.LoopRepeat, Infinity);
@@ -268,7 +341,7 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
 
   const base = () => {
     stopUpper();
-    play(moving ? entries[selected].run : entries[selected].idle);
+    play(getBaseClip());
   };
 
   const avatar: BattleAvatar = {
@@ -282,6 +355,7 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
         if (transient <= 0) {
           transient = 0;
           base();
+          syncWingAnim(flying ? 'fly' : 'idle');
         }
       }
     },
@@ -291,8 +365,8 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
         if (!transient) {
           base();
         } else if (upperAction) {
-          // 在上半身开火/换弹过程中切换下半身移动/待机
-          const legClip = moving ? entries[selected].run : entries[selected].idle;
+          // 在上半身开火/换弹过程中切换下半身移动/待机/飞行姿态
+          const legClip = getBaseClip();
           const legAct = mixer.clipAction(legClip);
           if (action !== legAct) {
             legAct.reset();
@@ -301,6 +375,20 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
             if (action) legAct.crossFadeFrom(action, 0.1, true);
             action = legAct;
           }
+        }
+      }
+    },
+    setFlying(value) {
+      if (flying !== value) {
+        flying = value;
+        syncWingAnim(flying ? 'fly' : 'idle');
+        if (flying && flyTakeoffClip) {
+          stopUpper();
+          play(flyTakeoffClip, true);
+          transient = Math.min(0.45, flyTakeoffClip.duration);
+        } else {
+          transient = 0;
+          base();
         }
       }
     },
@@ -322,6 +410,39 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
       }
     },
     spurt() { const clip = entries[selected].spurt; if (clip) { stopUpper(); play(clip, true); } },
+    hit() {
+      const clip = entries[selected]?.hit ?? commonHitClip;
+      if (clip && !moving && transient <= 0) {
+        stopUpper();
+        play(clip, true);
+      }
+    },
+    die() {
+      if (commonDeathClip) {
+        stopUpper();
+        play(commonDeathClip, true);
+      }
+    },
+    async playSkillAnim(skillAnimName: string) {
+      try {
+        let entry = skillClipCache.get(skillAnimName);
+        if (!entry) {
+          const full = await fetchClip(`gameplay:skill_anim-${skillAnimName}.json`, `skill-${skillAnimName}`);
+          entry = { full, upper: makeUpperBodyClip(full) };
+          skillClipCache.set(skillAnimName, entry);
+        }
+        if (entry?.full) {
+          if (skillAnimName === 'stdtread') {
+            stopUpper();
+            play(entry.full, true);
+          } else {
+            playUpper(entry.upper, entry.full);
+          }
+        }
+      } catch {
+        // Fallback if skill animation does not exist
+      }
+    },
     setMotion(on) { mixer.timeScale = on ? 1 : 0; },
     setGhost(on) {
       root.traverse((object: any) => {
@@ -344,26 +465,62 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
         playUpper(entry.upperReload, entry.reload);
       }
     },
-    jump() { if (entries[selected].jump) { stopUpper(); play(entries[selected].jump, true); } },
+    jump() {
+      if (entries[selected].jump) {
+        stopUpper();
+        play(entries[selected].jump, true);
+      }
+      syncWingAnim('jump');
+    },
+    doubleJump() {
+      stopUpper();
+      const clip = flyJumpClip ?? entries[selected].jump;
+      if (clip) {
+        play(clip, true);
+      }
+      syncWingAnim('jump');
+    },
     roll() { if (entries[selected].roll) { stopUpper(); play(entries[selected].roll, true); } },
     getMuzzlePosition(outTarget = new THREE.Vector3()) {
       root.updateMatrixWorld(true);
       const activeParts = entries[selected]?.parts ?? [];
       for (const part of activeParts) {
-        const fireNode = part.getObjectByName('Gun_Fire') || part.getObjectByName('gun_fire');
+        const fireNode =
+          part.getObjectByName('Gun_Fire') ||
+          part.getObjectByName('gun_fire') ||
+          part.getObjectByName('Gun_MZ') ||
+          part.getObjectByName('gun_mz') ||
+          part.getObjectByName('Gun_shot_pos');
         if (fireNode) {
           fireNode.getWorldPosition(outTarget);
           return outTarget;
         }
       }
-      const handBone = bones.bones[boneIndices.get('handweapon_r') ?? -1];
+      const handBone =
+        bones.bones[boneIndices.get('handweapon_r') ?? -1] ||
+        bones.bones[boneIndices.get('handweapon_l') ?? -1];
       if (handBone) {
         handBone.getWorldPosition(outTarget);
+        const worldQuat = new THREE.Quaternion();
+        root.getWorldQuaternion(worldQuat);
+        const fwd = new THREE.Vector3(0, 0.06, 0.42).applyQuaternion(worldQuat);
+        outTarget.add(fwd);
         return outTarget;
       }
       root.getWorldPosition(outTarget);
       outTarget.y += 1.15;
       return outTarget;
+    },
+    getWingTipPositions() {
+      if (!attachmentGroup || (!wingLeftNode && !wingRightNode)) return null;
+      root.updateMatrixWorld(true);
+      const left = new THREE.Vector3();
+      const right = new THREE.Vector3();
+      if (wingLeftNode) wingLeftNode.getWorldPosition(left);
+      else root.getWorldPosition(left);
+      if (wingRightNode) wingRightNode.getWorldPosition(right);
+      else root.getWorldPosition(right);
+      return { left, right, wingId: activeWingId || 'wing01' };
     },
     async setAttachment(attachment) {
       if (attachmentGroup && attachmentGroup.parent) {
@@ -374,6 +531,12 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
         attachmentMixer.stopAllAction();
         attachmentMixer = null;
       }
+      wingIdleClip = null;
+      wingFlyClip = null;
+      wingJumpClip = null;
+      wingLeftNode = null;
+      wingRightNode = null;
+      activeWingId = '';
       if (!attachment) return;
       try {
         const [model, map] = await Promise.all([
@@ -389,30 +552,57 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
           object.material = attMat;
           object.frustumCulled = false;
         });
-        const anchor = model.getObjectByName(attachment.bone);
-        const parentIndex = boneIndices.get(attachment.bone);
-        if (!anchor || parentIndex === undefined) return;
-        anchor.position.set(0, 0, 0);
-        anchor.quaternion.identity();
-        anchor.scale.set(1, 1, 1);
-        root.updateMatrixWorld(true);
+        const anchor = model.getObjectByName(attachment.bone) ?? model.children.find((c: any) => c.isBone);
+        const parentIndex = boneIndices.get(attachment.bone) ?? boneIndices.get('chest');
+        if (parentIndex === undefined) return;
+        if (anchor) {
+          anchor.position.set(0, 0, 0);
+          anchor.quaternion.identity();
+          anchor.scale.set(1, 1, 1);
+        }
         const host = bones.bones[parentIndex];
         const offset = new THREE.Group();
-        host.getWorldQuaternion(offset.quaternion).invert();
+        const bindQuat = bindQuats.get(host.name);
+        if (bindQuat) {
+          offset.quaternion.copy(bindQuat).invert();
+        } else {
+          root.updateMatrixWorld(true);
+          host.getWorldQuaternion(offset.quaternion).invert();
+        }
         offset.add(model);
         host.add(offset);
         attachmentGroup = offset;
+        activeWingId = attachment.id || 'wing01';
+        wingLeftNode = model.getObjectByName('wing_vfx_l') || model.getObjectByName('wing_l5') || model.getObjectByName('wing_l3') || model.getObjectByName('wing_l');
+        wingRightNode = model.getObjectByName('wing_vfx_r') || model.getObjectByName('wing_r5') || model.getObjectByName('wing_r3') || model.getObjectByName('wing_r');
+
         if (attachment.animation) {
-          const response = await fetch(assetUrl(attachment.animation));
-          if (response.ok) {
-            const data: ClipData = await response.json();
-            const names = new Set<string>();
-            model.traverse((object: any) => { if (object.isBone && object !== anchor) names.add(object.name); });
-            const clip = makeClip(data, attachment.id, names);
-            if (clip.tracks.length) {
-              attachmentMixer = new THREE.AnimationMixer(model);
-              attachmentMixer.clipAction(clip).play();
+          const names = new Set<string>();
+          model.traverse((object: any) => { if (object.isBone && object !== anchor) names.add(object.name); });
+          const loadWingClip = async (animPath: string, suffix: string) => {
+            try {
+              const resp = await fetch(assetUrl(animPath));
+              if (!resp.ok) return null;
+              const data: ClipData = await resp.json();
+              const clip = makeClip(data, `${attachment.id}-${suffix}`, names);
+              return clip.tracks.length ? clip : null;
+            } catch {
+              return null;
             }
+          };
+          const flyAnimPath = attachment.animation.replace(/-(idle|idle_an)\.json$/, '-fly.json');
+          const jumpAnimPath = attachment.animation.replace(/-(idle|idle_an|fly)\.json$/, '-jumpup.json');
+          const [idleC, flyC, jumpC] = await Promise.all([
+            loadWingClip(attachment.animation, 'idle'),
+            flyAnimPath !== attachment.animation ? loadWingClip(flyAnimPath, 'fly') : Promise.resolve(null),
+            jumpAnimPath !== attachment.animation ? loadWingClip(jumpAnimPath, 'jumpup') : Promise.resolve(null),
+          ]);
+          wingIdleClip = idleC;
+          wingFlyClip = flyC ?? idleC;
+          wingJumpClip = jumpC ?? flyC ?? idleC;
+          if (wingIdleClip || wingFlyClip) {
+            attachmentMixer = new THREE.AnimationMixer(model);
+            syncWingAnim(flying ? 'fly' : 'idle');
           }
         }
       } catch (err) {

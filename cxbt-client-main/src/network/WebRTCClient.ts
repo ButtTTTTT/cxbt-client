@@ -27,14 +27,24 @@ export class WebRTCClient {
     }
   }
 
-  sendMove(userId: number, x: number, z: number, yaw: number, sequence: number) {
+  sendMove(
+    userId: number | string,
+    x: number,
+    y: number,
+    z: number,
+    yaw: number,
+    sequence: number,
+    extra?: Record<string, any>
+  ) {
     this.sendJSON({
       type: 'sync',
-      userId: userId,
-      x: x,
-      z: z,
-      yaw: yaw,
-      sequence: sequence
+      userId,
+      x,
+      y,
+      z,
+      yaw,
+      sequence,
+      ...(extra || {}),
     });
   }
 
@@ -42,3 +52,4 @@ export class WebRTCClient {
     this.gameWs.close();
   }
 }
+

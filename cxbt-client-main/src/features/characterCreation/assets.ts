@@ -1,6 +1,6 @@
 export type Appearance = { gender: number; hair: number; eyes: number; mouth: number; accessory: number };
 export type ModelPart = { model: string; texture: string };
-export type CreationAttachment = { id: string; model: string; texture: string | null; bone: string; animation?: string | null; characterAnimation?: string | null };
+export type CreationAttachment = { id: string; label?: string; icon?: string; model: string; texture: string | null; bone: string; animation?: string | null; characterAnimation?: string | null };
 export type CreationWeapon = {
   id: string;
   label: string;
@@ -32,7 +32,10 @@ export type CreationAssets = {
   skinColor: string;
 };
 export const CREATION_BASE = `${import.meta.env.BASE_URL}assets/creation/`;
-export const assetUrl = (path: string) => `${CREATION_BASE}${path}`;
+export const assetUrl = (path: string) =>
+  path.startsWith('http') || path.startsWith('/assets/')
+    ? `${import.meta.env.BASE_URL}${path.replace(/^\//, '')}`
+    : `${CREATION_BASE}${path}`;
 
 export function initialAppearance(preset: CreationPreset, gender = 0): Appearance {
   return { gender, hair: preset.defaultHair, eyes: 0, mouth: 0, accessory: preset.accessorySets.length - 1 };

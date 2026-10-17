@@ -17,6 +17,12 @@ export type SavedCharacter = {
   signInStreak?: number;
   lastSignInDate?: string;
   onlineClaimCount?: number;
+  equippedWeapons?: string;
+  activeWing?: string;
+  activePet?: string;
+  quickbarJson?: string;
+  luckDrawPos?: number;
+  luckDrawStamina?: number;
 };
 
 export const CHARACTER_KEY = 'avatarstar.character';
@@ -44,6 +50,12 @@ export function mapServerCharacter(data: any): SavedCharacter {
     signInStreak: data.signInStreak ?? 0,
     lastSignInDate: data.lastSignInDate ?? '',
     onlineClaimCount: data.onlineClaimCount ?? 0,
+    equippedWeapons: data.equippedWeapons ?? '',
+    activeWing: data.activeWing ?? '',
+    activePet: data.activePet ?? '',
+    quickbarJson: data.quickbarJson ?? '',
+    luckDrawPos: data.luckDrawPos ?? 0,
+    luckDrawStamina: data.luckDrawStamina ?? 100,
   };
 }
 

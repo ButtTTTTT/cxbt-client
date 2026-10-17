@@ -6,14 +6,15 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
 
 var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
+	ReadBufferSize:  65536,
+	WriteBufferSize: 65536,
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
@@ -29,27 +30,83 @@ type Client struct {
 }
 
 var (
-	wsHubMu   sync.RWMutex
-	wsHubSubs = make(map[string]map[*Client]struct{})
+	wsHubMu        sync.RWMutex
+	wsHubSubs      = make(map[string]map[*Client]struct{})
+	wsRoomPlayerMu sync.RWMutex
+	wsRoomPlayers  = make(map[string]map[string]int)
 )
+
+func GetActiveWSCount(roomID string, playerID string) int {
+	if roomID == "" || playerID == "" {
+		return 0
+	}
+	wsRoomPlayerMu.RLock()
+	defer wsRoomPlayerMu.RUnlock()
+	if m, ok := wsRoomPlayers[roomID]; ok {
+		return m[playerID]
+	}
+	return 0
+}
 
 func registerClientInHub(c *Client) {
 	wsHubMu.Lock()
-	defer wsHubMu.Unlock()
 	if wsHubSubs[c.Channel] == nil {
 		wsHubSubs[c.Channel] = make(map[*Client]struct{})
 	}
 	wsHubSubs[c.Channel][c] = struct{}{}
+	wsHubMu.Unlock()
+
+	if c.RoomID != "" && c.ID != "" {
+		wsRoomPlayerMu.Lock()
+		if wsRoomPlayers[c.RoomID] == nil {
+			wsRoomPlayers[c.RoomID] = make(map[string]int)
+		}
+		wsRoomPlayers[c.RoomID][c.ID]++
+		wsRoomPlayerMu.Unlock()
+
+		var uid uint
+		if _, err := fmt.Sscanf(c.ID, "%d", &uid); err == nil && uid > 0 {
+			TouchPlayerActivity(uid)
+		}
+	}
 }
 
 func unregisterClientFromHub(c *Client) {
 	wsHubMu.Lock()
-	defer wsHubMu.Unlock()
 	if subs, ok := wsHubSubs[c.Channel]; ok {
 		delete(subs, c)
 		if len(subs) == 0 {
 			delete(wsHubSubs, c.Channel)
 		}
+	}
+	wsHubMu.Unlock()
+
+	if c.RoomID != "" && c.ID != "" && c.RoomID != "practice" && c.RoomID != "default-room" {
+		wsRoomPlayerMu.Lock()
+		if m, ok := wsRoomPlayers[c.RoomID]; ok {
+			m[c.ID]--
+			if m[c.ID] <= 0 {
+				delete(m, c.ID)
+			}
+			if len(m) == 0 {
+				delete(wsRoomPlayers, c.RoomID)
+			}
+		}
+		wsRoomPlayerMu.Unlock()
+
+		roomID := c.RoomID
+		playerID := c.ID
+		go func() {
+			time.Sleep(5 * time.Second)
+			if GetActiveWSCount(roomID, playerID) == 0 {
+				var uid uint
+				if _, err := fmt.Sscanf(playerID, "%d", &uid); err == nil && uid > 0 {
+					if !IsPlayerRecentlyActive(uid, 6) {
+						RemovePlayerFromRoomAndCleanup(roomID, uid)
+					}
+				}
+			}
+		}()
 	}
 }
 
@@ -106,6 +163,15 @@ func ServeWs(c *gin.Context) {
 
 func (c *Client) readPump() {
 	defer func() {
+		if c.ID != "" {
+			roster := RemoveVoiceParticipant(c.RoomID, c.ID)
+			PublishChannelJSON(c.Channel, map[string]interface{}{
+				"type":         "voice_leave",
+				"userId":       c.ID,
+				"roomId":       normalizeVoiceRoomKey(c.RoomID),
+				"participants": roster,
+			})
+		}
 		unregisterClientFromHub(c)
 		close(c.Done)
 		c.Conn.Close()
@@ -120,11 +186,26 @@ func (c *Client) readPump() {
 			break
 		}
 
+		if c.ID != "" {
+			var uid uint
+			if _, err := fmt.Sscanf(c.ID, "%d", &uid); err == nil && uid > 0 {
+				TouchPlayerActivity(uid)
+			}
+		}
+
 		var gameMsg map[string]interface{}
 		if err := json.Unmarshal(message, &gameMsg); err == nil {
 			msgType, _ := gameMsg["type"].(string)
 
+			if HandleWsVoiceMessage(c, msgType, gameMsg, message) {
+				continue
+			}
+
 			if msgType == "hit" && c.RoomID != "" {
+				if tStr, ok := gameMsg["targetId"].(string); ok && tStr == "__boss__" {
+					PublishChannel(c.Channel, message)
+					continue
+				}
 				var targetID uint
 				if t, ok := gameMsg["targetId"].(float64); ok {
 					targetID = uint(t)
@@ -135,9 +216,16 @@ func (c *Client) readPump() {
 				if d, ok := gameMsg["damage"].(float64); ok {
 					damage = int(d)
 				}
+				weaponName, _ := gameMsg["weaponName"].(string)
+				crit, _ := gameMsg["crit"].(bool)
 				var attID uint
 				fmt.Sscanf(c.ID, "%d", &attID)
-				HandleHit(c.RoomID, attID, targetID, damage)
+				if attID == 0 {
+					if aFloat, ok := gameMsg["attackerId"].(float64); ok {
+						attID = uint(aFloat)
+					}
+				}
+				HandleHit(c.RoomID, attID, targetID, damage, weaponName, crit)
 				continue
 			}
 
@@ -159,14 +247,19 @@ func (c *Client) readPump() {
 				if b, ok := gameMsg["blueDelta"].(float64); ok {
 					blueDelta = int(b)
 				}
-				HandleObjectiveAction(c.RoomID, redDelta, blueDelta)
+				HandleObjectiveAction(c.RoomID, redDelta, blueDelta, gameMsg)
 				continue
 			}
 
-
 			if msgType == "chat" {
-				sender, _ := gameMsg["userId"].(string)
+				sender, _ := gameMsg["sender"].(string)
+				if sender == "" {
+					sender, _ = gameMsg["userId"].(string)
+				}
 				text, _ := gameMsg["message"].(string)
+				if text == "" {
+					text, _ = gameMsg["content"].(string)
+				}
 				chOverride, _ := gameMsg["channel"].(string)
 				if sender != "" && text != "" {
 					chName := "global"

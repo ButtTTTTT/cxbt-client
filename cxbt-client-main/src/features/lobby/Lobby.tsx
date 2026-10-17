@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import CharacterPreview from '../characterCreation/CharacterPreview';
 import { assetUrl, CREATION_JOBS, initialAppearance, loadCreationAssets, type Appearance, type CreationAssets, type CreationAttachment, type CreationJob, type CreationWeapon } from '../characterCreation/assets';
 import { fetchCharacterFromServer, type SavedCharacter } from '../characterCreation/character';
+import { apiFetch } from '../../api';
 import GameModeLobby from '../gameMode/GameModeLobby';
 import PracticeRoom, { type ApiRoom } from '../gameMode/PracticeRoom';
 import type { RoomConfig } from '../gameMode/CreateRoomDialog';
@@ -50,12 +51,17 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
   const [skillTab, setSkillTab] = useState<'profession' | 'boss'>('profession');
   const [error, setError] = useState('');
   const [category, setCategory] = useState<InventoryCategory>('equipment');
+  const [subFilter, setSubFilter] = useState<'all' | 'wing' | 'sprayer' | 'rifle' | 'sniper' | 'explosive' | 'melee' | 'trinket'>('all');
   const [bagPage, setBagPage] = useState(0);
   const [query, setQuery] = useState('');
   const [sorted, setSorted] = useState(false);
   const [selected, setSelected] = useState<InventoryItem>();
   const [weaponId, setWeaponId] = useState<string>();
   const [attachment, setAttachment] = useState<CreationAttachment>();
+  const [equippedWing, setEquippedWing] = useState<CreationAttachment>();
+  const [equippedBadge, setEquippedBadge] = useState<InventoryItem>();
+  const [equippedLeftRing, setEquippedLeftRing] = useState<InventoryItem>();
+  const [equippedRightRing, setEquippedRightRing] = useState<InventoryItem>();
   const [animation, setAnimation] = useState<string>();
   const [appearance, setAppearance] = useState(character.appearance);
   const [previewJob, setPreviewJob] = useState<CreationJob>(character.jobId);
@@ -74,6 +80,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
   const [battleRoom, setBattleRoom] = useState<RoomConfig>();
   const [globalChatOpen, setGlobalChatOpen] = useState(false);
   const [quickbar, setQuickbar] = useState<(string | null)[]>([]);
+  const [pendingQuickbarItemId, setPendingQuickbarItemId] = useState<string | null>(null);
   const [status, setStatus] = useState('');
   const allocation = useSkillAllocation(skillAssets, character.jobId);
   // The cache keeps an unnamed item for every skill icon, so the hotbar resolves
@@ -86,7 +93,31 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
   const audioRef = useRef<HTMLAudioElement>(null);
   const weaponAudioRef = useRef<HTMLAudioElement | null>(null);
   const dialogRef = useRef<HTMLElement>(null);
+  const lastAutoReplacedRef = useRef<{ slotIndex: number; previousId: string | null; newId: string } | null>(null);
+  const nextRangedSlotRef = useRef<number>(0);
   const musicTrack = gameModeLobby || practiceRoom ? 'music-fortress' : 'music-lobby';
+
+  const quickbarStorageKey = `avatarstar.quickbar.${character.userId || character.name}.${character.jobId}`;
+  const updateQuickbar = (updater: (prev: (string | null)[]) => (string | null)[]) => {
+    setQuickbar((prev) => {
+      const next = updater(prev);
+      try {
+        const jsonStr = JSON.stringify(next);
+        localStorage.setItem(quickbarStorageKey, jsonStr);
+        void apiFetch('/character', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: character.name,
+            jobId: character.jobId,
+            appearance: character.appearance,
+            quickbarJson: jsonStr,
+            equippedWeapons: next.filter(Boolean).join(','),
+          }),
+        }).catch(() => {});
+      } catch {}
+      return next;
+    });
+  };
 
   useEffect(() => {
     setCharState(character);
@@ -105,15 +136,75 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
       setSkillAssets(skills);
       setAppearance(validAppearance(config, character));
       let savedCard: string | null = null;
-      try { savedCard = localStorage.getItem(`avatarstar.skin.${character.userId}.${character.name}`); } catch { /* Storage can be disabled. */ }
+      let savedWingId: string | null = null;
+      let savedQuickbarRaw: string | null = null;
+      try {
+        savedCard = localStorage.getItem(`avatarstar.skin.${character.userId}.${character.name}`);
+        savedWingId = localStorage.getItem('avatarstar.activeWing') || character.activeWing || null;
+        savedQuickbarRaw = localStorage.getItem(quickbarStorageKey) || character.quickbarJson || null;
+      } catch { /* Storage can be disabled. */ }
       const card = catalogue.items.find((item) => item.avatarCard?.id === savedCard)?.avatarCard;
       setAvatarCard(card);
       if (card) setAppearance(initialAppearance(card.preset, character.appearance.gender));
-      const defaults = config.jobs[character.jobId].weapons.map((weapon) => weapon.id);
-      setQuickbar(Array.from({ length: 12 }, (_, index) => defaults[index] ?? null));
+      const initialWingItem = catalogue.items.find(
+        (item) => item.attachment?.bone === 'chest' && (item.id === (savedWingId || 'wing01_indie') || item.attachment?.id === savedWingId)
+      ) ?? catalogue.items.find((item) => item.attachment?.bone === 'chest' && item.id === 'wing01_indie');
+      if (initialWingItem?.attachment && savedWingId !== 'none') {
+        const wingAtt = { ...initialWingItem.attachment, id: initialWingItem.id, label: initialWingItem.name, icon: initialWingItem.icon };
+        setEquippedWing(wingAtt);
+        setAttachment(wingAtt);
+      }
+      const badgeItem = catalogue.items.find((item) => item.id === 'badge01_indie' || item.id.startsWith('badge'));
+      const ringLItem = catalogue.items.find((item) => item.id === 'ring01_indie' || item.id.startsWith('ring01'));
+      const ringRItem = catalogue.items.find((item) => item.id === 'ring02_indie' || item.id.startsWith('ring02'));
+      setEquippedBadge(badgeItem);
+      setEquippedLeftRing(ringLItem);
+      setEquippedRightRing(ringRItem);
+
+      const defaults = [...config.jobs[character.jobId].weapons.map((weapon) => weapon.id)];
+      if (character.jobId === 'biochemist' && defaults.length === 1) {
+        defaults.push('shotgun_01', 'stick_sh01');
+      } else if (!defaults.some((id) => id.startsWith('sprayer'))) {
+        defaults.push('sprayer_03');
+      }
+      if (initialWingItem?.id && savedWingId !== 'none') {
+        defaults.push(initialWingItem.id);
+      }
+      let initialSlots: (string | null)[] = Array.from({ length: 12 }, (_, index) => defaults[index] ?? null);
+      if (savedQuickbarRaw) {
+        try {
+          const parsed = JSON.parse(savedQuickbarRaw);
+          if (Array.isArray(parsed) && parsed.some(Boolean)) {
+            const seenIds = new Set<string>();
+            let seenWing = false;
+            initialSlots = Array.from({ length: 12 }, (_, idx) => {
+              const rawId = typeof parsed[idx] === 'string' ? parsed[idx] : null;
+              if (!rawId || seenIds.has(rawId)) return null;
+              const isWing = rawId.startsWith('wing') || catalogue.items.find((it) => it.id === rawId)?.attachment?.bone === 'chest';
+              if (isWing) {
+                if (seenWing) return null;
+                seenWing = true;
+              }
+              seenIds.add(rawId);
+              return rawId;
+            });
+          }
+        } catch {}
+      }
+      setQuickbar(initialSlots);
+      const firstEquippedWep = initialSlots.find((id): id is string => Boolean(id && catalogue.weapons[id]));
+      if (firstEquippedWep) setWeaponId(firstEquippedWep);
+      const quickbarWingItem = initialSlots
+        .map((id) => (id ? catalogue.items.find((it) => it.id === id && (it.attachment?.bone === 'chest' || it.id.startsWith('wing'))) : undefined))
+        .find(Boolean);
+      if (quickbarWingItem?.attachment) {
+        const wingAtt = { ...quickbarWingItem.attachment, id: quickbarWingItem.id, label: quickbarWingItem.name, icon: quickbarWingItem.icon };
+        setEquippedWing(wingAtt);
+        if (!firstEquippedWep) setAttachment(wingAtt);
+      }
     }).catch((reason: unknown) => { if (!controller.signal.aborted) setError(String(reason)); });
     return () => controller.abort();
-  }, [character]);
+  }, [character.userId, character.jobId, character.name, quickbarStorageKey]);
   useEffect(() => {
     const resize = () => setScale(Math.min(innerWidth / (practiceRoom ? 1200 : 1440), innerHeight / 900));
     resize();
@@ -153,18 +244,94 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
   }, [dialog]);
 
   const previewWeapons = useMemo(() => weaponId && assets?.weapons[weaponId] ? [assets.weapons[weaponId]] : NO_WEAPONS, [weaponId, assets]);
-  const battleWeapons = useMemo(() => quickbar.filter((id): id is string => Boolean(id)), [quickbar]);
+  const battleWeapons = useMemo(
+    () => quickbar.filter((id): id is string => Boolean(id && assets?.weapons[id])),
+    [quickbar, assets]
+  );
   const filtered = useMemo(() => {
     const search = query.trim().toLocaleLowerCase();
-    const items = assets?.items.filter((item) => item.category === category && (!search || `${item.name} ${item.id}`.toLocaleLowerCase().includes(search))) ?? [];
+    const items = assets?.items.filter((item) => {
+      if (item.category !== category) return false;
+      if (category === 'equipment' && subFilter !== 'all') {
+        const wFam = (item.weapon ?? item.id).split('_')[0];
+        if (subFilter === 'wing' && !(item.attachment?.bone === 'chest' || item.id.startsWith('wing'))) return false;
+        if (subFilter === 'sprayer' && wFam !== 'sprayer') return false;
+        if (subFilter === 'rifle' && !['smg', 'machinegun', 'shotgun', 'pistol'].includes(wFam)) return false;
+        if (subFilter === 'sniper' && !['sniperrifle', 'bow', 'crossbow'].includes(wFam)) return false;
+        if (subFilter === 'explosive' && !['bazooka', 'grenadelauncher', 'grenade'].includes(wFam)) return false;
+        if (subFilter === 'melee' && !['knives', 'stick', 'shield'].includes(wFam)) return false;
+        if (subFilter === 'trinket' && !(item.id.startsWith('badge') || item.id.startsWith('ring'))) return false;
+      }
+      return !search || `${item.name} ${item.id}`.toLocaleLowerCase().includes(search);
+    }) ?? [];
     return sorted ? [...items].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN', { numeric: true })) : items;
-  }, [assets, category, query, sorted]);
+  }, [assets, category, subFilter, query, sorted]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(bagPage, pageCount - 1);
   const pageItems = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
-  const chooseItem = (item: InventoryItem) => {
+  const syncWingToQuickbar = (wingItemId: string) => {
+    updateQuickbar((slots) => {
+      const existingWingIndices = slots
+        .map((id, idx) => (id && (id.startsWith('wing') || assets?.items.find((it) => it.id === id)?.attachment?.bone === 'chest') ? idx : -1))
+        .filter((idx) => idx >= 0);
+      if (existingWingIndices.length > 0) {
+        const keepIdx = existingWingIndices[0];
+        lastAutoReplacedRef.current = { slotIndex: keepIdx, previousId: slots[keepIdx], newId: wingItemId };
+        return slots.map((v, i) => {
+          if (i === keepIdx) return wingItemId;
+          if (existingWingIndices.includes(i)) return null;
+          return v;
+        });
+      }
+      const emptyIdx = slots.findIndex((val, i) => i >= 3 && !val);
+      const targetIdx = emptyIdx >= 0 ? emptyIdx : slots.findIndex((val) => !val);
+      if (targetIdx >= 0) {
+        lastAutoReplacedRef.current = { slotIndex: targetIdx, previousId: slots[targetIdx], newId: wingItemId };
+        return slots.map((v, i) => (i === targetIdx ? wingItemId : v));
+      }
+      return slots;
+    });
+  };
+
+  const syncWeaponToQuickbar = (weaponItemId: string) => {
+    updateQuickbar((slots) => {
+      if (slots.includes(weaponItemId)) {
+        lastAutoReplacedRef.current = null;
+        return slots;
+      }
+      // 1. 若前 3 格主副近战武器栏有空位，优先填入空位
+      const emptyWeaponSlot = slots.findIndex((val, i) => i < 3 && !val);
+      if (emptyWeaponSlot >= 0) {
+        lastAutoReplacedRef.current = { slotIndex: emptyWeaponSlot, previousId: null, newId: weaponItemId };
+        return slots.map((v, i) => (i === emptyWeaponSlot ? weaponItemId : v));
+      }
+      // 2. 按武器类型智能匹配槽位（近战 -> 3号槽或已有近战槽；远程 -> 轮流装备 1/2 号主副远程槽）
+      const newFam = weaponItemId.split('_')[0];
+      const isMelee = ['knives', 'stick', 'shield'].includes(newFam);
+      if (isMelee) {
+        const meleeIdx = slots.findIndex((val, i) => i < 3 && val && ['knives', 'stick', 'shield'].includes(val.split('_')[0]));
+        const targetIdx = meleeIdx >= 0 ? meleeIdx : 2;
+        lastAutoReplacedRef.current = { slotIndex: targetIdx, previousId: slots[targetIdx], newId: weaponItemId };
+        return slots.map((v, i) => (i === targetIdx ? weaponItemId : v));
+      }
+      const targetIdx = nextRangedSlotRef.current % 2;
+      nextRangedSlotRef.current = (targetIdx + 1) % 2;
+      lastAutoReplacedRef.current = { slotIndex: targetIdx, previousId: slots[targetIdx], newId: weaponItemId };
+      return slots.map((v, i) => (i === targetIdx ? weaponItemId : v));
+    });
+  };
+
+  const chooseItem = (item: InventoryItem, fromQuickbar = false) => {
     setSelected(item);
+    if (fromQuickbar) {
+      setPendingQuickbarItemId(null);
+      lastAutoReplacedRef.current = null;
+    } else if (!item.avatarCard && !item.preset && !item.animation && item.attachment?.bone !== 'pet' && item.attachment?.bone !== 'avatar_part' && !item.id.startsWith('badge') && !item.id.startsWith('ring')) {
+      setPendingQuickbarItemId(item.id);
+    } else {
+      setPendingQuickbarItemId(null);
+    }
     if (item.avatarCard) {
       setAvatarCard(item.avatarCard);
       setPreviewJob(character.jobId);
@@ -173,12 +340,12 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
       setStatus(`${item.name} · 已切换造型`);
       return;
     }
+    const prevWeaponId = weaponId;
     setWeaponId(undefined);
-    setAttachment(undefined);
     setAnimation(undefined);
     setMotion(true);
     if (item.weapon) {
-      if (item.weapon !== weaponId) {
+      if (item.weapon !== prevWeaponId) {
         const family = item.weapon.split('_')[0];
         const audio = weaponAudioRef.current ?? new Audio();
         weaponAudioRef.current = audio;
@@ -188,13 +355,40 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
         void audio.play().catch(() => undefined);
       }
       setWeaponId(item.weapon);
-      setStatus(`${item.name} · 持握预览`);
+      setAttachment(equippedWing);
+      if (!fromQuickbar) {
+        syncWeaponToQuickbar(item.id);
+        setStatus(`${item.name} · 已穿戴并同步至快捷装备栏 (也可点击或拖动到下方任意快捷栏槽位指定键位)`);
+      } else {
+        setStatus(`${item.name} · 持握预览`);
+      }
     } else if (item.attachment) {
       setAttachment(item.attachment);
       setAnimation(item.attachment.characterAnimation ?? undefined);
-      setStatus(`${item.name} · 翅膀预览`);
+      if (item.attachment.bone === 'pet') {
+        const petModel = item.attachment.id.replace(/^pet_/, '');
+        try { localStorage.setItem('avatarstar.activePet', petModel); } catch {}
+        setStatus(`${item.name} · 宠物伙伴 3D 跟随预览 (已设为出战宠物)`);
+      } else if (item.attachment.bone === 'avatar_part') {
+        setStatus(`${item.name} · 3D 造型部件实时穿戴预览`);
+      } else if (item.attachment.id.startsWith('badge') || item.id.startsWith('badge')) {
+        setEquippedBadge(item);
+        setStatus(`${item.name} · 徽章已穿戴`);
+      } else if (item.attachment.id.startsWith('ring') || item.id.startsWith('ring')) {
+        if (!equippedLeftRing || equippedLeftRing.id === item.id) setEquippedLeftRing(item);
+        else setEquippedRightRing(item);
+        setStatus(`${item.name} · 指环已穿戴`);
+      } else {
+        const wingAtt = { ...item.attachment, id: item.id, label: item.name, icon: item.icon };
+        setEquippedWing(wingAtt);
+        setAttachment(wingAtt);
+        syncWingToQuickbar(item.id);
+        try { localStorage.setItem('avatarstar.activeWing', item.id); } catch {}
+        setStatus(`${item.name} · 飞行器已穿戴并同步至快捷装备栏 (局内可按快捷键/双击或长按空格展翼飞行)`);
+      }
     } else if (item.animation) {
       setWeaponId(undefined);
+      setAttachment(equippedWing);
       setAnimation(item.animation);
       setStatus(`${item.name} · 动作预览`);
     } else if (item.preset && creation) {
@@ -205,10 +399,10 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
       setAppearance(initialAppearance(preset, item.preset.gender));
       setStatus(`${item.name} · 造型预览`);
     } else {
-      setStatus(`${item.name}${item.category === 'equipment' ? ' · 暂无对应的角色预览资源' : ''}`);
+      setStatus(`${item.name}${item.category === 'equipment' ? ' · 暂无对应的角色预览资源' : ' · 已选中，点击下方快捷栏任意槽位即可放入'}`);
     }
   };
-  const chooseCategory = (value: InventoryCategory) => { setCategory(value); setBagPage(0); setQuery(''); setPage('bag'); };
+  const chooseCategory = (value: InventoryCategory) => { setCategory(value); setSubFilter('all'); setBagPage(0); setQuery(''); setPage('bag'); };
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (dialog || settingsOpen || battleRoom || event.target instanceof HTMLInputElement) return;
@@ -217,7 +411,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
       const index = QUICK_KEYS.indexOf(event.key);
       if (index < 0) return;
       const item = assets?.items.find((entry) => entry.id === quickbar[index]);
-      if (item) chooseItem(item);
+      if (item) chooseItem(item, true);
     };
     addEventListener('keydown', keydown);
     return () => removeEventListener('keydown', keydown);
@@ -225,7 +419,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
 
   if (!assets || !creation) return <main className="lobby-viewport"><p role="status">{error || '正在进入大厅…'}</p></main>;
   if (battleRoom) return <Gameplay room={battleRoom} character={charState} creation={creation} assets={assets}
-    avatarPreset={avatarCard?.preset}
+    avatarPreset={avatarCard?.preset} wingAttachment={equippedWing}
     quickbar={quickbar} skills={jobSkillList} bossSkills={bossSkillList} levels={allocation.levels}
     volume={volume} effectsVolume={effectsVolume} onVolume={setVolume} onEffectsVolume={setEffectsVolume}
     onExit={() => {
@@ -243,16 +437,50 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
   const reset = () => {
     setAppearance(originalAppearance); setPreviewJob(character.jobId); setRotation(0);
     setAvatarCard(undefined);
-    try { localStorage.removeItem(`avatarstar.skin.${character.userId}.${character.name}`); } catch { /* Storage can be disabled. */ }
-    setWeaponId(undefined); setAttachment(undefined); setAnimation(undefined); setSelected(undefined); setRevision((value) => value + 1); setStatus('');
+    setPendingQuickbarItemId(null);
+    lastAutoReplacedRef.current = null;
+    try {
+      localStorage.removeItem(`avatarstar.skin.${character.userId}.${character.name}`);
+      localStorage.setItem('avatarstar.activeWing', 'none');
+    } catch { /* Storage can be disabled. */ }
+    setWeaponId(undefined); setAttachment(undefined); setEquippedWing(undefined); setAnimation(undefined); setSelected(undefined); setRevision((value) => value + 1); setStatus('已重置角色与飞行器穿戴');
   };
   const assignQuickbar = (index: number, id: string) => {
     const skill = jobSkills.get(id);
-    if (!assets.items.some((item) => item.id === id) && skill?.kind !== 'active') return;
-    setQuickbar((slots) => slots.map((value, slot) => slot === index ? id : value));
+    const item = assets.items.find((it) => it.id === id);
+    if (!item && skill?.kind !== 'active') return;
+    const isWingItem = Boolean(item?.attachment && (item.attachment.bone === 'chest' || item.id.startsWith('wing')));
+    if (isWingItem && item?.attachment) {
+      const wingAtt = { ...item.attachment, id: item.id, label: item.name, icon: item.icon };
+      setEquippedWing(wingAtt);
+      setAttachment(wingAtt);
+      try { localStorage.setItem('avatarstar.activeWing', item.id); } catch {}
+    } else if (item?.weapon) {
+      setWeaponId(item.weapon);
+      setAttachment(equippedWing);
+    }
+    const autoRep = lastAutoReplacedRef.current;
+    lastAutoReplacedRef.current = null;
+    setPendingQuickbarItemId(null);
+    updateQuickbar((slots) =>
+      slots.map((value, slot) => {
+        if (slot === index) return id;
+        // 如果刚才点击背包时自动把该物品预填到了别的槽位，用户紧接着点击了目标快捷栏槽位，则恢复原先那个槽位的旧物品
+        if (autoRep && autoRep.newId === id && slot === autoRep.slotIndex && autoRep.slotIndex !== index) {
+          return autoRep.previousId;
+        }
+        // 避免同一武器/物品/技能在快捷栏重复占用多个槽位，也避免多个飞行器同时刷满槽位
+        if (value === id) return null;
+        if (isWingItem && value && (value.startsWith('wing') || assets.items.find((it) => it.id === value)?.attachment?.bone === 'chest')) {
+          return null;
+        }
+        return value;
+      })
+    );
+    setStatus(`已将 [${item?.name ?? skill?.name ?? id}] 装备至快捷栏键位 [${QUICK_KEYS[index]}]`);
   };
   const equipSkillToQuickbar = (skillId: string) => {
-    setQuickbar((slots) => {
+    updateQuickbar((slots) => {
       if (slots.includes(skillId)) return slots;
       const emptyIdx = slots.findIndex((val, i) => i >= 3 && !val);
       const targetIdx = emptyIdx >= 0 ? emptyIdx : 9;
@@ -328,11 +556,57 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
           </div>
           <div className="lobby-power-frame" style={art('powerFrame')} />
           <div className="lobby-power" style={art('power')}><span>战斗力</span><b>{charState.power ?? 1500}</b><small>冒险实力</small></div>
-          {page === 'bag' && ['slotStar', 'slotFlame', 'slotRing', 'slotRing'].map((key, index) => <button key={index}
-            className={`lobby-equipped-slot slot-${index}`} style={art('slot')} aria-label={['徽章', '翅膀', '左戒指', '右戒指'][index]}
-            onClick={() => { chooseCategory('equipment'); setQuery(index === 0 ? 'badge' : index === 1 ? 'wing' : 'ring'); }}>
-            <img src={lobbyUrl(assets.ui[key])} alt="" />
-          </button>)}
+          {page === 'bag' && ['slotStar', 'slotFlame', 'slotRing', 'slotRing'].map((key, index) => {
+            const slotLabels = ['徽章', '飞行器(翅膀)', '左戒指', '右戒指'];
+            const equippedItem = index === 0
+              ? equippedBadge
+              : index === 1
+                ? (equippedWing ? assets.items.find((it) => it.id === equippedWing.id || it.attachment?.id === equippedWing.id) : undefined)
+                : index === 2
+                  ? equippedLeftRing
+                  : equippedRightRing;
+            const iconSrc = equippedItem?.icon ?? (index === 1 ? equippedWing?.icon : undefined) ?? assets.ui[key];
+            const slotLabel = equippedItem?.name ?? (index === 1 ? equippedWing?.label : undefined) ?? slotLabels[index];
+            return <button key={index}
+              className={`lobby-equipped-slot slot-${index}`} style={art(equippedItem || (index === 1 && equippedWing) ? 'occupiedSlot' : 'slot')}
+              aria-label={slotLabels[index]}
+              title={`${slotLabels[index]}：${slotLabel}\n左键筛选此类装备，拖动穿戴，右键卸下`}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const dropId = e.dataTransfer.getData('text/plain');
+                const found = assets.items.find((it) => it.id === dropId);
+                if (found) chooseItem(found);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (index === 0) { setEquippedBadge(undefined); setStatus('已卸下徽章'); }
+                else if (index === 1) {
+                  setEquippedWing(undefined);
+                  setAttachment(undefined);
+                  updateQuickbar((slots) =>
+                    slots.map((val) =>
+                      val && (val.startsWith('wing') || assets.items.find((it) => it.id === val)?.attachment?.bone === 'chest') ? null : val
+                    )
+                  );
+                  try { localStorage.setItem('avatarstar.activeWing', 'none'); } catch {}
+                  setStatus('已卸下飞行器(翅膀)');
+                }
+                else if (index === 2) { setEquippedLeftRing(undefined); setStatus('已卸下左戒指'); }
+                else if (index === 3) { setEquippedRightRing(undefined); setStatus('已卸下右戒指'); }
+              }}
+              onClick={() => {
+                setCategory('equipment');
+                setBagPage(0);
+                setQuery('');
+                setPage('bag');
+                setSubFilter(index === 1 ? 'wing' : 'trinket');
+                if (equippedItem) chooseItem(equippedItem);
+              }}>
+              <img src={lobbyUrl(iconSrc)} alt="" />
+              {(equippedItem || (index === 1 && equippedWing)) && <span className="lobby-equipped-mark">E</span>}
+            </button>;
+          })}
           <div className="lobby-preview-controls">
             <button className="lobby-art-button" style={buttonArt('button')} onClick={reset}>重置</button>
             <button style={art('rotateLeft')} aria-label="向左旋转角色" onClick={() => setRotation((value) => value - Math.PI / 6)} />
@@ -350,8 +624,70 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
 
           : <section className="lobby-inventory" style={art('inventory')} aria-label="背包">
           <h1>背包</h1>
-          <label className="lobby-search"><span className="sr-only">搜索物品</span><input placeholder="搜索物品" value={query} onChange={(event) => { setQuery(event.target.value); setBagPage(0); }} /></label>
+          <label className="lobby-search"><span className="sr-only">搜索物品</span><input placeholder="搜索物品 (如: 飞行器 / 燃烧器 / 翅膀)" value={query} onChange={(event) => { setQuery(event.target.value); setBagPage(0); }} /></label>
           <button className="lobby-renew" style={art('renew')} onClick={() => setStatus('全部物品均已永久续费并可在当前背包中预览')}>全部续费</button>
+          {category === 'equipment' && (
+            <div
+              aria-label="装备子类型筛选"
+              style={{
+                position: 'absolute',
+                top: 32,
+                left: 16,
+                display: 'flex',
+                gap: 4,
+                zIndex: 4,
+              }}
+            >
+              {([
+                ['all', '全部'],
+                ['wing', '🪽飞行器'],
+                ['sprayer', '🔥燃烧器'],
+                ['rifle', '🔫枪械'],
+                ['sniper', '🎯狙/弩'],
+                ['explosive', '🚀重炮'],
+                ['melee', '🗡️近战/盾'],
+                ['trinket', '🏅徽章/戒'],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => { setSubFilter(key); setBagPage(0); }}
+                  style={{
+                    padding: '1px 6px',
+                    fontSize: 11,
+                    lineHeight: '16px',
+                    borderRadius: 4,
+                    border: subFilter === key ? '1px solid #fbbf24' : '1px solid #947253',
+                    background: subFilter === key ? '#78350f' : '#382c20cc',
+                    color: subFilter === key ? '#fef08a' : '#faead4',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {category === 'avatars' && (
+            <div style={{ position: 'absolute', top: 32, left: 16, display: 'flex', gap: 6, zIndex: 4 }}>
+              <button
+                type="button"
+                onClick={() => moduleDialog('造型屋')}
+                style={{
+                  padding: '1px 8px',
+                  fontSize: 11,
+                  lineHeight: '16px',
+                  borderRadius: 4,
+                  border: '1px solid #fbbf24',
+                  background: '#78350f',
+                  color: '#fef08a',
+                  cursor: 'pointer',
+                }}
+              >
+                🧩 打开造型屋 · 1392件解密3D部件库
+              </button>
+            </div>
+          )}
           <nav className="lobby-bag-tabs" aria-label="物品分类">
             {TABS.map((tab) => <button key={tab.id} className={'lobby-art-button' + (category === tab.id ? ' active' : '')} style={buttonArt('bagTab')}
               aria-pressed={category === tab.id} data-category={tab.id} onClick={() => chooseCategory(tab.id)}>
@@ -366,13 +702,14 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
                 return <button key={item?.id ?? `empty-${index}`} role="gridcell" className={'lobby-item' + (item?.avatarCard ? ' lobby-avatar-card' : '') + (isSelected ? ' selected' : '')}
                   style={{ ...art(item ? 'occupiedSlot' : 'slot'), '--selected-art': `url("${lobbyUrl(assets.ui.slotSelected)}")` } as CSSProperties}
                   disabled={!item} data-item-id={item?.id} aria-label={item?.name ?? '空格'} aria-selected={isSelected}
-                  title={item ? `${item.name}\n${item.id}${item.avatarCard ? '\n点击切换角色皮肤' : item.weapon || item.attachment || item.animation || item.preset ? '\n点击预览，拖动到快捷栏' : ''}` : undefined}
+                  title={item ? `${item.name}\n${item.id}${item.avatarCard ? '\n点击切换角色皮肤' : item.weapon || item.attachment || item.animation || item.preset ? '\n点击预览/穿戴，拖动到快捷栏' : ''}` : undefined}
                   draggable={!!item} onDragStart={(event) => { if (item) event.dataTransfer.setData('text/plain', item.id); }}
                   onClick={() => { if (item) chooseItem(item); }}>
                   <img src={lobbyUrl(item?.icon ?? assets.ui.slotLogo)} alt="" draggable={false} />
                   {item?.avatarCard && <span className="lobby-avatar-card-label">{item.name}</span>}
                   {item && quickbar.includes(item.id) && <span className="lobby-equipped-mark">E</span>}
                   {item?.avatarCard && avatarCard?.id === item.id && <span className="lobby-equipped-mark">E</span>}
+                  {item?.attachment && equippedWing?.id === item.attachment.id && <span className="lobby-equipped-mark">E</span>}
                 </button>;
               })}
             </div>
@@ -380,7 +717,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
           </div>
           <div className="lobby-bag-tools">
             <button style={art('delete')} aria-label="清除装备预览" onClick={reset} />
-            <button style={art('expand')} aria-label="查看全部物品" onClick={() => { setQuery(''); setBagPage(0); setStatus(`背包已开放全部 ${assets.items.length} 项物品`); }} />
+            <button style={art('expand')} aria-label="查看全部物品" onClick={() => { setQuery(''); setSubFilter('all'); setBagPage(0); setStatus(`背包已开放全部 ${assets.items.length} 项物品`); }} />
             <div className="lobby-pages">
               <button style={art('pageLeft')} aria-label="背包上一页" disabled={currentPage === 0} onClick={() => setBagPage(currentPage - 1)} />
               <input aria-label="背包页码" type="number" min="1" max={pageCount} value={currentPage + 1} onChange={(event) => setBagPage(Math.min(pageCount - 1, Math.max(0, Number(event.target.value) - 1)))} />
@@ -392,7 +729,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
             <button style={art('repairAll')} aria-label="恢复持握动作" title="恢复持握动作" onClick={() => setAnimation(undefined)} />
             <button className="lobby-art-button lobby-sort" style={buttonArt('button')} onClick={() => { setSorted((value) => !value); setBagPage(0); }}>整理</button>
           </div>
-          <span className="lobby-item-count">共 {filtered.length} 项</span>
+          <span className="lobby-item-count" style={{ left: 'auto', right: 16 }}>共 {filtered.length} 项</span>
         </section>}
         <section className="lobby-quickbar" style={art('quickbar')} aria-label="快捷栏">
           <span>快捷栏</span>
@@ -404,11 +741,16 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
               aria-label={`快捷栏 ${QUICK_KEYS[index]}${item ? ' ' + item.name : skill ? ' ' + skill.name : ''}`}
               onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); assignQuickbar(index, event.dataTransfer.getData('text/plain')); }}
               onClick={() => {
-                if (skill) setStatus(`${skill.name} · 主动技能，进入战斗后使用`);
-                else if (item) chooseItem(item);
-                else if (selected) assignQuickbar(index, selected.id);
+                if (pendingQuickbarItemId) assignQuickbar(index, pendingQuickbarItemId);
+                else if (skill) setStatus(`${skill.name} · 主动技能，进入战斗后使用`);
+                else if (item) chooseItem(item, true);
               }}
-              onContextMenu={(event) => { event.preventDefault(); setQuickbar((slots) => slots.map((value, slot) => slot === index ? null : value)); }}>
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setPendingQuickbarItemId(null);
+                lastAutoReplacedRef.current = null;
+                updateQuickbar((slots) => slots.map((value, slotIdx) => slotIdx === index ? null : value));
+              }}>
               <img src={lobbyUrl(item?.icon ?? skill?.icon ?? assets.ui.quickStar)} alt="" /><small>{QUICK_KEYS[index]}</small>
             </button>;
           })}</div>

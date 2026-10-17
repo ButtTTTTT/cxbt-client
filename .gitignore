@@ -11,6 +11,9 @@ node_modules
 dist
 dist-ssr
 public/assets/cache/
+cxbt-resource/
+AvatarStar/
+**/textures_材质贴图/
 *.local
 
 # Editor directories and files

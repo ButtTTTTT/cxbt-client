@@ -357,6 +357,18 @@ export function createStylizedWeaponMesh(weaponId: string): any {
     muzzleNode.position.set(0, 0.085, 0.56);
   }
 
+  const ejectNode = new THREE.Object3D();
+  ejectNode.name = 'Gun_TG';
+  ejectNode.position.set(0.05, muzzleNode.position.y, Math.max(0.12, muzzleNode.position.z * 0.35));
+  group.add(ejectNode);
+
+  if (family === 'rpg') {
+    const backFireNode = new THREE.Object3D();
+    backFireNode.name = 'Gun_backFire';
+    backFireNode.position.set(0, muzzleNode.position.y, -0.42);
+    group.add(backFireNode);
+  }
+
   group.add(muzzleNode);
   group.traverse((child: any) => {
     if (child.isMesh) {
@@ -369,9 +381,9 @@ export function createStylizedWeaponMesh(weaponId: string): any {
 }
 
 /**
- * 增强已加载的 GLB 武器模型（提亮材质、修正缩放、补充枪口定位点 Gun_Fire）
+ * 增强已加载的 GLB 武器模型（提亮材质、修正缩放、自动补全精确的枪口 Gun_Fire / 抛壳口 Gun_TG / 尾焰口 Gun_backFire）
  */
-export function enhanceLoadedWeaponModel(weaponModel: any, _weaponId?: string) {
+export function enhanceLoadedWeaponModel(weaponModel: any, weaponId?: string) {
   let meshCount = 0;
   weaponModel.traverse((child: any) => {
     if (child.isMesh) {
@@ -386,12 +398,65 @@ export function enhanceLoadedWeaponModel(weaponModel: any, _weaponId?: string) {
     }
   });
 
+  const box = new THREE.Box3().setFromObject(weaponModel);
+  const hasValidBox = !box.isEmpty() && isFinite(box.max.z);
+
   if (!weaponModel.getObjectByName('Gun_Fire')) {
+    const altNode =
+      weaponModel.getObjectByName('gun_fire') ||
+      weaponModel.getObjectByName('Gun_MZ') ||
+      weaponModel.getObjectByName('gun_mz') ||
+      weaponModel.getObjectByName('Gun_shot_pos');
     const muzzleNode = new THREE.Object3D();
     muzzleNode.name = 'Gun_Fire';
-    muzzleNode.position.set(0, 0.14, 0.52);
+    if (altNode) {
+      weaponModel.updateMatrixWorld(true);
+      const worldPos = new THREE.Vector3();
+      altNode.getWorldPosition(worldPos);
+      weaponModel.worldToLocal(worldPos);
+      muzzleNode.position.copy(worldPos);
+    } else if (hasValidBox) {
+      const cx = (box.min.x + box.max.x) * 0.5;
+      const cy = Math.max(0.06, box.min.y + (box.max.y - box.min.y) * 0.62);
+      const cz = Math.max(0.28, box.max.z + 0.03);
+      muzzleNode.position.set(cx, cy, cz);
+    } else {
+      muzzleNode.position.set(0, 0.14, 0.52);
+    }
     weaponModel.add(muzzleNode);
+  }
+
+  if (!weaponModel.getObjectByName('Gun_TG')) {
+    const ejectNode = new THREE.Object3D();
+    ejectNode.name = 'Gun_TG';
+    if (hasValidBox) {
+      ejectNode.position.set(
+        Math.max(0.04, box.max.x + 0.01),
+        Math.max(0.06, (box.min.y + box.max.y) * 0.58),
+        Math.max(0.10, (box.min.z + box.max.z) * 0.45)
+      );
+    } else {
+      ejectNode.position.set(0.05, 0.12, 0.18);
+    }
+    weaponModel.add(ejectNode);
+  }
+
+  const family = getWeaponFamily(weaponId || '');
+  if (family === 'rpg' && !weaponModel.getObjectByName('Gun_backFire')) {
+    const backFireNode = new THREE.Object3D();
+    backFireNode.name = 'Gun_backFire';
+    if (hasValidBox) {
+      backFireNode.position.set(
+        (box.min.x + box.max.x) * 0.5,
+        Math.max(0.06, (box.min.y + box.max.y) * 0.58),
+        Math.min(-0.28, box.min.z - 0.04)
+      );
+    } else {
+      backFireNode.position.set(0, 0.12, -0.42);
+    }
+    weaponModel.add(backFireNode);
   }
 
   return meshCount;
 }
+

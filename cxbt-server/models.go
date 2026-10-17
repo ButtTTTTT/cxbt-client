@@ -58,6 +58,12 @@ type SavedCharacter struct {
 	SignInStreak     int        `gorm:"default:0" json:"signInStreak"`
 	LastSignInDate   string     `gorm:"type:varchar(32)" json:"lastSignInDate"`
 	OnlineClaimCount int        `gorm:"default:0" json:"onlineClaimCount"`
+	EquippedWeapons  string     `gorm:"type:varchar(500)" json:"equippedWeapons"`
+	ActiveWing       string     `gorm:"type:varchar(64)" json:"activeWing"`
+	ActivePet        string     `gorm:"type:varchar(64)" json:"activePet"`
+	QuickbarJSON     string     `gorm:"type:text" json:"quickbarJson"`
+	LuckDrawPos      int        `gorm:"default:0" json:"luckDrawPos"`
+	LuckDrawStamina  int        `gorm:"default:100" json:"luckDrawStamina"`
 }
 
 // --- Social, Economy & Progression Models (MySQL 8) ---
@@ -197,4 +203,51 @@ type RoomConfig struct {
 	Players      map[uint]RoomPlayer `json:"players"` // mapping UserID -> Player
 	State        string              `json:"state"`   // "Waiting", "Playing"
 	WatchCount   int                 `json:"watchCount"`
+	UpdatedAt    int64               `json:"updatedAt,omitempty"`
 }
+
+type BattleRoomRecord struct {
+	gorm.Model
+	RoomID       string `gorm:"type:varchar(128);uniqueIndex;not null" json:"roomId"`
+	Name         string `gorm:"type:varchar(191)" json:"name"`
+	Password     string `gorm:"type:varchar(128)" json:"password"`
+	MaxPlayers   int    `gorm:"default:16" json:"maxPlayers"`
+	BalanceTeams bool   `gorm:"default:true" json:"balanceTeams"`
+	ModeID       string `gorm:"type:varchar(64)" json:"modeId"`
+	ModeName     string `gorm:"type:varchar(64)" json:"modeName"`
+	MapID        string `gorm:"type:varchar(64)" json:"mapId"`
+	MapName      string `gorm:"type:varchar(128)" json:"mapName"`
+	HostID       uint   `gorm:"index" json:"hostId"`
+	HostName     string `gorm:"type:varchar(191)" json:"hostName"`
+	State        string `gorm:"type:varchar(32);default:'Waiting'" json:"state"`
+	PlayerCount  int    `gorm:"default:1" json:"playerCount"`
+	PlayersJSON  string `gorm:"type:text" json:"playersJson"`
+}
+
+type PlayerReport struct {
+	gorm.Model
+	ReporterID  string `gorm:"type:varchar(64);index" json:"reporterId"`
+	TargetID    string `gorm:"type:varchar(64);index" json:"targetId"`
+	TargetName  string `gorm:"type:varchar(191)" json:"targetName"`
+	ReasonType  int    `gorm:"default:0" json:"type"`
+	ReasonLabel string `gorm:"type:varchar(191)" json:"reasonLabel"`
+	Content     string `gorm:"type:varchar(500)" json:"content"`
+}
+
+type PlayerFeedback struct {
+	gorm.Model
+	UserID  string `gorm:"type:varchar(64);index" json:"userId"`
+	Title   string `gorm:"type:varchar(255)" json:"title"`
+	Content string `gorm:"type:text" json:"content"`
+}
+
+type VoteKickRecord struct {
+	gorm.Model
+	RoomID     string `gorm:"type:varchar(128);index" json:"roomId"`
+	Initiator  string `gorm:"type:varchar(191)" json:"initiator"`
+	TargetID   string `gorm:"type:varchar(64);index" json:"targetId"`
+	TargetName string `gorm:"type:varchar(191)" json:"targetName"`
+	Reason     string `gorm:"type:varchar(255)" json:"reason"`
+}
+
+

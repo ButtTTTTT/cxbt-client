@@ -1,4 +1,5 @@
-import type { CreationWeapon } from '../characterCreation/assets';
+import type { CreationAttachment, CreationWeapon } from '../characterCreation/assets';
+import type { InventoryItem } from '../lobby/assets';
 import type { Skill } from '../lobby/skills';
 import { BATTLE_QUICK_KEYS } from './hud';
 
@@ -110,27 +111,93 @@ export function passiveModifiers(loads: LoadedSkill[]): PassiveModifiers {
 
 export type BattleSlot =
   | { key: string; kind: 'empty' }
-  | { key: string; kind: 'weapon'; id: string; weapon: CreationWeapon; weaponIndex: number }
-  | { key: string; kind: 'skill'; id: string; load: LoadedSkill };
+  | { key: string; kind: 'weapon'; id: string; weapon: CreationWeapon; weaponIndex: number; lobbyIcon?: string; label?: string }
+  | { key: string; kind: 'skill'; id: string; load: LoadedSkill }
+  | { key: string; kind: 'wing'; id: string; attachment: CreationAttachment; icon: string; label: string }
+  | { key: string; kind: 'item'; id: string; item: InventoryItem; icon: string; label: string };
 
-/** Mirrors the lobby quickbar slot-for-slot so the battle hotbar only carries equipped items. */
-export function resolveLoadout(quickbar: (string | null)[], weapons: Record<string, CreationWeapon>,
-  loads: LoadedSkill[]): { slots: BattleSlot[]; weapons: CreationWeapon[]; skills: LoadedSkill[] } {
+/** Mirrors the lobby quickbar slot-for-slot so the battle hotbar carries equipped weapons, skills, wings, and items. */
+export function resolveLoadout(
+  quickbar: (string | null)[],
+  weapons: Record<string, CreationWeapon>,
+  loads: LoadedSkill[],
+  attachments?: Record<string, CreationAttachment>,
+  equippedWing?: CreationAttachment,
+  items?: InventoryItem[]
+): { slots: BattleSlot[]; weapons: CreationWeapon[]; skills: LoadedSkill[] } {
   const byId = new Map(loads.map((load) => [load.skill.id, load]));
+  const itemsById = new Map((items ?? []).map((it) => [it.id, it]));
   const carried: CreationWeapon[] = [];
   const carriedSkills: LoadedSkill[] = [];
   const slots: BattleSlot[] = BATTLE_QUICK_KEYS.map((key, index) => {
     const id = quickbar[index] ?? null;
     if (!id) return { key, kind: 'empty' };
     const load = byId.get(id);
-    if (load) { if (!carriedSkills.includes(load)) carriedSkills.push(load); return { key, kind: 'skill', id, load }; }
-    const weapon = weapons[id];
+    if (load) {
+      if (!carriedSkills.includes(load)) carriedSkills.push(load);
+      return { key, kind: 'skill', id, load };
+    }
+    const bagItem = itemsById.get(id);
+    const weapon = weapons[id] ?? (bagItem?.weapon ? weapons[bagItem.weapon] : undefined);
     if (weapon) {
       const weaponIndex = carried.length;
       carried.push(weapon);
-      return { key, kind: 'weapon', id, weapon, weaponIndex };
+      return {
+        key,
+        kind: 'weapon',
+        id: weapon.id,
+        weapon,
+        weaponIndex,
+        lobbyIcon: bagItem?.icon,
+        label: bagItem?.name || weapon.label,
+      };
+    }
+    const att = attachments?.[id] ?? bagItem?.attachment;
+    if (att && (att.bone === 'chest' || att.id.startsWith('wing') || id.startsWith('wing'))) {
+      const slotWing: CreationAttachment = {
+        ...att,
+        id: bagItem?.id || att.id || id,
+        icon: bagItem?.icon || att.icon || 'icons/item_wing01.png',
+        label: bagItem?.name || att.label || '飞行器',
+      };
+      return {
+        key,
+        kind: 'wing',
+        id: slotWing.id || id,
+        attachment: slotWing,
+        icon: slotWing.icon || 'icons/item_wing01.png',
+        label: slotWing.label || '飞行器',
+      };
+    }
+    if (bagItem) {
+      return {
+        key,
+        kind: 'item',
+        id: bagItem.id,
+        item: bagItem,
+        icon: bagItem.icon,
+        label: bagItem.name,
+      };
     }
     return { key, kind: 'empty' };
   });
+
+  if (equippedWing && !slots.some((s) => s.kind === 'wing')) {
+    const emptyIdx = slots.findIndex((s, i) => i >= 3 && s.kind === 'empty');
+    const targetIdx = emptyIdx >= 0 ? emptyIdx : slots.findIndex((s) => s.kind === 'empty');
+    if (targetIdx >= 0) {
+      const key = BATTLE_QUICK_KEYS[targetIdx];
+      slots[targetIdx] = {
+        key,
+        kind: 'wing',
+        id: equippedWing.id,
+        attachment: equippedWing,
+        icon: equippedWing.icon || 'icons/item_wing01.png',
+        label: equippedWing.label || '飞行器',
+      };
+    }
+  }
+
   return { slots, weapons: carried, skills: carriedSkills };
 }
+

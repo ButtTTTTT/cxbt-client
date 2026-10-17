@@ -56,6 +56,22 @@ export class PlayerEntity {
   private jumpVelocity: number = 0;
   public isGrounded: boolean = true;
   public isJumping: boolean = false;
+  public jumpStage: number = 0;
+
+  // 翅膀挂载与飞行系统 (1:1 对应 move_info.lua jump2 / fly_v0 / fly_total_time)
+  public hasWings: boolean = false;
+  public activeWingId: string = '';
+  public isFlying: boolean = false;
+  public flyEnergy: number = 100;
+  public maxFlyEnergy: number = 100;
+  public flyAscendInput: number = 0;
+  private standaloneWingGroup: any = null;
+  private standaloneWingMixer: any = null;
+  private standaloneWingActions: { idle?: any; fly?: any } = {};
+  private standaloneWingTipL = new THREE.Vector3();
+  private standaloneWingTipR = new THREE.Vector3();
+  private airborneTime: number = 0;
+  private spaceHoldTime: number = 0;
 
   // 动作状态计时器
   public isRolling: boolean = false;
@@ -314,11 +330,25 @@ export class PlayerEntity {
       return this.mainSkeleton.bones[exactIdx];
     }
 
-    // 2. 常见别名回退
-    const isLeft = boneName.toLowerCase().includes('l');
-    const candidates = isLeft
-      ? ['handweapon_l', 'hand_l', 'Bip01 L Hand', 'Bip01_L_Hand', 'mixamorig:LeftHand', 'LeftHand', 'L_Hand']
-      : ['handweapon_r', 'hand_r', 'Bip01 R Hand', 'Bip01_R_Hand', 'mixamorig:RightHand', 'RightHand', 'R_Hand'];
+    // 2. AvatarStar_cache 骨骼别名映射 (back_b / chest / head / foot_l / foot_r / root / 左右手)
+    const lowerName = boneName.toLowerCase();
+    let candidates: string[];
+    if (lowerName === 'back_b' || lowerName === 'chest' || lowerName === 'spine') {
+      candidates = ['back_b', 'chest', 'spine', 'pelvis', 'root'];
+    } else if (lowerName === 'head' || lowerName === 'neck') {
+      candidates = ['head', 'neck', 'chest'];
+    } else if (lowerName === 'root' || lowerName === 'pelvis') {
+      candidates = ['root', 'pelvis'];
+    } else if (lowerName === 'foot_l' || lowerName === 'toe_l') {
+      candidates = ['foot_l', 'toe_l', 'calf_l'];
+    } else if (lowerName === 'foot_r' || lowerName === 'toe_r') {
+      candidates = ['foot_r', 'toe_r', 'calf_r'];
+    } else {
+      const isLeft = lowerName.includes('l');
+      candidates = isLeft
+        ? ['handweapon_l', 'hand_l', 'Bip01 L Hand', 'Bip01_L_Hand', 'mixamorig:LeftHand', 'LeftHand', 'L_Hand']
+        : ['handweapon_r', 'hand_r', 'Bip01 R Hand', 'Bip01_R_Hand', 'mixamorig:RightHand', 'RightHand', 'R_Hand'];
+    }
 
     for (const name of candidates) {
       const idx = this.boneIndices.get(name);
@@ -328,6 +358,7 @@ export class PlayerEntity {
     }
 
     // 3. 模糊字符串匹配
+    const isLeft = lowerName.includes('l');
     for (const bone of this.mainSkeleton.bones) {
       const lower = bone.name.toLowerCase();
       if (isLeft && (lower.includes('handweapon_l') || (lower.includes('hand') && lower.includes('l')))) {
@@ -341,6 +372,33 @@ export class PlayerEntity {
     // 4. 极端回退：如果存在任何骨骼，返回右手或末端骨骼
     console.warn(`[PlayerEntity] 未能精确定位骨骼挂点: ${boneName}，使用降级骨骼挂接`);
     return this.mainSkeleton.bones[this.mainSkeleton.bones.length - 1] ?? null;
+  }
+
+  /**
+   * 获取指定骨骼挂点在世界坐标系下的实时 3D 位置 (供 AvatarStar_cache 技能与 Buff .vfx 特效精确绑定)
+   */
+  public getBoneWorldPosition(boneName: string): any {
+    const basePos = this.modelGroup.position;
+    if (boneName === 'root') {
+      return basePos.clone();
+    }
+    const bone = this.getAttachmentBone(boneName);
+    if (bone) {
+      this.modelGroup.updateMatrixWorld(true);
+      const worldPos = new THREE.Vector3();
+      bone.getWorldPosition(worldPos);
+      if (Number.isFinite(worldPos.x) && worldPos.distanceTo(basePos) < 6.0) {
+        return worldPos;
+      }
+    }
+    const lower = boneName.toLowerCase();
+    if (lower === 'head') return basePos.clone().add(new THREE.Vector3(0, 1.55, 0));
+    if (lower === 'chest' || lower === 'back_b') return basePos.clone().add(new THREE.Vector3(0, 1.05, 0));
+    if (lower.includes('foot_l')) return basePos.clone().add(new THREE.Vector3(0.22, 0.12, 0));
+    if (lower.includes('foot_r')) return basePos.clone().add(new THREE.Vector3(-0.22, 0.12, 0));
+    if (lower.includes('hand') && lower.includes('l')) return basePos.clone().add(new THREE.Vector3(0.42, 1.05, 0.25));
+    if (lower.includes('hand')) return basePos.clone().add(new THREE.Vector3(-0.42, 1.05, 0.25));
+    return basePos.clone().add(new THREE.Vector3(0, 1.0, 0));
   }
 
   public async attachWeaponModel(slot: number, modelPath: string, boneName: string, texturePath?: string, weaponId = 'smg_01'): Promise<any> {
@@ -476,6 +534,188 @@ export class PlayerEntity {
   }
 
   /**
+   * 1:1 装配 3D 翅膀配饰 (支持 wing01..wing45，同时兼容 BattleAvatar 模式与沙盒独立骨架模式)
+   */
+  public async equipWing(wingAttachment?: any): Promise<void> {
+    if (this.standaloneWingGroup) {
+      if (this.standaloneWingGroup.parent) {
+        this.standaloneWingGroup.parent.remove(this.standaloneWingGroup);
+      }
+      this.standaloneWingMixer?.stopAllAction();
+      this.standaloneWingGroup.traverse((child: any) => {
+        if (child.isMesh) {
+          child.geometry?.dispose();
+          if (Array.isArray(child.material)) {
+            child.material.forEach((m: any) => m?.dispose());
+          } else {
+            child.material?.dispose();
+          }
+        }
+      });
+      this.standaloneWingGroup = null;
+      this.standaloneWingMixer = null;
+      this.standaloneWingActions = {};
+    }
+
+    if (!wingAttachment) {
+      this.hasWings = false;
+      this.activeWingId = '';
+      this.setFlying(false);
+      if (this.battleAvatar?.setAttachment) {
+        await this.battleAvatar.setAttachment(undefined);
+      }
+      return;
+    }
+
+    const baseId = typeof wingAttachment === 'string'
+      ? wingAttachment.replace(/_indie$/i, '').replace(/^wing_/, 'wing')
+      : String(wingAttachment.id || 'wing01').replace(/_indie$/i, '').replace(/^wing_/, 'wing');
+
+    const defaultTex = baseId === 'wing15'
+      ? '../lobby/textures/mesh/character/thirdperson/avatar/trinket/tex_wing15_trinket_c.png'
+      : `../lobby/textures/mesh/character/thirdperson/avatar/indie/wing/tex_${baseId}_indie_c.png`;
+
+    const attObj = typeof wingAttachment === 'object' && wingAttachment.model
+      ? wingAttachment
+      : {
+          id: `${baseId}_indie`,
+          label: `飞行器 · ${baseId.toUpperCase()}`,
+          bone: 'chest',
+          model: `../lobby/models/${baseId}.glb`,
+          texture: defaultTex,
+          animation: `../lobby/animations/indie-wing-${baseId}-idle.json`,
+        };
+
+    this.hasWings = true;
+    this.activeWingId = baseId;
+
+    if (this.battleAvatar?.setAttachment) {
+      await this.battleAvatar.setAttachment(attObj);
+      return;
+    }
+
+    // 独立骨架模式 (如沙盒实验室 CharacterController): 直接挂接到 chest 背部挂点
+    if (!this.mainSkeleton) return;
+    const chestIdx = this.boneIndices.get('chest');
+    const chestBone = (chestIdx !== undefined ? this.mainSkeleton.bones[chestIdx] : null)
+      || this.mainSkeleton.bones.find((b: any) => b.name === 'chest' || b.name.toLowerCase().includes('spine'))
+      || this.mainSkeleton.bones[0];
+    if (!chestBone) return;
+
+    const lobbyBase = `${import.meta.env.BASE_URL}assets/lobby/`;
+    const resolveLobbyPath = (p: string) => `${lobbyBase}${p.replace(/^\.\.\/lobby\//, '')}`;
+    const loader = new GLTFLoader();
+    try {
+      const gltf = await loader.loadAsync(resolveLobbyPath(attObj.model));
+      const wingScene = gltf.scene;
+      if (attObj.texture) {
+        try {
+          const texLoader = new THREE.TextureLoader();
+          const tex = await texLoader.loadAsync(resolveLobbyPath(attObj.texture));
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.flipY = false;
+          const wingMat = new THREE.MeshPhongMaterial({
+            map: tex,
+            color: '#ffffff',
+            shininess: 18,
+            specular: '#26202a',
+            emissive: '#161926',
+            emissiveIntensity: 0.25,
+            transparent: true,
+            alphaTest: 0.08,
+            side: THREE.DoubleSide,
+          });
+          wingScene.traverse((child: any) => {
+            if (child.isMesh) {
+              child.material = wingMat;
+              child.frustumCulled = false;
+            }
+          });
+        } catch {}
+      }
+      // 抵消 chest 骨骼修正四元数 (-0.5, -0.5, -0.5, 0.5)
+      const bindQuat = new THREE.Quaternion(-0.5, -0.5, -0.5, 0.5);
+      wingScene.quaternion.copy(bindQuat).invert();
+      chestBone.add(wingScene);
+      this.standaloneWingGroup = wingScene;
+      this.standaloneWingMixer = new THREE.AnimationMixer(wingScene);
+
+      const loadWingClip = async (relPath: string, clipName: string) => {
+        const res = await fetch(resolveLobbyPath(relPath));
+        if (!res.ok) return null;
+        const data = await res.json();
+        const rawFps = data.fps || 60;
+        const effectiveFps = rawFps === 60 ? 96 : rawFps;
+        const dur = data.duration && data.duration > 0 ? data.duration * (rawFps / effectiveFps) : -1;
+        return new THREE.AnimationClip(clipName, dur, data.tracks.flatMap((track: any) => {
+          const pTimes = track.positions.map((_: any, i: number) => i / effectiveFps);
+          const rTimes = track.rotations.map((_: any, i: number) => i / effectiveFps);
+          return [
+            new THREE.VectorKeyframeTrack(`${track.name}.position`, pTimes, track.positions.flat()),
+            new THREE.QuaternionKeyframeTrack(`${track.name}.quaternion`, rTimes, track.rotations.flat()),
+          ];
+        }));
+      };
+
+      const [idleClip, flyClip] = await Promise.all([
+        loadWingClip(attObj.animation || `animations/indie-wing-${baseId}-idle.json`, 'wing-idle').catch(() => null),
+        loadWingClip(`animations/indie-wing-${baseId}-fly.json`, 'wing-fly').catch(() => null),
+      ]);
+      if (idleClip && this.standaloneWingMixer) {
+        const act = this.standaloneWingMixer.clipAction(idleClip);
+        act.play();
+        this.standaloneWingActions.idle = act;
+      }
+      if (flyClip && this.standaloneWingMixer) {
+        this.standaloneWingActions.fly = this.standaloneWingMixer.clipAction(flyClip);
+      }
+    } catch (err) {
+      console.warn('[PlayerEntity] Wing load failed:', err);
+    }
+  }
+
+  /**
+   * 获取翅膀左右翼尖的世界坐标 (用于发射 vfx_wing*_trail.vfx 粒子拖尾)
+   */
+  public getWingTipPositions(): { left: any; right: any; wingId: string } | null {
+    if (!this.hasWings) return null;
+    if (this.battleAvatar?.getWingTipPositions) {
+      return this.battleAvatar.getWingTipPositions();
+    }
+    if (this.standaloneWingGroup) {
+      this.modelGroup.updateMatrixWorld(true);
+      const lNode = this.standaloneWingGroup.getObjectByName('wing_vfx_l')
+        || this.standaloneWingGroup.getObjectByName('wing1_l2')
+        || this.standaloneWingGroup.getObjectByName('wing1_l1');
+      const rNode = this.standaloneWingGroup.getObjectByName('wing_vfx_r')
+        || this.standaloneWingGroup.getObjectByName('wing1_r2')
+        || this.standaloneWingGroup.getObjectByName('wing1_r1');
+      if (lNode && rNode) {
+        lNode.getWorldPosition(this.standaloneWingTipL);
+        rNode.getWorldPosition(this.standaloneWingTipR);
+      } else {
+        this.standaloneWingGroup.getWorldPosition(this.standaloneWingTipL);
+        this.standaloneWingTipR.copy(this.standaloneWingTipL);
+        const yaw = this.modelGroup.rotation.y;
+        const rx = Math.cos(yaw) * 0.55;
+        const rz = -Math.sin(yaw) * 0.55;
+        this.standaloneWingTipL.x -= rx;
+        this.standaloneWingTipL.z -= rz;
+        this.standaloneWingTipL.y += 0.25;
+        this.standaloneWingTipR.x += rx;
+        this.standaloneWingTipR.z += rz;
+        this.standaloneWingTipR.y += 0.25;
+      }
+      return {
+        left: this.standaloneWingTipL,
+        right: this.standaloneWingTipR,
+        wingId: this.activeWingId || 'wing01',
+      };
+    }
+    return null;
+  }
+
+  /**
    * 计算角色枪口或投射物发射的世界坐标 (优先读取手持 3D 武器模型上的 Gun_Fire 节点)
    */
   public getMuzzlePosition(): any {
@@ -565,7 +805,7 @@ export class PlayerEntity {
     const buildClip = (data: any, name: string, upperOnly: boolean = false) => {
       const rawFps = data.fps || 60;
       const effectiveFps = rawFps === 60 ? 96 : rawFps;
-      const effectiveDuration = data.duration ? data.duration * (rawFps / effectiveFps) : -1;
+      const effectiveDuration = data.duration && data.duration > 0 ? data.duration * (rawFps / effectiveFps) : -1;
       return new THREE.AnimationClip(name, effectiveDuration, data.tracks.flatMap((track: any) => {
         if (upperOnly && LOWER_BODY_BONES.has(track.name)) {
           return [];
@@ -797,6 +1037,60 @@ export class PlayerEntity {
   }
 
   /**
+   * 播放原版 AvatarStar_cache 技能施放骨骼动画 (stdblast / stdoutcry / stdtread / stdeat / stdcatch / stdtleibao_01_bombon)
+   */
+  public playSkillAnim(skillAnimName: string) {
+    if (!this.isAlive) return;
+    this.syncFacingToCamera();
+    this.isAttacking = true;
+    this.activeAttackAction = skillAnimName;
+    this.attackDuration = 0.65;
+    this.attackTimer = 0.65;
+    if (this.battleAvatar?.playSkillAnim) {
+      void this.battleAvatar.playSkillAnim(skillAnimName);
+      return;
+    }
+    this.attack(1);
+  }
+
+  /**
+   * 向前突进冲刺位移 (刀锋疾行 Spurt / 狼王猛扑 WolfDecelerate) with 碰撞阻挡保护
+   */
+  public lungeForward(distance: number) {
+    if (!this.isAlive) return;
+    this.syncFacingToCamera();
+    const yaw = this.modelGroup.rotation.y;
+    const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    const currentPos = this.modelGroup.position;
+    const steps = 6;
+    const stepVec = forward.multiplyScalar(distance / steps);
+    for (let i = 0; i < steps; i++) {
+      const nextPos = currentPos.clone().add(stepVec);
+      if (this.collisionEnv?.resolveMovement) {
+        const res = this.collisionEnv.resolveMovement(currentPos, nextPos, this.isGrounded && !this.isFlying);
+        currentPos.x = res.x;
+        currentPos.z = res.z;
+        if (this.isGrounded && !this.isFlying && res.floorY !== undefined) {
+          currentPos.y = res.floorY;
+        }
+      } else if (!this.collisionEnv?.isBlocked?.(currentPos, nextPos)) {
+        currentPos.copy(nextPos);
+      } else {
+        break;
+      }
+    }
+  }
+
+  /**
+   * 过激反应 (Overreaction) 狂暴体型缩放 (1:1 对应 buff/68.lua CharacterScale)
+   */
+  public setBerserkScale(scale: number) {
+    if (this.battleAvatar?.root) {
+      this.battleAvatar.root.scale.setScalar(scale);
+    }
+  }
+
+  /**
    * 触发换弹动作 (支持边移动边换弹)
    */
   public reload(): boolean {
@@ -828,20 +1122,97 @@ export class PlayerEntity {
   }
 
   /**
-   * 触发起跳
+   * 切换或设置翅膀飞行状态 (1:1 复刻 move_info.lua 飞行姿态与能量推进)
    */
-  public jump(): boolean {
-    if (!this.isAlive || this.isJumping || this.isRolling || !this.isGrounded) return false;
-    this.isJumping = true;
-    this.isGrounded = false;
-    this.jumpVelocity = 7.2;
-    if (this.battleAvatar) {
-      this.battleAvatar.jump();
-    } else if (this.actions['jump']) {
-      this.playAction('jump', 0.1, false);
+  public setFlying(flying: boolean) {
+    if (flying && (!this.hasWings || !this.isAlive || this.flyEnergy <= 5)) {
+      flying = false;
     }
+    if (this.isFlying === flying) return;
+    this.isFlying = flying;
+    if (flying) {
+      this.isGrounded = false;
+      this.isJumping = true;
+      this.jumpVelocity = Math.max(this.jumpVelocity, 3.8);
+      this.battleAvatar?.setFlying?.(true);
+      if (this.standaloneWingActions.fly) {
+        this.standaloneWingActions.idle?.stop();
+        this.standaloneWingActions.fly.reset().play();
+      }
+    } else {
+      this.flyAscendInput = 0;
+      this.battleAvatar?.setFlying?.(false);
+      if (this.standaloneWingActions.idle) {
+        this.standaloneWingActions.fly?.stop();
+        this.standaloneWingActions.idle.reset().play();
+      }
+    }
+  }
+
+  public toggleFlying(): boolean {
+    if (this.isFlying) {
+      this.setFlying(false);
+      return false;
+    }
+    if (!this.hasWings || !this.isAlive || this.flyEnergy <= 10) return false;
+    if (this.isGrounded) {
+      this.modelGroup.position.y += 0.35;
+      this.jumpVelocity = 5.2;
+      this.isGrounded = false;
+      this.isJumping = true;
+      this.jumpStage = 2;
+    }
+    this.setFlying(true);
     this.events.onJump?.();
     return true;
+  }
+
+  /**
+   * 触发起跳 / 二段跳 (jump2) / 翅膀凌空飞行 (1:1 复刻 move_info.lua)
+   */
+  public jump(): boolean {
+    if (!this.isAlive || this.isRolling) return false;
+
+    // 1. 地面一段起跳
+    if (this.isGrounded && !this.isJumping) {
+      this.isJumping = true;
+      this.isGrounded = false;
+      this.jumpStage = 1;
+      this.jumpVelocity = 7.2;
+      if (this.battleAvatar) {
+        this.battleAvatar.jump();
+      } else if (this.actions['jump']) {
+        this.playAction('jump', 0.1, false);
+      }
+      this.events.onJump?.();
+      return true;
+    }
+
+    // 2. 空中再次按空格 -> 触发二段跳 (jump2)，若穿戴了翅膀则直接展开双翼进入凌空飞行状态！
+    if (!this.isGrounded && !this.isFlying && this.jumpStage < 2) {
+      this.jumpStage = 2;
+      this.jumpVelocity = 6.8;
+      if (this.battleAvatar?.doubleJump) {
+        this.battleAvatar.doubleJump();
+      } else if (this.battleAvatar) {
+        this.battleAvatar.jump();
+      } else if (this.actions['jump2'] || this.actions['jump']) {
+        this.playAction(this.actions['jump2'] ? 'jump2' : 'jump', 0.08, false);
+      }
+      if (this.hasWings && this.flyEnergy > 12) {
+        this.setFlying(true);
+      }
+      this.events.onJump?.();
+      return true;
+    }
+
+    // 3. 飞行中按空格 -> 振翅拔高
+    if (this.isFlying) {
+      this.jumpVelocity = 5.5;
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -862,10 +1233,16 @@ export class PlayerEntity {
     }
 
     // 轻微受击硬直反应
-    if (!this.isRolling && !this.isAttacking && !this.isMoving && this.actions['hit']) {
-      this.isHitStun = true;
-      this.hitTimer = 0.25;
-      this.playAction('hit', 0.08, false);
+    if (!this.isRolling && !this.isAttacking && !this.isMoving) {
+      if (this.battleAvatar?.hit) {
+        this.isHitStun = true;
+        this.hitTimer = 0.25;
+        this.battleAvatar.hit();
+      } else if (this.actions['hit']) {
+        this.isHitStun = true;
+        this.hitTimer = 0.25;
+        this.playAction('hit', 0.08, false);
+      }
     }
     return false;
   }
@@ -883,14 +1260,18 @@ export class PlayerEntity {
    * 阵亡处理
    */
   public die() {
+    this.setFlying(false);
     this.isAlive = false;
     this.health = 0;
     this.isMoving = false;
     this.isRolling = false;
     this.isAttacking = false;
     this.isJumping = false;
+    this.jumpStage = 0;
     this.stopUpperActions(0.05);
-    if (this.actions['death']) {
+    if (this.battleAvatar?.die) {
+      this.battleAvatar.die();
+    } else if (this.actions['death']) {
       this.playAction('death', 0.2, false);
     }
     this.events.onDeath?.();
@@ -900,11 +1281,14 @@ export class PlayerEntity {
    * 复活并重置状态
    */
   public revive(reviveHealth: number = this.maxHealth) {
+    this.setFlying(false);
     this.isAlive = true;
     this.health = reviveHealth;
+    this.flyEnergy = this.maxFlyEnergy;
     this.isRolling = false;
     this.isAttacking = false;
     this.isJumping = false;
+    this.jumpStage = 0;
     this.isGrounded = true;
     this.stopUpperActions(0.05);
     this.currentActionName = '';
@@ -982,18 +1366,19 @@ export class PlayerEntity {
   }
 
   public getCurrentAction(): string {
+    if (this.isFlying) return 'fly';
     if (this.isMoving && this.isAttacking) return `${this.activeAttackAction}+run`;
     if (this.isMoving) return 'run';
     if (this.isAttacking) return this.activeAttackAction;
     if (this.isReloading) return 'reload';
-    if (this.isJumping) return 'jump';
+    if (this.isJumping) return this.jumpStage >= 2 ? 'jump2' : 'jump';
     if (this.isRolling) return 'roll';
     return this.currentActionName;
   }
 
   public getLoadedActions(): string[] {
     if (this.battleAvatar) {
-      return ['idle', 'run', 'jump', 'roll', 'attack', 'reload', 'spurt'];
+      return ['idle', 'run', 'jump', 'jump2', 'fly', 'roll', 'attack', 'reload', 'spurt'];
     }
     return Object.keys(this.actions);
   }
@@ -1035,6 +1420,57 @@ export class PlayerEntity {
   // =========================================
   public update(delta: number) {
     if (!this.isReady) return;
+
+    if (this.standaloneWingMixer) {
+      this.standaloneWingMixer.update(delta);
+    }
+
+    if (this.isGrounded) {
+      this.airborneTime = 0;
+    } else {
+      this.airborneTime += delta;
+    }
+    if (this.flyAscendInput > 0) {
+      this.spaceHoldTime += delta;
+      // 1:1 复刻 game_text.lua tips_datalist_Item_Desc8 / id_datalist_chaonaimo_thruster_desc:
+      // "原地起飞：长按空格键，实现爬升及滑翔。高处坠落过程中，长按空格键可实现滑翔并减免落地伤害。"
+      if (this.hasWings && !this.isFlying && this.flyEnergy > 8) {
+        if (this.isGrounded) {
+          // 地面长按空格 (>= 0.16s)：自动原地起跳并展开飞行器爬升，无需松开再按
+          if (this.spaceHoldTime >= 0.16) {
+            this.isGrounded = false;
+            this.isJumping = true;
+            this.jumpStage = 2;
+            this.jumpVelocity = Math.max(this.jumpVelocity, 5.2);
+            this.setFlying(true);
+          }
+        } else if (this.spaceHoldTime >= 0.16 || this.airborneTime >= 0.18 || this.jumpVelocity < -0.8) {
+          this.jumpStage = Math.max(this.jumpStage, 2);
+          this.setFlying(true);
+        }
+      }
+    } else {
+      this.spaceHoldTime = 0;
+    }
+
+    // 翅膀飞行能量消耗与充能 (1:1 对应 move_info.lua fly_total_time，长按空格爬升时加速消耗，确保翼能实时动态计算)
+    if (this.isFlying) {
+      const drainRate = this.flyAscendInput > 0 ? 12.5 : this.flyAscendInput < 0 ? 5.0 : 7.5;
+      this.flyEnergy = Math.max(0, this.flyEnergy - delta * drainRate);
+      if (this.flyEnergy <= 0) {
+        if (this.godMode) {
+          this.flyEnergy = this.maxFlyEnergy;
+        } else {
+          this.setFlying(false);
+        }
+      }
+    } else if (this.isGrounded) {
+      this.flyEnergy = Math.min(this.maxFlyEnergy, this.flyEnergy + delta * 26.0);
+      this.jumpStage = 0;
+    } else {
+      // 空中非飞行状态（如主动收翼或台阶边缘滞空）保持翼能平滑恢复，杜绝翼能数值停止计算
+      this.flyEnergy = Math.min(this.maxFlyEnergy, this.flyEnergy + delta * 10.0);
+    }
 
     // 1. 如果处于强制动作调试模式
     if (this.forcedAction && this.actions[this.forcedAction]) {
@@ -1078,12 +1514,14 @@ export class PlayerEntity {
 
     // 3. 动画状态机决策 (优先委托给 BattleAvatar，或者使用内部 mixer 上下半身混合)
     if (this.battleAvatar) {
-      this.battleAvatar.setMoving(this.isMoving && !this.isJumping && !this.isRolling);
+      this.battleAvatar.setMoving(this.isMoving && (!this.isJumping || this.isFlying) && !this.isRolling);
       this.battleAvatar.update(delta);
     } else if (this.isAlive) {
       let nextAction = 'idle';
       if (this.isRolling && this.actions['roll']) {
         nextAction = 'roll';
+      } else if (this.isFlying && (this.actions['fly'] || this.actions['jump'])) {
+        nextAction = this.actions['fly'] ? 'fly' : 'jump';
       } else if (this.isJumping && this.actions['jump']) {
         nextAction = 'jump';
       } else if (this.isMoving && this.actions['run']) {
@@ -1137,14 +1575,15 @@ export class PlayerEntity {
       while (diff > Math.PI) diff -= Math.PI * 2;
       this.modelGroup.rotation.y += diff * (this.isAttacking ? 28 : 16) * delta;
 
-      // 位移直接沿 moveAngle 推进，支持边横向平移(A/D)/后退(S)边朝准星开火
-      const moveX = Math.sin(moveAngle) * this.speed * delta;
-      const moveZ = Math.cos(moveAngle) * this.speed * delta;
+      // 位移直接沿 moveAngle 推进，翅膀飞行状态下获得 1.32x 凌空推进速度加成
+      const effectiveSpeed = this.isFlying ? this.speed * 1.32 : this.speed;
+      const moveX = Math.sin(moveAngle) * effectiveSpeed * delta;
+      const moveZ = Math.cos(moveAngle) * effectiveSpeed * delta;
       this.candidatePos.x += moveX;
       this.candidatePos.z += moveZ;
 
       // 脚步声节奏触发
-      if (this.isGrounded) {
+      if (this.isGrounded && !this.isFlying) {
         this.footstepTimer -= delta;
         if (this.footstepTimer <= 0) {
           this.footstepIndex = (this.footstepIndex % 3) + 1;
@@ -1170,10 +1609,10 @@ export class PlayerEntity {
     // 6. 碰撞环境阻挡、墙壁平滑滑动与防卡死脱困
     if (this.collisionEnv) {
       if (this.collisionEnv.resolveMovement) {
-        const resolved = this.collisionEnv.resolveMovement(currentPos, this.candidatePos, this.isGrounded);
+        const resolved = this.collisionEnv.resolveMovement(currentPos, this.candidatePos, this.isGrounded && !this.isFlying);
         currentPos.x = resolved.x;
         currentPos.z = resolved.z;
-        if (this.isGrounded) {
+        if (this.isGrounded && !this.isFlying) {
           if (resolved.floorY !== undefined) {
             currentPos.y = resolved.floorY;
           } else if (this.collisionEnv.floorAt) {
@@ -1184,6 +1623,8 @@ export class PlayerEntity {
               } else {
                 currentPos.y = belowFloor;
               }
+            } else {
+              this.isGrounded = false;
             }
           }
         }
@@ -1209,10 +1650,10 @@ export class PlayerEntity {
 
         const blocked = this.collisionEnv.isBlocked ? this.collisionEnv.isBlocked(currentPos, this.candidatePos) : false;
 
-        if (!blocked && (floor === undefined || floor - currentPos.y <= (this.isGrounded ? 0.82 : 0.55))) {
+        if (!blocked && (this.isFlying || floor === undefined || floor - currentPos.y <= (this.isGrounded ? 0.82 : 0.55))) {
           currentPos.x = this.candidatePos.x;
           currentPos.z = this.candidatePos.z;
-          if (this.isGrounded && floor !== undefined && Math.abs(floor - currentPos.y) <= 0.85) {
+          if (this.isGrounded && !this.isFlying && floor !== undefined && Math.abs(floor - currentPos.y) <= 0.85) {
             currentPos.y = floor;
           }
         }
@@ -1223,9 +1664,53 @@ export class PlayerEntity {
       currentPos.z = this.candidatePos.z;
     }
 
-    // 7. 垂直跳跃、顶棚防穿模与重力物理
-    if (this.isJumping || !this.isGrounded) {
-      this.jumpVelocity += this.gravity * delta;
+    // 7. 垂直跳跃、翅膀凌空飞行、顶棚防穿模与重力物理
+    if (this.isFlying) {
+      const prevY = currentPos.y;
+      const targetVy = this.flyAscendInput > 0
+        ? 5.6
+        : this.flyAscendInput < 0
+          ? -5.2
+          : Math.sin(performance.now() * 0.0065) * 0.52;
+      this.jumpVelocity += (targetVy - this.jumpVelocity) * Math.min(1, delta * 10);
+      currentPos.y += this.jumpVelocity * delta;
+
+      // 飞行高度上限与顶棚碰撞保护
+      if (this.jumpVelocity > 0 && this.collisionEnv?.ceilingAt) {
+        const ceilY = this.collisionEnv.ceilingAt(currentPos.x, currentPos.z, currentPos.y, 1.95);
+        if (ceilY !== undefined && currentPos.y + 1.72 >= ceilY) {
+          currentPos.y = Math.min(currentPos.y, ceilY - 1.75);
+          this.jumpVelocity = 0;
+        }
+      }
+      currentPos.y = Math.min(currentPos.y, 38);
+
+      let groundY: number | undefined = this.collisionEnv ? undefined : 0;
+      if (this.collisionEnv && this.collisionEnv.floorAt) {
+        const probeFromY = Math.max(prevY, currentPos.y) + 0.85;
+        groundY = this.collisionEnv.floorAt(currentPos.x, currentPos.z, probeFromY, 0.85);
+      }
+      if (groundY !== undefined && currentPos.y <= groundY + 0.04 && this.flyAscendInput <= 0 && this.jumpVelocity <= 0.25) {
+        this.setFlying(false);
+        currentPos.y = groundY;
+        this.jumpVelocity = 0;
+        this.isJumping = false;
+        this.isGrounded = true;
+        this.jumpStage = 0;
+        this.events.onLand?.();
+      } else if (groundY !== undefined && currentPos.y < groundY) {
+        currentPos.y = groundY;
+      }
+
+      if (this.collisionEnv?.resolveMovement) {
+        const postFly = this.collisionEnv.resolveMovement(currentPos, currentPos, this.isGrounded && !this.isFlying);
+        currentPos.x = postFly.x;
+        currentPos.z = postFly.z;
+      }
+    } else if (this.isJumping || !this.isGrounded) {
+      const prevY = currentPos.y;
+      // 限制最大自由落体终端速度 (-20 m/s)，避免高空坠落单帧步长过大
+      this.jumpVelocity = Math.max(this.jumpVelocity + this.gravity * delta, -20.0);
       currentPos.y += this.jumpVelocity * delta;
 
       // 上升阶段头顶天花板碰撞检测，防止跳入空心屋顶
@@ -1237,10 +1722,23 @@ export class PlayerEntity {
         }
       }
 
-      // 检查下方地面（严格限制查询起点为角色脚下附近，避免命中头顶屋顶或高空封盖）
+      // 连续碰撞检测 (CCD)：始终从上一帧高度 prevY 之上 (+0.85m) 向下扫掠探测，彻底杜绝高空高速自由落体单帧穿透薄地板掉入地下
       let groundY: number | undefined = this.collisionEnv ? undefined : 0;
       if (this.collisionEnv && this.collisionEnv.floorAt) {
-        groundY = this.collisionEnv.floorAt(currentPos.x, currentPos.z, currentPos.y + 0.65, 0.65);
+        const probeFromY = Math.max(prevY, currentPos.y) + 0.85;
+        groundY = this.collisionEnv.floorAt(currentPos.x, currentPos.z, probeFromY, 0.85);
+        // 若因极端掉帧或斜向滑落导致角色已低于最底层地面 (groundY === undefined)，立即向上方回溯探测真实地面拦截
+        if (groundY === undefined && this.jumpVelocity <= 0) {
+          const nearOverhead = this.collisionEnv.floorAt(currentPos.x, currentPos.z, prevY + 2.6, 2.6);
+          if (nearOverhead !== undefined && prevY >= nearOverhead - 0.6) {
+            groundY = nearOverhead;
+          } else if (currentPos.y < -2.2) {
+            const mapFloor = this.collisionEnv.floorAt(currentPos.x, currentPos.z, 25);
+            if (mapFloor !== undefined) {
+              groundY = mapFloor;
+            }
+          }
+        }
       }
 
       if (groundY !== undefined && this.jumpVelocity <= 0 && currentPos.y <= groundY) {
@@ -1248,14 +1746,23 @@ export class PlayerEntity {
         this.jumpVelocity = 0;
         this.isJumping = false;
         this.isGrounded = true;
+        this.jumpStage = 0;
         this.events.onLand?.();
-      } else if (currentPos.y < -35) {
+      } else if (currentPos.y < -15) {
         // 深渊防跌落安全兜底
-        const safeY = this.collisionEnv?.floorAt?.(currentPos.x, currentPos.z, 24) ?? 0;
+        const safeY = this.collisionEnv?.floorAt?.(currentPos.x, currentPos.z, 25) ?? 0;
         currentPos.y = safeY;
         this.jumpVelocity = 0;
         this.isJumping = false;
         this.isGrounded = true;
+        this.jumpStage = 0;
+      }
+
+      // 垂直高度变化后再次执行水平脱困校验，防止从高空垂直落入建筑边缘 DeadAABB 或斜切空气墙内部
+      if (this.collisionEnv?.resolveMovement) {
+        const postAir = this.collisionEnv.resolveMovement(currentPos, currentPos, this.isGrounded && !this.isFlying);
+        currentPos.x = postAir.x;
+        currentPos.z = postAir.z;
       }
     }
   }
