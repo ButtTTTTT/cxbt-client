@@ -109,16 +109,20 @@ export class PlayerEntity {
   // 临时数学计算对象
   private candidatePos = new THREE.Vector3();
   private worldMuzzlePos = new THREE.Vector3();
+  private overheadSprite: any = null;
+  private overheadCanvas: HTMLCanvasElement | null = null;
+  private overheadTexture: any = null;
+  private lastOverheadKey = '';
 
   constructor(scene: any) {
     this.modelGroup = new THREE.Group();
     scene.add(this.modelGroup);
 
-    // 构建不可见的受击胶囊体 (Hitbox)
-    const capsuleGeom = new THREE.CapsuleGeometry(0.38, 0.95, 4, 8);
+    // 构建不可见的受击胶囊体 (Hitbox) —— 适配 Q 版大头角色体型以保证多人联机射击 100% 精准命中
+    const capsuleGeom = new THREE.CapsuleGeometry(0.58, 1.05, 6, 10);
     const capMat = new THREE.MeshBasicMaterial({ visible: false, wireframe: true });
     this.hitbox = new THREE.Mesh(capsuleGeom, capMat);
-    this.hitbox.position.y = 0.85;
+    this.hitbox.position.y = 0.92;
     this.hitbox.userData = { isPlayer: true, entity: this };
     this.modelGroup.add(this.hitbox);
   }
@@ -291,6 +295,119 @@ export class PlayerEntity {
   public setTransform(x: number, y: number, z: number, yaw: number) {
     this.modelGroup.position.set(x, y, z);
     this.modelGroup.rotation.y = yaw;
+    this.targetCameraYaw = yaw;
+    this.modelGroup.updateMatrixWorld(true);
+  }
+
+  /**
+   * 渲染/更新远端真人玩家头顶 3D 姓名牌、阵营徽标、语音图标与实时生命条
+   */
+  public updateOverheadHud(info: {
+    username: string;
+    team?: string;
+    level?: number;
+    hp: number;
+    maxHp: number;
+    speaking?: boolean;
+    shield?: boolean;
+  }) {
+    const safeMax = Math.max(1, info.maxHp || 3201);
+    const safeHp = Math.max(0, Math.min(safeMax, Math.round(info.hp ?? safeMax)));
+    const team = info.team === 'red' ? 'red' : 'blue';
+    const key = `${info.username}|${team}|${info.level || 1}|${safeHp}|${safeMax}|${info.speaking ? 1 : 0}|${info.shield ? 1 : 0}`;
+    if (key === this.lastOverheadKey && this.overheadSprite) return;
+    const now = performance.now();
+    const lastDrawAt = (this as any)._lastOverheadDrawAt || 0;
+    if (
+      this.overheadSprite &&
+      safeHp > 0 &&
+      safeHp < safeMax &&
+      now - lastDrawAt < 110
+    ) {
+      return;
+    }
+    (this as any)._lastOverheadDrawAt = now;
+    this.lastOverheadKey = key;
+
+    if (!this.overheadCanvas) {
+      this.overheadCanvas = document.createElement('canvas');
+      this.overheadCanvas.width = 256;
+      this.overheadCanvas.height = 76;
+    }
+    const ctx = this.overheadCanvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, 256, 76);
+
+    // 背板圆角框
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.84)';
+    ctx.strokeStyle = info.shield ? '#fbbf24' : (team === 'red' ? '#f87171' : '#38bdf8');
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect(8, 6, 240, 62, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    // 阵营色标与等级+名字
+    ctx.font = 'bold 17px "Microsoft YaHei", sans-serif';
+    ctx.fillStyle = team === 'red' ? '#fca5a5' : '#93c5fd';
+    const badge = team === 'red' ? '🔴' : '🔵';
+    const shieldTag = info.shield ? ' 🛡️' : '';
+    const voiceTag = info.speaking ? ' 🔊' : '';
+    const title = `${badge} Lv.${info.level || 1} ${info.username || '战友'}${shieldTag}${voiceTag}`;
+    ctx.textAlign = 'center';
+    ctx.fillText(title, 128, 29, 224);
+
+    // 血条槽背景
+    ctx.fillStyle = 'rgba(30, 41, 59, 0.95)';
+    ctx.beginPath();
+    ctx.roundRect(20, 39, 216, 18, 6);
+    ctx.fill();
+
+    // 血条前景
+    const ratio = Math.max(0, Math.min(1, safeHp / safeMax));
+    const fillW = Math.round(216 * ratio);
+    if (fillW > 0) {
+      const grad = ctx.createLinearGradient(20, 0, 236, 0);
+      if (team === 'red') {
+        grad.addColorStop(0, '#ef4444');
+        grad.addColorStop(1, '#f97316');
+      } else {
+        grad.addColorStop(0, '#10b981');
+        grad.addColorStop(1, '#38bdf8');
+      }
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.roundRect(20, 39, fillW, 18, 6);
+      ctx.fill();
+    }
+
+    // 血量数值
+    ctx.font = 'bold 12px monospace';
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${safeHp} / ${safeMax}`, 128, 53);
+
+    if (!this.overheadTexture) {
+      this.overheadTexture = new THREE.CanvasTexture(this.overheadCanvas);
+      this.overheadTexture.colorSpace = THREE.SRGBColorSpace;
+    } else {
+      this.overheadTexture.needsUpdate = true;
+    }
+
+    if (!this.overheadSprite) {
+      const mat = new THREE.SpriteMaterial({
+        map: this.overheadTexture,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      });
+      this.overheadSprite = new THREE.Sprite(mat);
+      this.overheadSprite.position.set(0, 2.22, 0);
+      this.overheadSprite.scale.set(1.75, 0.52, 1);
+      this.overheadSprite.renderOrder = 999;
+      this.modelGroup.add(this.overheadSprite);
+    }
   }
 
   /**
@@ -1233,18 +1350,29 @@ export class PlayerEntity {
     }
 
     // 轻微受击硬直反应
-    if (!this.isRolling && !this.isAttacking && !this.isMoving) {
-      if (this.battleAvatar?.hit) {
-        this.isHitStun = true;
-        this.hitTimer = 0.25;
-        this.battleAvatar.hit();
-      } else if (this.actions['hit']) {
-        this.isHitStun = true;
-        this.hitTimer = 0.25;
-        this.playAction('hit', 0.08, false);
-      }
-    }
+    this.triggerHitReaction();
     return false;
+  }
+
+  private lastHitReactionAt: number = 0;
+
+  /**
+   * 仅播放受击硬直动作（不修改血量，用于远端同步受击视觉反馈，带 350ms 冷却防高频连射卡顿）
+   */
+  public triggerHitReaction() {
+    if (!this.isAlive || this.isRolling || this.isAttacking || this.isMoving) return;
+    const now = performance.now();
+    if (now - this.lastHitReactionAt < 350) return;
+    this.lastHitReactionAt = now;
+    if (this.battleAvatar?.hit) {
+      this.isHitStun = true;
+      this.hitTimer = 0.25;
+      this.battleAvatar.hit();
+    } else if (this.actions['hit']) {
+      this.isHitStun = true;
+      this.hitTimer = 0.25;
+      this.playAction('hit', 0.08, false);
+    }
   }
 
   /**
@@ -1285,14 +1413,20 @@ export class PlayerEntity {
     this.isAlive = true;
     this.health = reviveHealth;
     this.flyEnergy = this.maxFlyEnergy;
+    this.isMoving = false;
     this.isRolling = false;
     this.isAttacking = false;
     this.isJumping = false;
+    this.isHitStun = false;
+    this.hitTimer = 0;
     this.jumpStage = 0;
+    this.jumpVelocity = 0;
     this.isGrounded = true;
     this.stopUpperActions(0.05);
     this.currentActionName = '';
-    if (this.actions['idle']) {
+    if (this.battleAvatar?.revive) {
+      this.battleAvatar.revive();
+    } else if (this.actions['idle']) {
       this.playAction('idle', 0.2, true);
     }
     this.events.onRevive?.();

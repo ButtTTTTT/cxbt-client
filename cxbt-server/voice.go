@@ -213,10 +213,6 @@ func HandleWsVoiceMessage(c *Client, msgType string, gameMsg map[string]interfac
 			}
 		}
 		wsHubMu.RUnlock()
-
-		if RedisReady && RDB != nil && !loopback {
-			_ = RDB.Publish(Ctx, c.Channel, rawMessage).Err()
-		}
 		return true
 
 	case "vote_kick":

@@ -182,4 +182,40 @@ export class CameraController {
     );
     this.camera.lookAt(this.lookTarget);
   }
+
+  /**
+   * 立即将摄像机瞬移对齐至目标位置（用于出生/复活瞬移，避免跨地图平滑插值穿墙卡顿）
+   */
+  public snapToTarget() {
+    if (!this.target) return;
+    const targetPos = this.target.isVector3 ? this.target : this.target.position;
+    const currentDist = this.isAiming ? Math.max(1.5, this.distance * 0.6) : this.distance;
+    const currentShoulder = this.isAiming ? this.shoulderOffset * 0.8 : this.shoulderOffset;
+
+    this.focusPoint.set(
+      targetPos.x,
+      targetPos.y + this.heightOffset + this.pitch * 0.4,
+      targetPos.z
+    );
+
+    const cosPitch = Math.cos(this.pitch);
+    const sinYaw = Math.sin(this.yaw);
+    const cosYaw = Math.cos(this.yaw);
+
+    this.desiredPosition.set(
+      this.focusPoint.x - sinYaw * currentDist * cosPitch + cosYaw * currentShoulder,
+      this.focusPoint.y + Math.sin(this.pitch) * currentDist + 0.4,
+      this.focusPoint.z - cosYaw * currentDist * cosPitch - sinYaw * currentShoulder
+    );
+
+    this.currentPosition.copy(this.desiredPosition);
+    this.camera.position.copy(this.currentPosition);
+
+    this.lookTarget.set(
+      this.focusPoint.x + sinYaw * 4.0,
+      this.focusPoint.y - Math.sin(this.pitch) * 2.5,
+      this.focusPoint.z + cosYaw * 4.0
+    );
+    this.camera.lookAt(this.lookTarget);
+  }
 }

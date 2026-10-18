@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { apiFetch } from '../../api';
+import { apiFetch, WS_BASE } from '../../api';
 import { lobbyUrl, type LobbyAssets } from '../lobby/assets';
 import CreateRoomDialog, { type RoomConfig } from './CreateRoomDialog';
 import RoomSettings from './RoomSettings';
@@ -81,8 +81,26 @@ export default function PracticeRoom({ assets, hostName, hostIcon, weaponIds, in
   useEffect(() => {
     void fetchRooms();
     const timer = setInterval(() => void fetchRooms(), 3000);
-    return () => clearInterval(timer);
-  }, [fetchRooms]);
+    const ws = new WebSocket(`${WS_BASE}?roomId=global_channel&playerId=${encodeURIComponent(hostName || 'guest')}`);
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'rooms_updated' && Array.isArray(msg.rooms)) {
+          setRoomList(msg.rooms);
+          setCreatedRoom(previous => {
+            if (!previous) return undefined;
+            return msg.rooms.find((room: ApiRoom) => room.id === previous.id);
+          });
+        }
+      } catch {
+        // ignore
+      }
+    };
+    return () => {
+      clearInterval(timer);
+      ws.close();
+    };
+  }, [fetchRooms, hostName]);
   const rooms = useMemo(() => {
     const result = roomList.filter(room => mode === 'all' || room.modeId === mode || room.modeName === MODES.find(entry => entry.id === mode)?.label);
     const value = (room: ApiRoom): string | number => [room.id, room.state, room.name, roomHost(room),
@@ -102,6 +120,16 @@ export default function PracticeRoom({ assets, hostName, hostIcon, weaponIds, in
       setCreatedRoom(targetRoom);
       onStatus(`已进入房间 · ${room.name}`);
     } catch (error) { onStatus(error instanceof Error ? error.message : '进入失败'); }
+  };
+  const watchRoom = async (room: ApiRoom) => {
+    try {
+      const watched: ApiRoom = await apiFetch(`/rooms/${room.id}/watch`, { method: 'POST' });
+      const targetRoom = { ...(watched ?? room), spectator: true } as any;
+      onStatus(`👁️ 正在观战房间 · ${targetRoom.name}`);
+      onStart(targetRoom);
+    } catch (error) {
+      onStart({ ...room, spectator: true } as any);
+    }
   };
   const chooseMode = (id: (typeof MODES)[number]['id']) => {
     setMode(id); setSelectedId(undefined); setScrollPosition(0);
@@ -170,7 +198,7 @@ export default function PracticeRoom({ assets, hostName, hostIcon, weaponIds, in
             <div className="practice-actions">
               <ActionButton assets={assets} icon="practiceIconBack" label="返回" ariaLabel="返回凌云要塞" className="practice-back" onClick={onBack} />
               <ActionButton assets={assets} icon="practiceIconWatch" label="观战" className="practice-watch" disabled={!selectedRoom}
-                onClick={() => selectedRoom ? onStart(selectedRoom) : onStatus('请选择一个房间观战')} />
+                onClick={() => selectedRoom ? void watchRoom(selectedRoom) : onStatus('请选择一个房间观战')} />
               <ActionButton assets={assets} icon="practiceIconCreate" label="创建战场" className="practice-create" onClick={() => setCreateRoomOpen(true)} />
               <button className="practice-action practice-enter lobby-art-button" aria-label="进入战场" style={buttonArt(assets, 'practiceStart')}
                 onClick={() => selectedRoom ? void joinRoom(selectedRoom) : onStatus('请选择一个房间后再进入')}>

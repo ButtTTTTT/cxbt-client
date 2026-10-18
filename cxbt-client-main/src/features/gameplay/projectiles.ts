@@ -116,6 +116,7 @@ type Projectile = {
   kind: WeaponKind;
   subType: ProjectileSubType;
   trailTimer: number;
+  isRemote?: boolean;
 };
 
 /**
@@ -225,8 +226,8 @@ function buildProjectileMesh(
 export function createProjectileSystem(
   scene: any,
   targets: () => any[],
-  onExplosion: (point: any, radius: number, subType?: ProjectileSubType) => void,
-  onHit?: (hit: any, kind: WeaponKind, subType: ProjectileSubType) => void
+  onExplosion: (point: any, radius: number, subType?: ProjectileSubType, isRemote?: boolean) => void,
+  onHit?: (hit: any, kind: WeaponKind, subType: ProjectileSubType, isRemote?: boolean) => void
 ) {
   const projectiles: Projectile[] = [];
   const impacts: { mesh: any; lifetime: number }[] = [];
@@ -247,8 +248,8 @@ export function createProjectileSystem(
     }
   };
 
-  const impact = (point: any, explosive: boolean, subType: ProjectileSubType = 'default') => {
-    if (explosive) onExplosion(point, subType === 'gasbomb' ? 5.5 : 4.2, subType);
+  const impact = (point: any, explosive: boolean, subType: ProjectileSubType = 'default', isRemote = false) => {
+    if (explosive) onExplosion(point, subType === 'gasbomb' ? 5.5 : 4.2, subType, isRemote);
     const isGas = subType === 'gasbomb';
     const mesh = new THREE.Mesh(
       new THREE.SphereGeometry(explosive ? 1.25 : 0.16, 10, 8),
@@ -271,7 +272,8 @@ export function createProjectileSystem(
     origin: any,
     aim: any,
     subType: ProjectileSubType = 'default',
-    weaponId?: string
+    weaponId?: string,
+    isRemote = false
   ) => {
     const mesh = buildProjectileMesh(kind, subType, weaponId);
     const direction = aim.clone().normalize();
@@ -285,7 +287,7 @@ export function createProjectileSystem(
     }
     scene.add(mesh);
     const lifetime = kind === 'grenade' ? 2.4 : kind === 'bullet' ? 0.35 : 1.8;
-    projectiles.push({ mesh, velocity, lifetime, kind, subType, trailTimer: 0 });
+    projectiles.push({ mesh, velocity, lifetime, kind, subType, trailTimer: 0, isRemote });
   };
 
   const update = (delta: number) => {
@@ -377,6 +379,9 @@ export function createProjectileSystem(
         nearbyTargets.length = 0;
         for (let t = 0; t < allTargets.length; t++) {
           const m = allTargets[t];
+          if (projectile.isRemote && m?.userData?.isPlayer) {
+            continue;
+          }
           const wb = m?.userData?._worldBox;
           if (wb) {
             if (
@@ -400,12 +405,13 @@ export function createProjectileSystem(
 
       if (hit || projectile.lifetime <= 0) {
         if (hit && onHit) {
-          onHit(hit, projectile.kind, projectile.subType);
+          onHit(hit, projectile.kind, projectile.subType, projectile.isRemote);
         }
         impact(
           hit?.point ?? projectile.mesh.position,
           projectile.kind === 'grenade' || projectile.kind === 'rocket',
-          projectile.subType
+          projectile.subType,
+          Boolean(projectile.isRemote)
         );
         scene.remove(projectile.mesh);
         projectiles.splice(index, 1);

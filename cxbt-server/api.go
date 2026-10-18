@@ -31,6 +31,9 @@ func RegisterRoutes(r *gin.Engine) {
 		protected.POST("/rooms", createRoomHandler)
 		protected.PUT("/rooms/:id", UpdateRoomHandler)
 		protected.POST("/rooms/:id/team", SwitchTeamHandler)
+		protected.POST("/rooms/:id/ready", ReadyRoomHandler)
+		protected.POST("/rooms/:id/kick", KickRoomPlayerHandler)
+		protected.POST("/rooms/:id/watch", WatchRoomHandler)
 		protected.POST("/rooms/quickmatch", QuickMatchHandler)
 		protected.POST("/rooms/:id/join", JoinRoomHandler)
 		protected.POST("/rooms/:id/leave", LeaveRoomHandler)
@@ -89,6 +92,7 @@ func getCharacterHandler(c *gin.Context) {
 	if char.Power <= 0 {
 		char.Power = 1500 + char.Level*150
 	}
+	SetCachedCharacter(char)
 
 	c.JSON(http.StatusOK, char)
 }
@@ -147,6 +151,7 @@ func saveCharacterHandler(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		SetCachedCharacter(existing)
 		c.JSON(http.StatusOK, existing)
 	} else {
 		req.UserID = userID
@@ -176,6 +181,7 @@ func saveCharacterHandler(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		SetCachedCharacter(req)
 		c.JSON(http.StatusOK, req)
 	}
 }
@@ -210,8 +216,7 @@ func createRoomHandler(c *gin.Context) {
 	// Remove player from any other rooms before creating this room
 	RemovePlayerFromAllOtherRooms(userID, config.ID)
 
-	var char SavedCharacter
-	DB.Where("user_id = ?", userID).First(&char)
+	char, _ := GetCachedCharacter(userID)
 	username := char.Name
 	if username == "" {
 		username = fmt.Sprintf("Player%d", userID)
@@ -228,7 +233,7 @@ func createRoomHandler(c *gin.Context) {
 		Username:   username,
 		Level:      level,
 		Team:       "red",
-		Ready:      false,
+		Ready:      true,
 		JobID:      char.JobID,
 		Appearance: char.Appearance,
 		WeaponIds:  req.WeaponIds,

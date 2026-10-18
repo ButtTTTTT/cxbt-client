@@ -43,21 +43,45 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
   const players = Object.values((room as any).players || {}) as any[];
   const redPlayers = players.filter(p => p.team === 'red');
   const bluePlayers = players.filter(p => p.team === 'blue');
+  const mePlayer = players.find((p: any) => p.username === hostName);
+  const myPlayerId = mePlayer?.userId ? String(mePlayer.userId) : hostName;
+  const roomHostId = Number((room as any).hostId || 0);
+  const roomHostName =
+    (room as any).hostName ||
+    players.find((p: any) => Number(p.userId) === roomHostId)?.username ||
+    hostName;
+  const isMeHost = !room.id || (
+    mePlayer && roomHostId > 0
+      ? Number(mePlayer.userId) === roomHostId
+      : (room as any).hostName
+        ? (room as any).hostName === hostName
+        : false
+  );
   const startedRef = useRef(false);
   const startRef = useRef(onStart);
   const updateRef = useRef(onRoomUpdate);
   useEffect(() => { startRef.current = onStart; }, [onStart]);
   useEffect(() => { updateRef.current = onRoomUpdate; }, [onRoomUpdate]);
 
-  const enterBattle = (roomId: string) => {
+  const enterBattle = (roomId: string, directRoom?: any) => {
     if (startedRef.current) return;
     startedRef.current = true;
     Promise.resolve(document.body.requestPointerLock?.()).catch(() => {});
+    if (directRoom && directRoom.id) {
+      startRef.current(directRoom);
+      return;
+    }
     apiFetch('/rooms').then((rooms: any) => {
       const latest = (rooms || []).find((entry: any) => entry.id === roomId);
       startRef.current(latest ?? undefined);
     }).catch(() => startRef.current());
   };
+
+  useEffect(() => {
+    if (room.id && (room as any).state === 'Playing') {
+      enterBattle(room.id, room);
+    }
+  }, [room.id, (room as any).state]);
 
   const switchTeam = async (side: 'red' | 'blue') => {
     if (!room.id) return;
@@ -71,6 +95,35 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
       onStatus(`已切换至${side === 'red' ? '红队' : '蓝队'}`);
     } catch {
       // ignore if same team
+    }
+  };
+
+  const toggleReady = async () => {
+    if (!room.id) return;
+    try {
+      const nextReady = !mePlayer?.ready;
+      const updated = await apiFetch(`/rooms/${room.id}/ready`, {
+        method: 'POST',
+        body: JSON.stringify({ ready: nextReady }),
+      });
+      if (updated) updateRef.current?.(updated);
+      onStatus(nextReady ? '✅ 已准备就绪，等待房主开始游戏' : '已取消准备');
+    } catch (e: any) {
+      onStatus(e.message || '操作失败');
+    }
+  };
+
+  const kickPlayer = async (targetUserId: number, targetName: string) => {
+    if (!room.id) return;
+    try {
+      const updated = await apiFetch(`/rooms/${room.id}/kick`, {
+        method: 'POST',
+        body: JSON.stringify({ targetId: targetUserId, targetUserId }),
+      });
+      if (updated) updateRef.current?.(updated);
+      onStatus(`已将 ${targetName} 移出房间`);
+    } catch (e: any) {
+      onStatus(e.message || '踢出失败');
     }
   };
 
@@ -100,8 +153,6 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
   useEffect(() => {
     if (!room.id) return;
     const roomId = room.id;
-    const mePlayer = players.find((p: any) => p.username === hostName);
-    const myPlayerId = mePlayer?.userId ? String(mePlayer.userId) : hostName;
 
     apiFetch(`/chat/history?channel=${encodeURIComponent(roomId)}`)
       .then((rows: any[]) => {
@@ -141,13 +192,26 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
           onLeave();
           return;
         }
+        if (msg.type === 'kicked') {
+          const kickedId = String(msg.targetUserId ?? msg.targetId ?? '');
+          if (kickedId === String(myPlayerId) || msg.targetName === hostName) {
+            onStatus('您已被房主移出房间');
+            onLeave();
+            return;
+          }
+          appendRoomChat(`系统: 玩家 ${msg.targetName || kickedId} 被房主移出了房间`);
+        }
         if (msg.room) {
           updateRef.current?.(msg.room);
+          if (msg.room.state === 'Playing') {
+            enterBattle(roomId, msg.room);
+            return;
+          }
         }
         if (msg.type === 'start_game') {
-          enterBattle(roomId);
+          enterBattle(roomId, msg.room);
         } else if (msg.type === 'join' || msg.type === 'leave') {
-          appendRoomChat(`系统: 玩家 ${msg.userId} ${msg.type === 'join' ? '进入' : '离开'}了房间`);
+          appendRoomChat(`系统: 玩家 ${msg.username || msg.userId} ${msg.type === 'join' ? '进入' : '离开'}了房间`);
         } else if (msg.type === 'chat') {
           appendRoomChat(`${msg.sender || msg.userId}: ${msg.message}`);
         }
@@ -155,6 +219,21 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
         // ignore malformed message
       }
     };
+
+    const pollRoomTimer = window.setInterval(() => {
+      if (startedRef.current) return;
+      apiFetch('/rooms')
+        .then((list: any[]) => {
+          const found = (list || []).find((entry: any) => entry.id === roomId);
+          if (found) {
+            updateRef.current?.(found);
+            if (found.state === 'Playing') {
+              enterBattle(roomId, found);
+            }
+          }
+        })
+        .catch(() => undefined);
+    }, 2000);
 
     const onBeforeUnload = () => {
       if (!startedRef.current && roomId) {
@@ -192,6 +271,7 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
     window.addEventListener('keyup', onRoomKeyUp, { capture: true });
 
     return () => {
+      window.clearInterval(pollRoomTimer);
       window.removeEventListener('beforeunload', onBeforeUnload);
       window.removeEventListener('keydown', onRoomKeyDown, { capture: true });
       window.removeEventListener('keyup', onRoomKeyUp, { capture: true });
@@ -200,7 +280,7 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
       voiceMgrRef.current = null;
       ws.close();
     };
-  }, [room.id, hostName]);
+  }, [room.id, hostName, myPlayerId]);
 
 
   return <div className="practice-room-root room-settings-root" data-room-settings-ready="true">
@@ -214,7 +294,7 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
           </div>
           <dl className="room-map-details">
             <dt>房间名称</dt><dd>{room.name}</dd>
-            <dt>房主</dt><dd>{hostName}</dd>
+            <dt>房主</dt><dd>{roomHostName}</dd>
             <dt>游戏模式</dt><dd>{room.modeName}</dd>
             <dt>游戏人数</dt><dd>{room.maxPlayers}</dd>
           </dl>
@@ -369,8 +449,43 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
                   style={art(assets, side === 'red' ? 'roomRedRow' : 'roomBlueRow')}
                   aria-label={occupied ? `${player.username}，${isHost ? '房主' : '玩家'}，${side === 'red' ? '红队' : '蓝队'}` : `${side === 'red' ? '红队' : '蓝队'}空位 ${slot + 1}`}
                   disabled={!available || occupied} onClick={() => void switchTeam(side)}>
-                  {occupied && <><img className="room-player-job" src={hostIcon} alt="" /><span className="room-player-name">LV {player.level || 1} {player.username} {isSpeaking ? '🔊' : ''}</span>
-                    {isHost && <img className="room-player-host" src={lobbyUrl(assets.ui.roomHost)} alt="房主" />}</>}
+                  {occupied && <>
+                    <img className="room-player-job" src={hostIcon} alt="" />
+                    <span className="room-player-name">
+                      LV {player.level || 1} {player.username} {isSpeaking ? '🔊' : ''}
+                      {!isHost && player.ready && (
+                        <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 5px', borderRadius: 3, background: '#059669', color: '#fff', fontWeight: 'bold' }}>
+                          ✓已准备
+                        </span>
+                      )}
+                    </span>
+                    {isHost && <img className="room-player-host" src={lobbyUrl(assets.ui.roomHost)} alt="房主" />}
+                    {isMeHost && !isHost && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        title="移出房间"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void kickPlayer(player.userId, player.username);
+                        }}
+                        style={{
+                          marginLeft: 'auto',
+                          marginRight: 6,
+                          fontSize: 10,
+                          padding: '1px 6px',
+                          borderRadius: 4,
+                          background: 'rgba(220, 38, 38, 0.85)',
+                          color: '#fff',
+                          border: '1px solid #f87171',
+                          cursor: 'pointer',
+                          pointerEvents: 'auto',
+                        }}
+                      >
+                        踢出
+                      </span>
+                    )}
+                  </>}
                 </button>;
               })}
             </div>;
@@ -400,30 +515,62 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
             }}>
             <img src={lobbyUrl(assets.ui.roomIconInvite)} alt="" />邀请
           </button>
-          <button className="room-action lobby-art-button" style={buttonArt(assets, 'practiceButton')} onClick={onSettings}>
+          <button className="room-action lobby-art-button" style={buttonArt(assets, 'practiceButton')}
+            disabled={!isMeHost}
+            title={isMeHost ? '修改房间设置' : '仅房主可修改房间设置'}
+            onClick={() => {
+              if (!isMeHost) {
+                onStatus('只有房主可以修改房间设置');
+                return;
+              }
+              onSettings();
+            }}>
             <img src={lobbyUrl(assets.ui.roomIconSetup)} alt="" />房间设置
           </button>
-          <button className="room-action room-start lobby-art-button" style={buttonArt(assets, 'practiceStart')}
-            onClick={async () => {
-              try {
-                if (room.id) {
-                  await apiFetch(`/rooms/${room.id}/start`, { method: 'POST' });
-                  for (let attempt = 0; attempt < 10 && !startedRef.current; attempt += 1) {
-                    await new Promise((resolve) => setTimeout(resolve, 750));
-                    if (startedRef.current) break;
-                    const rooms: any[] = await apiFetch('/rooms').catch(() => []);
-                    if ((rooms ?? []).some((entry: any) => entry.id === room.id && entry.state === 'Playing')) enterBattle(room.id);
+          {isMeHost ? (
+            <button className="room-action room-start lobby-art-button" style={buttonArt(assets, 'practiceStart')}
+              onClick={async () => {
+                try {
+                  if (room.id) {
+                    const res = await apiFetch(`/rooms/${room.id}/start`, { method: 'POST' });
+                    if (res?.room) {
+                      enterBattle(room.id, res.room);
+                      return;
+                    }
+                    for (let attempt = 0; attempt < 10 && !startedRef.current; attempt += 1) {
+                      await new Promise((resolve) => setTimeout(resolve, 750));
+                      if (startedRef.current) break;
+                      const rooms: any[] = await apiFetch('/rooms').catch(() => []);
+                      const found = (rooms ?? []).find((entry: any) => entry.id === room.id && entry.state === 'Playing');
+                      if (found) enterBattle(room.id, found);
+                    }
+                  } else {
+                    Promise.resolve(document.body.requestPointerLock?.()).catch(() => {});
+                    onStart();
                   }
-                } else {
-                  Promise.resolve(document.body.requestPointerLock?.()).catch(() => {});
-                  onStart();
+                } catch (e: any) {
+                  onStatus(e.message || '无法开始游戏');
                 }
-              } catch (e: any) {
-                onStatus(e.message || '无法开始游戏');
-              }
-            }}>
-            <img src={lobbyUrl(assets.ui.roomIconStart)} alt="" />开始游戏
-          </button>
+              }}>
+              <img src={lobbyUrl(assets.ui.roomIconStart)} alt="" />开始游戏
+            </button>
+          ) : (
+            <button className="room-action room-start lobby-art-button" style={buttonArt(assets, 'practiceStart')}
+              onClick={() => {
+                if ((room as any).state === 'Playing' && room.id) {
+                  enterBattle(room.id, room);
+                  return;
+                }
+                void toggleReady();
+              }}>
+              <img src={lobbyUrl(assets.ui.roomIconStart)} alt="" />
+              {(room as any).state === 'Playing'
+                ? '进入战场'
+                : mePlayer?.ready
+                  ? '✓ 已准备 (等待房主)'
+                  : '准备就绪'}
+            </button>
+          )}
         </div>
       </section>
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import * as THREE from 'three';
 import { apiFetch, WS_BASE } from '../../api';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -85,8 +85,11 @@ type BattleControl = {
   spawnChatBubbleForUser: (userId: string | number, sender: string, text: string) => void;
   handleRemoteFire: (pkt: any) => void;
   handleRemoteSkill: (pkt: any) => void;
+  handleRemoteEmote: (pkt: any) => void;
   handleRemoteBossHit: (pkt: any) => void;
   handleRemoteObjective: (pkt: any) => void;
+  handleRemoteHealthUpdate: (userId: string | number, hp: number, damage?: number, crit?: boolean, extra?: any) => void;
+  applyLocalHitEffect: (pkt: any) => void;
   handleRemoteKill: (victimId: string | number) => void;
   handleRemoteRespawn: (userId: string | number) => void;
   removeRemotePlayer: (userId: string | number) => void;
@@ -95,6 +98,7 @@ type BattleControl = {
   reviveAllBots: () => void;
   clearAllBots: () => void;
   hitBot: (id: string, dmg: number) => void;
+  diePlayer: () => void;
   respawnPlayer: () => void;
   interactObjective: () => void;
   toggleFlight: () => void;
@@ -149,16 +153,20 @@ function formatTime(seconds: number) {
   return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
 }
 
-function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCompanion, wingAttachment, character, creation, assets, avatarPreset, weapons, slots, loads, allLoads, health, motion,
-  active, onReady, onPosition, onShot, onHit, onFireEvent, onSkillEvent, onReload, onWeaponChange, onDamage, onHeal, onHotbar,
+const BattleScene = memo(function BattleScene({ map, customMap, roomId, myUserId, myTeam, isSpectator, modeId, damageBonusMult, hasPetCompanion, activePetId, wingAttachment, character, creation, assets, avatarPreset, weapons, slots, loads, allLoads, health, motion,
+  active, onReady, onPosition, onShot, onHit, onFireEvent, onSkillEvent, onEmoteEvent, onReload, onWeaponChange, onDamage, onHeal, onHotbar,
   onPause, paused, sandboxOpen, chatOpen, sandboxRules, onBotsChange, onBotKill, onObjectiveScore, onObjectiveState, onHitMarker, onRecoil,
-  onScopeChange, onShieldGuardChange, otherPlayers, roomPlayers, logDebug }: {
+  onScopeChange, onShieldGuardChange, otherPlayers, roomPlayers, remoteStats, voiceParticipants, logDebug }: {
   map: MapDefinition;
   customMap?: CustomMapBlueprint;
   roomId?: string;
+  myUserId: number;
+  myTeam: 'red' | 'blue';
+  isSpectator?: boolean;
   modeId: string;
   damageBonusMult: number;
   hasPetCompanion: boolean;
+  activePetId: string;
   wingAttachment?: CreationAttachment;
   character: SavedCharacter;
   creation: CreationAssets;
@@ -189,6 +197,7 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
   onHit: (targetId: string, damage: number, crit?: boolean, weaponName?: string, extra?: Record<string, any>) => void;
   onFireEvent?: (pkt: Record<string, any>) => void;
   onSkillEvent?: (pkt: Record<string, any>) => void;
+  onEmoteEvent?: (pkt: Record<string, any>) => void;
   onReload: () => void;
   onWeaponChange: (index: number) => void;
   onDamage: (amount: number) => void;
@@ -197,6 +206,8 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
   onPause: () => void;
   otherPlayers: React.RefObject<Record<string, { buffer: Array<Record<string, any>> }>>;
   roomPlayers: any;
+  remoteStats?: Record<string, { kills: number; deaths: number; hp?: number }>;
+  voiceParticipants?: Array<any>;
   logDebug: (msg: string) => void;
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -204,6 +215,7 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
   const hitRef = useRef(onHit);
   const fireEventRef = useRef(onFireEvent);
   const skillEventRef = useRef(onSkillEvent);
+  const emoteEventRef = useRef(onEmoteEvent);
   const reloadRef = useRef(onReload);
   const positionRef = useRef(onPosition);
   const readyRef = useRef(onReady);
@@ -225,12 +237,17 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
   const allLoadsRef = useRef(allLoads);
   const slotsRef = useRef(slots);
   const wingAttachmentRef = useRef(wingAttachment);
+  const activePetIdRef = useRef(activePetId);
+  const myTeamRef = useRef(myTeam);
   const roomPlayersRef = useRef(roomPlayers);
+  const remoteStatsRef = useRef(remoteStats);
+  const voiceParticipantsRef = useRef(voiceParticipants);
 
   shotRef.current = onShot;
   hitRef.current = onHit;
   fireEventRef.current = onFireEvent;
   skillEventRef.current = onSkillEvent;
+  emoteEventRef.current = onEmoteEvent;
   reloadRef.current = onReload;
   positionRef.current = onPosition;
   readyRef.current = onReady;
@@ -252,7 +269,11 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
   allLoadsRef.current = allLoads;
   slotsRef.current = slots;
   wingAttachmentRef.current = wingAttachment;
+  activePetIdRef.current = activePetId;
+  myTeamRef.current = myTeam;
   roomPlayersRef.current = roomPlayers;
+  remoteStatsRef.current = remoteStats;
+  voiceParticipantsRef.current = voiceParticipants;
 
   useEffect(() => {
     if (mountRef.current) {
@@ -512,6 +533,55 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
       return new THREE.Vector3(hx, hy, hz);
     };
 
+    const resolvePlayerSpawnTransform = (targetUid: number) => {
+      const center = resolveSafeSpawn('red', 0);
+      const holdVec = resolveHoldPointVec();
+      const isMultiplayer = Boolean(roomId && roomId !== 'practice' && roomId !== 'default-room');
+      if (!isMultiplayer) {
+        const yaw = Math.atan2(holdVec.x - center.x, holdVec.z - center.z);
+        return { pos: center, yaw };
+      }
+      const allIds = Array.from(
+        new Set([
+          String(myUserId),
+          ...Object.keys(roomPlayersRef.current || {}),
+          ...Object.keys(otherPlayers.current || {}),
+        ])
+      )
+        .map((id) => Number(id))
+        .filter((n) => Number.isFinite(n) && n > 0)
+        .sort((a, b) => a - b);
+
+      let slotIdx = allIds.indexOf(Number(targetUid));
+      if (slotIdx < 0) {
+        slotIdx = Math.abs(Number(targetUid)) % 4;
+      } else if (allIds.length < 2) {
+        slotIdx = Math.abs(Number(targetUid)) % 2;
+      }
+
+      const baseAngle = Math.atan2(holdVec.x - center.x, holdVec.z - center.z);
+      const slotAngles = [0, Math.PI, Math.PI * 0.5, -Math.PI * 0.5, Math.PI * 0.25, -Math.PI * 0.75];
+      const angle = baseAngle + (slotAngles[slotIdx % slotAngles.length] ?? slotIdx * Math.PI * 0.5);
+      const radius = 3.2;
+      const desired = new THREE.Vector3(
+        center.x + Math.sin(angle) * radius,
+        center.y,
+        center.z + Math.cos(angle) * radius
+      );
+      const resolved = mapCollider.resolveMovement(center, desired, false);
+      const floorY =
+        resolved.floorY ??
+        mapCollider.floorAt(resolved.x, resolved.z, center.y + 3.2, 3.5) ??
+        mapCollider.floorAt(resolved.x, resolved.z, 24) ??
+        center.y;
+      const pos = new THREE.Vector3(resolved.x, floorY, resolved.z);
+      const yaw =
+        pos.distanceTo(center) > 0.25
+          ? Math.atan2(center.x - pos.x, center.z - pos.z)
+          : baseAngle;
+      return { pos, yaw };
+    };
+
     const botManager = new BotManager(scene, {
       onStateChange: (list) => botsChangeRef.current(list),
       onPlayerAttacked: (dmg) => takeDamage(dmg),
@@ -537,7 +607,7 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
       return list;
     };
 
-    const damageTargetById = (userId: string, damage: number, crit = false, hitPoint?: any) => {
+    const damageTargetById = (userId: string, damage: number, crit = false, hitPoint?: any, extra?: Record<string, any>) => {
       const vulnMult = skillEffects.getDamageMultiplier(userId);
       const scaledDamage = Math.max(1, Math.round(damage * damageBonusRef.current * buffDamageMult * vulnMult));
       skillEffects.onEnemyDamaged(userId, scaledDamage);
@@ -553,7 +623,11 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
           const defeatedName = BOSS_STAGES[bossStageIdx].name;
           combatEffects.spawnExplosionEffect(bossGroup.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
           audio.play('grenade-explode', 0.8);
-          objectiveScoreRef.current(10, 0, `👹 击败首领 [${defeatedName}]！红队 +10 分！`);
+          objectiveScoreRef.current(
+            myTeamRef.current === 'red' ? 10 : 0,
+            myTeamRef.current === 'blue' ? 10 : 0,
+            `👹 击败首领 [${defeatedName}]！${myTeamRef.current === 'red' ? '红队' : '蓝队'} +10 分！`
+          );
           healRef.current(1200);
           if (bossStageIdx < BOSS_STAGES.length - 1) {
             bossStageIdx += 1;
@@ -598,10 +672,11 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
         audio.play(crit ? 'critical_hit' : 'hit', crit ? 0.7 : 0.45);
         return;
       }
-      hitRef.current(userId, scaledDamage, crit, curWeaponLabel);
+      hitRef.current(userId, scaledDamage, crit, curWeaponLabel, extra);
       const remoteEntity = otherPlayerEntities.get(userId);
       if (remoteEntity) {
-        remoteEntity.takeDamage(scaledDamage);
+        remoteEntity.health = Math.max(1, remoteEntity.health - scaledDamage);
+        remoteEntity.triggerHitReaction();
         const pos = hitPoint ? hitPoint.clone() : remoteEntity.modelGroup.position.clone().add(new THREE.Vector3(0, 1.65, 0));
         combatEffects.spawnFloatingDamage(pos, scaledDamage, crit);
       }
@@ -668,6 +743,7 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
             const relY = hit.point.y - targetBasePos.y;
             const isHeadshot = relY >= 1.35;
             let dmg = Math.round(profile.damage * (isHeadshot ? profile.headshotMultiplier : 1));
+            let hitExtra: Record<string, any> | undefined;
             if (subType === 'syringe' || weaponId.startsWith('crossbow')) {
               audio.play('hit_crossbow', 0.65);
               const leechRatio = Math.max(25, passives.lifesteal);
@@ -679,11 +755,12 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
               }
               if (passives.puppetRecover > 0 || passives.lifesteal > 0) {
                 skillEffects.inflictPuppet(target.userId, passives.puppetRecover || 25);
+                hitExtra = { statusEffect: 'puppet', statusText: '🪡 傀儡印记', statusColor: '#a855f7' };
               }
             } else {
               audio.play('hit_bow', 0.65);
             }
-            damageTargetById(target.userId, dmg, isHeadshot, hit.point);
+            damageTargetById(target.userId, dmg, isHeadshot, hit.point, hitExtra);
           } else if (kind === 'rocket' || kind === 'grenade') {
             damageTargetById(target.userId, 65, false, hit.point);
           }
@@ -718,6 +795,11 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
         const remote = otherPlayerEntities.get(userId);
         if (remote) {
           remote.modelGroup.position.addScaledVector(dir, dist);
+          hitRef.current(userId, 1, false, '技能震退', {
+            knockback: [dir.x * dist, 0, dir.z * dist],
+            statusText: '💥 冲击震退！',
+            statusColor: '#f97316',
+          });
         }
       },
       lungeForward: (dist) => localPlayer?.lungeForward(dist),
@@ -811,6 +893,7 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
           if (distance > reach || (distance > 0.01 && offset.normalize().dot(aim) < 0.15)) continue;
           let damage = profile.damage * (family === 'shield' ? 0.34 : 0.25);
           if (wasStealthed) damage *= 1.65;
+          let hitExtra: Record<string, any> | undefined;
           if (family === 'shield') {
             audio.play('hit_shield', 0.7);
             combatEffects.spawnStatusText(enemy.position, '🛡️ 盾击震退！', '#38bdf8');
@@ -818,11 +901,21 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
             if (bot) {
               bot.entity.modelGroup.position.addScaledVector(aim, 2.1);
             }
+            hitExtra = {
+              knockback: [aim.x * 2.1, 0, aim.z * 2.1],
+              statusText: '🛡️ 盾击震退！',
+              statusColor: '#38bdf8',
+            };
           } else if (passives.poisonChance > 0 && Math.random() * 100 < Math.max(45, passives.poisonChance)) {
             damage += passives.dotDamage * 3;
             skillEffects.inflictPoison(enemy.userId, Math.max(55, passives.dotDamage), 10);
+            hitExtra = {
+              statusEffect: 'poison',
+              statusText: '☠️ 剧毒侵蚀！',
+              statusColor: '#a3e635',
+            };
           }
-          damageTargetById(enemy.userId, Math.round(damage), wasStealthed, enemy.position.clone().add(new THREE.Vector3(0, 1.0, 0)));
+          damageTargetById(enemy.userId, Math.round(damage), wasStealthed, enemy.position.clone().add(new THREE.Vector3(0, 1.0, 0)), hitExtra);
         }
         return;
       }
@@ -876,6 +969,7 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
           const dist = toEnemy.length();
           if (dist <= 9.8 && (dist < 1.5 || toEnemy.normalize().dot(aim) >= 0.62)) {
             let sprayDmg = profile.damage * 0.24;
+            let hitExtra: Record<string, any> | undefined;
             if (passives.plagueChance > 0 && Math.random() * 100 < Math.max(40, passives.plagueChance)) {
               sprayDmg += passives.plagueDamage * 2;
               skillEffects.inflictPlague(
@@ -883,8 +977,13 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
                 Math.max(60, passives.plagueDamage || 75),
                 passives.plagueRadius || 5
               );
+              hitExtra = {
+                statusEffect: 'plague',
+                statusText: '☣️ 瘟疫感染！',
+                statusColor: '#10b981',
+              };
             }
-            damageTargetById(enemy.userId, Math.round(sprayDmg), false, enemy.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
+            damageTargetById(enemy.userId, Math.round(sprayDmg), false, enemy.position.clone().add(new THREE.Vector3(0, 1.2, 0)), hitExtra);
           }
         }
         return;
@@ -903,6 +1002,11 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
 
       const effectiveSpread = isScoped ? profile.spread * 0.12 : profile.spread;
       let firstTargetPoint: any = null;
+      let sparkCount = 0;
+      const aggregatedHits = new Map<
+        string,
+        { totalDamage: number; isCrit: boolean; hitPoint: any; hitExtra?: Record<string, any>; targetBasePos: any; sniperCritText: boolean }
+      >();
 
       for (let p = 0; p < profile.pellets; p++) {
         const rayDir = aim.clone();
@@ -917,14 +1021,10 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
           ? hit.point
           : camera.position.clone().addScaledVector(rayDir, 85);
         if (!firstTargetPoint) firstTargetPoint = targetPoint;
-        const bulletDir = targetPoint.clone().sub(muzzle).normalize();
 
-        if (p === 0 || p % 2 === 0) {
-          projectiles.spawn('bullet', muzzle, bulletDir);
-        }
         if (family === 'sniperrifle') {
           combatEffects.spawnSniperSpiralBeam(muzzle, targetPoint, isScoped || wasStealthed);
-        } else {
+        } else if (profile.pellets <= 4 || p % 2 === 0) {
           combatEffects.spawnBulletTracer(muzzle, targetPoint, tracerColor);
         }
 
@@ -940,20 +1040,50 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
             if (isScoped && family === 'sniperrifle') {
               damage *= 1.25;
             }
+            let sniperCritText = false;
             if (family === 'sniperrifle' && Math.random() * 100 < Math.max(30, passives.critChance)) {
               isCrit = true;
               damage *= 1 + (passives.critDamage || 50) / 100;
-              combatEffects.spawnStatusText(targetBasePos, '🎯 精准暴击！', '#fde047');
+              sniperCritText = true;
             }
+            let hitExtra: Record<string, any> | undefined;
             if ((family === 'smg' || family === 'pistol') && passives.weakChance > 0 && Math.random() * 100 < Math.max(35, passives.weakChance)) {
               damage *= 1.2;
               skillEffects.inflictWeakness(target.userId, 5);
+              hitExtra = {
+                statusEffect: 'weakness',
+                statusText: '💔 弱点破甲 (+20%易伤)',
+                statusColor: '#f43f5e',
+              };
             }
-            damageTargetById(target.userId, Math.round(damage), isCrit, hit.point);
-          } else {
+            const prev = aggregatedHits.get(target.userId);
+            if (prev) {
+              prev.totalDamage += damage;
+              prev.isCrit = prev.isCrit || isCrit;
+              prev.sniperCritText = prev.sniperCritText || sniperCritText;
+              if (hitExtra && !prev.hitExtra) prev.hitExtra = hitExtra;
+            } else {
+              aggregatedHits.set(target.userId, {
+                totalDamage: damage,
+                isCrit,
+                hitPoint: hit.point,
+                hitExtra,
+                targetBasePos,
+                sniperCritText,
+              });
+            }
+          } else if (sparkCount < 2) {
+            sparkCount++;
             combatEffects.spawnImpactSpark(hit.point);
           }
         }
+      }
+
+      for (const [targetUid, info] of aggregatedHits) {
+        if (info.sniperCritText) {
+          combatEffects.spawnStatusText(info.targetBasePos, '🎯 精准暴击！', '#fde047');
+        }
+        damageTargetById(targetUid, Math.round(info.totalDamage), info.isCrit, info.hitPoint, info.hitExtra);
       }
 
       if (firstTargetPoint) {
@@ -1232,7 +1362,7 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
         if (pkt.kind === 'melee') {
           combatEffects.spawnMeleeSlash(muzzleVec, aimVec, pkt.comboStep || 1, wId);
         } else if (pkt.kind === 'grenade' || pkt.kind === 'rocket' || pkt.kind === 'arrow') {
-          projectiles.spawn(pkt.kind, muzzleVec, aimVec, pkt.subType || 'default', wId);
+          projectiles.spawn(pkt.kind, muzzleVec, aimVec, pkt.subType || 'default', wId, true);
           combatEffects.triggerMuzzleFlash(muzzleVec, 0.08, aimVec, wId);
         } else if (pkt.kind === 'sprayer' || fam === 'sprayer') {
           combatEffects.spawnSprayerMistCone(muzzleVec, aimVec);
@@ -1254,15 +1384,42 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
           : (Array.isArray(pkt.pos) && pkt.pos.length >= 3
               ? new THREE.Vector3(pkt.pos[0], pkt.pos[1], pkt.pos[2])
               : null);
+        const sId = String(pkt.skillId || 'skill');
         if (remote) {
-          remote.playSkillAnim(pkt.skillId || 'skill');
+          if (sId === 'spurt' || sId === 'wolf_decelerate') {
+            remote.spurt();
+          } else {
+            remote.playSkillAnim(sId);
+          }
         }
         if (pos) {
           combatEffects.spawnStatusText(
             pos,
-            `✨ [${pkt.sender || '战友'}] 释放 ${pkt.label || pkt.skillId}`,
+            `✨ [${pkt.sender || '战友'}] 释放 ${pkt.label || sId}`,
             '#38bdf8'
           );
+          if (sId === 'detonate' || sId === 'blast' || sId === 'self_destruct') {
+            combatEffects.spawnExplosionEffect(pos);
+            audio.play('grenade-explode', 0.45);
+          } else if (sId === 'gas' || sId.includes('poison')) {
+            skillEffects.spawnToxicGasCloud(pos, 4.2, 0, 8);
+          } else if (sId === 'heal' || sId === 'medical' || sId.startsWith('leechdom') || sId === 'ticket_anabiosis') {
+            combatEffects.spawnFloatingHeal(pos, 600);
+          }
+        }
+      },
+      handleRemoteEmote(pkt) {
+        const uidStr = String(pkt.userId ?? '');
+        const remote = otherPlayerEntities.get(uidStr);
+        if (!remote) return;
+        if (pkt.action === 'jump') {
+          remote.jump();
+          audio.play('jump', 0.25);
+        } else if (pkt.action === 'roll') {
+          remote.roll();
+          audio.play('roll', 0.3);
+        } else if (pkt.action === 'reload') {
+          remote.reload();
         }
       },
       handleRemoteBossHit(pkt) {
@@ -1309,6 +1466,52 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
           occupyProgress = pkt.occupyProgress;
         }
       },
+      handleRemoteHealthUpdate(userId, hp, damage = 0, crit = false, extra) {
+        const remote = otherPlayerEntities.get(String(userId));
+        if (!remote) return;
+        remote.health = Math.max(0, hp);
+        if (hp > 0 && !remote.isAlive) {
+          remote.revive(hp);
+        } else if (damage > 0 && remote.isAlive) {
+          remote.triggerHitReaction();
+          combatEffects.spawnFloatingDamage(
+            remote.modelGroup.position.clone().add(new THREE.Vector3(0, 1.65, 0)),
+            damage,
+            crit
+          );
+          if (extra?.statusText) {
+            combatEffects.spawnStatusText(
+              remote.modelGroup.position,
+              String(extra.statusText),
+              String(extra.statusColor || '#fbbf24')
+            );
+          }
+        }
+      },
+      applyLocalHitEffect(pkt) {
+        if (!localPlayer) return;
+        localPlayer.triggerHitReaction();
+        if (Array.isArray(pkt.knockback) && pkt.knockback.length >= 3) {
+          const kb = new THREE.Vector3(Number(pkt.knockback[0]) || 0, 0, Number(pkt.knockback[2]) || 0);
+          const cur = localPlayer.modelGroup.position;
+          const next = cur.clone().add(kb);
+          const env = mapCollider.toCollisionEnvironment();
+          if (env.resolveMovement) {
+            const res = env.resolveMovement(cur, next, localPlayer.isGrounded && !localPlayer.isFlying);
+            cur.x = res.x;
+            cur.z = res.z;
+          } else {
+            cur.add(kb);
+          }
+        }
+        if (pkt.statusText) {
+          combatEffects.spawnStatusText(
+            localPlayer.modelGroup.position,
+            String(pkt.statusText),
+            String(pkt.statusColor || '#f87171')
+          );
+        }
+      },
       handleRemoteKill(victimId) {
         const remote = otherPlayerEntities.get(String(victimId));
         if (remote) {
@@ -1316,9 +1519,30 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
         }
       },
       handleRemoteRespawn(userId) {
-        const remote = otherPlayerEntities.get(String(userId));
+        const uidStr = String(userId);
+        const { pos: sp, yaw } = resolvePlayerSpawnTransform(Number(userId));
+        if (otherPlayers.current && otherPlayers.current[uidStr]) {
+          const buf = otherPlayers.current[uidStr].buffer;
+          const prev = buf[buf.length - 1] || {};
+          otherPlayers.current[uidStr].buffer = [
+            {
+              ...prev,
+              x: sp.x,
+              y: sp.y,
+              z: sp.z,
+              yaw,
+              vx: 0,
+              vy: 0,
+              vz: 0,
+              isFlying: false,
+              time: performance.now(),
+            },
+          ];
+        }
+        const remote = otherPlayerEntities.get(uidStr);
         if (remote) {
-          remote.revive();
+          remote.setTransform(sp.x, sp.y, sp.z, yaw);
+          remote.revive(MAX_HEALTH);
         }
       },
       removeRemotePlayer(userId) {
@@ -1338,6 +1562,7 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
         reloadUntil = now + (sandboxRules.current.noCooldown ? 250 : profile.reloadTime * 1000);
         localPlayer?.reload();
         if (profile.reloadAudio) audio.play(profile.reloadAudio, 0.55);
+        emoteEventRef.current?.({ action: 'reload', weaponId });
         reloadRef.current();
       },
       spawnBot(mode = 'dummy') {
@@ -1360,12 +1585,44 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
       hitBot(id, dmg) {
         damageTargetById(id, dmg, false);
       },
+      diePlayer() {
+        if (!localPlayer) return;
+        holding = false;
+        if (localPlayer.isAlive) {
+          localPlayer.die();
+        }
+      },
       respawnPlayer() {
         if (!localPlayer) return;
-        const sp = resolveSafeSpawn('red', Math.floor(Math.random() * 4));
+        holding = false;
+        const { pos: sp, yaw } = resolvePlayerSpawnTransform(myUserId);
         localPlayer.modelGroup.position.copy(sp);
-        localPlayer.revive();
-        combatEffects.spawnFloatingHeal(sp, MAX_HEALTH);
+        localPlayer.modelGroup.rotation.y = yaw;
+        localPlayer.revive(MAX_HEALTH);
+        if (cameraController) {
+          cameraController.yaw = yaw;
+          cameraController.snapToTarget();
+        }
+        const now = performance.now();
+        prevSyncPos.copy(sp);
+        prevSyncTime = now;
+        lastPositionSyncAt = now;
+        if (!isSpectator) {
+          positionRef.current(sp.x, sp.y, sp.z, yaw, {
+            vx: 0,
+            vy: 0,
+            vz: 0,
+            respawned: true,
+            isFlying: false,
+            wingId: wingAttachmentRef.current?.id ?? '',
+            petId: activePetIdRef.current || 'dragon',
+            berserkScale: localPlayer.battleAvatar?.root?.scale?.x ?? 1,
+            weaponIndex: selected,
+            weaponId: weapons[selected]?.id ?? '',
+            stealthed: false,
+            shieldGuarding: false,
+          });
+        }
       },
       interactObjective() {
         triggerObjectiveAction();
@@ -1476,7 +1733,6 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
       } catch {}
     };
 
-    let lastHudClickAt = 0;
     const onKeyDown = (event: KeyboardEvent) => {
       // 唯一保留的浏览器快捷键：F11 全屏切换
       if (event.code === 'F11' || event.key === 'F11') {
@@ -1504,9 +1760,8 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
       if (isInputTarget) return;
       if (chatOpen.current) return;
 
-      // 语音快捷键 T / Y / V：标记宽限时间，避免首次请求麦克风权限脱离鼠标锁定时触发自动暂停
+      // 语音快捷键 T / Y / V
       if (event.code === 'KeyT' || event.code === 'KeyY' || event.code === 'KeyV') {
-        lastHudClickAt = performance.now();
         audio.start();
         return;
       }
@@ -1590,7 +1845,6 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
     const onDown = (event: PointerEvent) => {
       if (paused.current || sandboxOpen.current || chatOpen.current) return;
       if (event.target instanceof Element && event.target.closest('button, input, select, .settings-menu, .battle-inventory, .battle-sandbox-drawer, .battle-chat-box, .battle-skill-castbar, .battle-wing-flight-bar, .battle-voice-hud, .battle-team-hp-panel, .battle-lua-hud, .battle-watch-camera, .battle-votekick-modal')) {
-        lastHudClickAt = performance.now();
         return;
       }
       audio.start();
@@ -1623,6 +1877,14 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
             const targetPoint = crosshairHit ? crosshairHit.point : camera.position.clone().addScaledVector(aim, 45);
             const launchDir = targetPoint.clone().sub(muzzle).normalize();
             projectiles.spawn('grenade', muzzle, launchDir, 'gasbomb', curWeaponId);
+            fireEventRef.current?.({
+              kind: 'grenade',
+              subType: 'gasbomb',
+              weaponId: curWeaponId,
+              muzzle: [muzzle.x, muzzle.y, muzzle.z],
+              aim: [launchDir.x, launchDir.y, launchDir.z],
+              target: [targetPoint.x, targetPoint.y, targetPoint.z],
+            });
             combatEffects.spawnStatusText(localPlayer.modelGroup.position, '🔥 投掷烈焰毒雾弹！', '#fb923c');
           }
         }
@@ -1665,8 +1927,6 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
       keys.clear();
       holding = false;
       cameraController?.setAiming(false);
-      if (performance.now() - lastHudClickAt < 2500) return;
-      if (ready && !paused.current && !sandboxOpen.current && !chatOpen.current) pauseRef.current();
     };
 
     const onLockError = () => {
@@ -1705,6 +1965,49 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
     const observer = new ResizeObserver(resize);
     observer.observe(mount);
 
+    let lastPositionSyncAt = 0;
+    const prevSyncPos = new THREE.Vector3();
+    let prevSyncTime = 0;
+
+    const attachRemotePet = (remoteEntity: PlayerEntity, rawPetId: string) => {
+      let rPetGroup = (remoteEntity as any)._petMesh as any;
+      if (!rPetGroup) {
+        rPetGroup = new THREE.Group();
+        remoteEntity.modelGroup.add(rPetGroup);
+        (remoteEntity as any)._petMesh = rPetGroup;
+      }
+      while (rPetGroup.children.length > 0) {
+        rPetGroup.remove(rPetGroup.children[0]);
+      }
+      if (!rawPetId || rawPetId === 'none') {
+        rPetGroup.visible = false;
+        return;
+      }
+      rPetGroup.visible = true;
+      const petId = rawPetId.replace(/\.mesh\.glb$/i, '');
+      const petSpec = LUA_PETS[petId];
+      const off = petSpec?.offset || [-0.7, 1.35, -0.45];
+      rPetGroup.position.set(off[0] * 0.85, Math.max(1.1, off[1] * 0.9), off[2] * 0.85);
+      const fallbackCrystal = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.2, 1),
+        new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.8 })
+      );
+      rPetGroup.add(fallbackCrystal);
+      propLoader.load(
+        `${import.meta.env.BASE_URL}assets/gameplay/mesh/pet/${petId}.mesh.glb`,
+        (gltf) => {
+          if (cancelled) return;
+          fallbackCrystal.visible = false;
+          const petRoot = gltf.scene;
+          const lvScale = petSpec?.levelSizes?.['1']?.[0] ?? 1.0;
+          petRoot.scale.setScalar(1.25 * lvScale);
+          rPetGroup.add(petRoot);
+        },
+        undefined,
+        () => undefined
+      );
+    };
+
     const load = async () => {
       const loader = new GLTFLoader();
       const [mapGltf, collisionGltf, avatar] = await Promise.all([
@@ -1740,34 +2043,62 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
 
       // 挂接音效与事件
       localPlayer.events.onFootstep = (idx) => audio.play(`step${idx}`, 0.35);
-      localPlayer.events.onJump = () => audio.play('jump');
+      localPlayer.events.onJump = () => {
+        audio.play('jump');
+        if (!isSpectator) emoteEventRef.current?.({ action: 'jump' });
+      };
       localPlayer.events.onLand = () => audio.play('land', 0.4);
-      localPlayer.events.onRoll = () => audio.play('roll');
+      localPlayer.events.onRoll = () => {
+        audio.play('roll');
+        if (!isSpectator) emoteEventRef.current?.({ action: 'roll' });
+      };
       localPlayer.events.onDamage = (dmg) => damageRef.current(dmg);
 
       // 挂载跟随宠物伴侣 (1:1 复刻 pet/*.lua + skill/pet_skill01.lua)
-      if (hasPetCompanion) {
-        const activePetId = (localStorage.getItem('avatarstar.activePet') || 'dragon').replace(/\.mesh\.glb$/i, '');
-        loadPetModel(activePetId);
+      if (hasPetCompanion && !isSpectator) {
+        const initPet = (activePetIdRef.current || localStorage.getItem('avatarstar.activePet') || 'dragon').replace(/\.mesh\.glb$/i, '');
+        loadPetModel(initPet);
       }
 
       // 3. 相机控制器实例化并绑定
       cameraController = new CameraController(camera, {
-        distance: 2.9,
-        pitch: 0.1,
+        distance: isSpectator ? 8.5 : 2.9,
+        pitch: isSpectator ? 0.25 : 0.1,
         yaw: 0,
-        heightOffset: 1.25,
-        shoulderOffset: 0.35
+        heightOffset: isSpectator ? 3.8 : 1.25,
+        shoulderOffset: isSpectator ? 0 : 0.35
       });
       cameraController.setTarget(localPlayer.modelGroup);
 
-      // 4. 使用已验证的可行走地面出生点 (防止俯瞰相机坐标将玩家刷在场外高空)
+      // 4. 使用已验证的可行走地面出生点 (多人联机下按座位号环形错开并面对面出生)
       const safeSpawn = resolveSafeSpawn('red', 0);
       const holdVec = resolveHoldPointVec();
-      localPlayer.modelGroup.position.copy(safeSpawn);
-      const initialYaw = Math.atan2(holdVec.x - safeSpawn.x, holdVec.z - safeSpawn.z);
+      const { pos: mySpawnPos, yaw: initialYaw } = resolvePlayerSpawnTransform(myUserId);
+      localPlayer.modelGroup.position.copy(mySpawnPos);
       localPlayer.modelGroup.rotation.y = initialYaw;
       cameraController.yaw = initialYaw;
+      prevSyncPos.copy(mySpawnPos);
+      prevSyncTime = performance.now();
+
+      if (isSpectator) {
+        localPlayer.modelGroup.visible = false;
+        localPlayer.godMode = true;
+        localPlayer.setFlying(true);
+      } else {
+        positionRef.current(mySpawnPos.x, mySpawnPos.y, mySpawnPos.z, initialYaw, {
+          vx: 0,
+          vy: 0,
+          vz: 0,
+          isFlying: false,
+          wingId: wingAttachmentRef.current?.id ?? '',
+          petId: activePetIdRef.current || 'dragon',
+          berserkScale: 1,
+          weaponIndex: selected,
+          weaponId: weapons[selected]?.id ?? '',
+          stealthed: false,
+          shieldGuarding: false,
+        });
+      }
 
       // 5. 构建当前模式的 3D 场景交互目标物 (占点光环 / 红蓝战旗 / 黄金宝箱 / C4爆破点 / 远征Boss)
       if (normalizedMode === 'occupy') {
@@ -2002,6 +2333,49 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
       if (!cancelled) mount.dataset.error = error instanceof Error ? error.message : '战场加载失败';
     });
 
+    const attachRemotePlayerAvatar = (remoteEntity: PlayerEntity, pInfo: any, latest: any) => {
+      const resolvedJobId = pInfo?.jobId || latest?.jobId || 'guardian';
+      const hasCustomApp = Boolean(pInfo?.appearance || latest?.appearance);
+      const job =
+        (creation.jobs as any)[resolvedJobId] ||
+        (creation.jobs as any)['guardian'] ||
+        Object.values(creation.jobs)[0];
+      if (!job) return;
+      if (hasCustomApp) {
+        (remoteEntity as any)._hasCustomAvatar = true;
+      } else if ((remoteEntity as any)._loadingDefaultAvatar) {
+        return;
+      } else {
+        (remoteEntity as any)._loadingDefaultAvatar = true;
+      }
+      const gender = (pInfo?.appearance?.gender ?? latest?.appearance?.gender ?? 0) as 0 | 1;
+      const preset = (job as any).presets?.[gender] || Object.values((job as any).presets || {})[0];
+      const resolvedAppearance =
+        pInfo?.appearance ||
+        latest?.appearance ||
+        (preset ? initialAppearance(preset as any, gender) : character.appearance);
+      const rawWIds = pInfo?.weaponIds || latest?.weaponIds;
+      let pWeapons = Array.isArray(rawWIds)
+        ? rawWIds.map((wId: string) => assets.weapons[wId]).filter(Boolean)
+        : (job as any).weapons;
+      if (!pWeapons || pWeapons.length === 0) pWeapons = (job as any).weapons;
+      createBattleAvatar(creation, preset as any, resolvedAppearance, pWeapons)
+        .then((loadedAvatar) => {
+          if (cancelled) {
+            loadedAvatar.dispose();
+            return;
+          }
+          remoteEntity.attachBattleAvatar(loadedAvatar);
+          if (wingAttachmentRef.current) {
+            void remoteEntity.equipWing(wingAttachmentRef.current);
+          }
+        })
+        .catch((err) => {
+          console.error('Remote player load error:', err);
+          logRef.current(`[Avatar Error] ${err.message || String(err)}`);
+        });
+    };
+
     const animate = () => {
       frame = requestAnimationFrame(animate);
       const delta = Math.min(clock.getDelta(), 0.05);
@@ -2019,16 +2393,45 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
         petCompanionMesh.position.y = 1.55 + Math.sin(nowMs * 0.004) * 0.12;
       }
 
-      // 多人联机真人玩家全状态同步与 3D 插值 (含高度Y、飞行翼、武器切换、隐身与粒子拖尾)
+      // 预热房间内其他真人玩家初始坐标：即便对方首包 sync 尚未到达，也在其对应出生位立即渲染 3D 角色
+      if (ready && otherPlayers.current && roomPlayersRef.current) {
+        for (const [rUid, rPlayer] of Object.entries(roomPlayersRef.current)) {
+          if (!rPlayer || String(rUid) === String(myUserId)) continue;
+          if ((rPlayer as any).username && (rPlayer as any).username === character.name && Number(rUid) === myUserId) continue;
+          if (!otherPlayers.current[rUid] || otherPlayers.current[rUid].buffer.length === 0) {
+            const sp = resolvePlayerSpawnTransform(Number(rUid));
+            otherPlayers.current[rUid] = {
+              buffer: [
+                {
+                  x: sp.pos.x,
+                  y: sp.pos.y,
+                  z: sp.pos.z,
+                  yaw: sp.yaw,
+                  username: (rPlayer as any).username,
+                  jobId: (rPlayer as any).jobId,
+                  appearance: (rPlayer as any).appearance,
+                  weaponIds: (rPlayer as any).weaponIds,
+                  team: (rPlayer as any).team,
+                  time: nowMs,
+                },
+              ],
+            };
+          }
+        }
+      }
+
+      // 多人联机真人玩家全状态同步与零延迟航位推算 3D 插值 (含高度Y、速度预测、飞行翼、武器切换、隐身、跟宠、狂暴体型、头顶名字血条与粒子拖尾)
       if (otherPlayers.current) {
-        const renderTime = nowMs - 85;
+        const renderTime = nowMs - 22;
         for (const [userIdStr, stateObj] of Object.entries(otherPlayers.current)) {
+          if (String(userIdStr) === String(myUserId)) continue;
           const buffer = stateObj.buffer;
           if (buffer.length === 0) continue;
 
           let state0 = buffer[0];
           let state1 = buffer[buffer.length - 1];
           const latest = buffer[buffer.length - 1];
+          if (!Number.isFinite(latest?.x) || !Number.isFinite(latest?.z)) continue;
           let found = false;
 
           for (let i = buffer.length - 1; i >= 0; i--) {
@@ -2044,75 +2447,104 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
             state1 = buffer[0];
           }
 
-          const floorAtPos = mapCollider.floorAt(state0.x, state0.z, 80) ?? 0;
+          const fallbackY = typeof state0.y === 'number' && Number.isFinite(state0.y)
+            ? state0.y
+            : (mapCollider.floorAt(state0.x, state0.z, 6) ?? 0);
           let interpX = state0.x;
-          let interpY = typeof state0.y === 'number' ? state0.y : floorAtPos;
+          let interpY = fallbackY;
           let interpZ = state0.z;
-          let interpYaw = state0.yaw;
+          let interpYaw = Number.isFinite(state0.yaw) ? state0.yaw : 0;
 
           if (state0 !== state1 && state1.time > state0.time) {
             const t = (renderTime - state0.time) / (state1.time - state0.time);
             const clampedT = Math.max(0, Math.min(1, t));
             interpX = state0.x + (state1.x - state0.x) * clampedT;
-            const y0 = typeof state0.y === 'number' ? state0.y : floorAtPos;
-            const y1 = typeof state1.y === 'number' ? state1.y : floorAtPos;
+            const y0 = typeof state0.y === 'number' && Number.isFinite(state0.y) ? state0.y : fallbackY;
+            const y1 = typeof state1.y === 'number' && Number.isFinite(state1.y) ? state1.y : fallbackY;
             interpY = y0 + (y1 - y0) * clampedT;
             interpZ = state0.z + (state1.z - state0.z) * clampedT;
-            let dy = state1.yaw - state0.yaw;
+            const yaw0 = Number.isFinite(state0.yaw) ? state0.yaw : 0;
+            const yaw1 = Number.isFinite(state1.yaw) ? state1.yaw : yaw0;
+            let dy = yaw1 - yaw0;
             while (dy > Math.PI) dy -= Math.PI * 2;
             while (dy < -Math.PI) dy += Math.PI * 2;
-            interpYaw = state0.yaw + dy * clampedT;
+            interpYaw = yaw0 + dy * clampedT;
+          } else if (renderTime > state1.time) {
+            // 航位推算 (Dead-Reckoning): 限制外推时间与速度上限，防止网络抖动或丢包时角色飞出地图或钻入地下
+            const gapMs = renderTime - state1.time;
+            const extrapSec = gapMs < 140 ? Math.min(0.038, gapMs / 1000) : 0;
+            const vx = Math.max(-16, Math.min(16, Number(state1.vx) || 0));
+            const vy = Math.max(-12, Math.min(12, Number(state1.vy) || 0));
+            const vz = Math.max(-16, Math.min(16, Number(state1.vz) || 0));
+            interpX = state1.x + vx * extrapSec;
+            const baseY = typeof state1.y === 'number' && Number.isFinite(state1.y) ? state1.y : fallbackY;
+            interpY = baseY + (latest?.isFlying ? vy * extrapSec : Math.max(0, vy * extrapSec));
+            interpZ = state1.z + vz * extrapSec;
+            interpYaw = Number.isFinite(state1.yaw) ? state1.yaw : 0;
           }
+
+          if (!latest?.isFlying) {
+            const minFloor = mapCollider.floorAt(interpX, interpZ, interpY + 2.2, 3.0);
+            if (minFloor != null && interpY < minFloor) {
+              interpY = minFloor;
+            }
+          }
+
+          const pInfo = (roomPlayersRef.current && roomPlayersRef.current[userIdStr]) || (latest?.jobId ? latest : null);
 
           let remoteEntity = otherPlayerEntities.get(userIdStr);
           if (!remoteEntity) {
             remoteEntity = new PlayerEntity(scene);
             remoteEntity.hitbox.userData = { isPlayer: true, userId: userIdStr, entity: remoteEntity };
             otherPlayerEntities.set(userIdStr, remoteEntity);
-
-            const pInfo = (roomPlayers && roomPlayers[userIdStr]) || (latest?.jobId ? latest : null);
-            const resolvedJobId = pInfo?.jobId || 'commando';
-            const resolvedAppearance = pInfo?.appearance;
-            const job = (creation.jobs as any)[resolvedJobId] || (creation.jobs as any)['commando'];
-            if (job && resolvedAppearance) {
-              const preset = job.presets[resolvedAppearance.gender] || Object.values(job.presets)[0];
-              const rawWIds = pInfo?.weaponIds || latest?.weaponIds;
-              let pWeapons = Array.isArray(rawWIds)
-                ? rawWIds.map((wId: string) => assets.weapons[wId]).filter(Boolean)
-                : job.weapons;
-              if (!pWeapons || pWeapons.length === 0) pWeapons = job.weapons;
-              createBattleAvatar(creation, preset, resolvedAppearance, pWeapons)
-                .then((loadedAvatar) => {
-                  remoteEntity!.attachBattleAvatar(loadedAvatar);
-                  if (wingAttachment) {
-                    void remoteEntity!.equipWing(wingAttachment);
-                  }
-                })
-                .catch((err) => {
-                  console.error('Remote player load error:', err);
-                  logDebug(`[Avatar Error] ${err.message || String(err)}`);
-                });
-            } else {
-              remoteEntity
-                .loadAvatar('/assets/creation/models/malecommandos.glb', '/assets/creation/models/body01.glb')
-                .then(() => {
-                  void remoteEntity!.loadAnimations(getWeaponActionSuite('smg_01').actions);
-                })
-                .catch(() => null);
-            }
+            attachRemotePlayerAvatar(remoteEntity, pInfo, latest);
+          } else if (!(remoteEntity as any)._hasCustomAvatar && (pInfo?.appearance || latest?.appearance)) {
+            attachRemotePlayerAvatar(remoteEntity, pInfo, latest);
           }
 
           const oldPos = remoteEntity.modelGroup.position.clone();
-          const effectiveY = Math.max(floorAtPos, interpY);
-          remoteEntity.setTransform(interpX, effectiveY, interpZ, interpYaw);
-          remoteEntity.isFlying = Boolean(latest?.isFlying);
+          remoteEntity.setTransform(interpX, interpY, interpZ, interpYaw);
+          remoteEntity.setFlying(Boolean(latest?.isFlying));
+          remoteEntity.setGhost(Boolean(latest?.stealthed));
           remoteEntity.modelGroup.visible = !latest?.stealthed;
+          if (typeof latest?.berserkScale === 'number' && latest.berserkScale > 0) {
+            remoteEntity.setBerserkScale(latest.berserkScale);
+          }
+          if (latest?.petId && latest.petId !== (remoteEntity as any)._lastPetId) {
+            (remoteEntity as any)._lastPetId = latest.petId;
+            attachRemotePet(remoteEntity, latest.petId);
+          }
+          const rPet = (remoteEntity as any)._petMesh;
+          if (rPet && rPet.visible) {
+            rPet.rotation.y += delta * 2.4;
+            rPet.position.y = 1.55 + Math.sin(nowMs * 0.004) * 0.12;
+          }
+
+          const rStat = remoteStatsRef.current?.[userIdStr];
+          const rHp = typeof rStat?.hp === 'number' ? rStat.hp : remoteEntity.health;
+          const vPeer = (voiceParticipantsRef.current || []).find(
+            (vp: any) => String(vp.userId) === userIdStr || (pInfo?.username && vp.username === pInfo.username)
+          );
+          remoteEntity.updateOverheadHud({
+            username: pInfo?.username || latest?.username || `玩家#${userIdStr}`,
+            team: (pInfo?.team || latest?.team || 'blue') === 'red' ? 'red' : 'blue',
+            level: Number(pInfo?.level || latest?.level || 1),
+            hp: rHp,
+            maxHp: MAX_HEALTH,
+            speaking: Boolean(vPeer?.speaking),
+            shield: Boolean(latest?.shieldGuarding),
+          });
 
           if (remoteEntity.isReady) {
-            const speed = oldPos.distanceTo(remoteEntity.modelGroup.position) / Math.max(0.001, delta);
+            const vMag = Math.hypot(Number(latest?.vx) || 0, Number(latest?.vz) || 0);
+            const speed = Math.max(vMag, oldPos.distanceTo(remoteEntity.modelGroup.position) / Math.max(0.001, delta));
             if (remoteEntity.battleAvatar) {
-              if (typeof latest?.weaponIndex === 'number') {
-                remoteEntity.battleAvatar.setActiveWeaponIndex(latest.weaponIndex);
+              if (
+                typeof latest?.weaponIndex === 'number' &&
+                latest.weaponIndex !== (remoteEntity as any)._lastWeaponIndex
+              ) {
+                (remoteEntity as any)._lastWeaponIndex = latest.weaponIndex;
+                remoteEntity.switchWeaponSlot(latest.weaponIndex);
               }
               if (latest?.wingId && latest.wingId !== (remoteEntity as any)._lastWingId) {
                 (remoteEntity as any)._lastWingId = latest.wingId;
@@ -2149,10 +2581,10 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
         else audio.start();
       }
 
-      if (holding && ready && !paused.current && !sandboxOpen.current && !chatOpen.current) fire();
+      if (!isSpectator && holding && ready && health.current > 0 && localPlayer?.isAlive && !paused.current && !sandboxOpen.current && !chatOpen.current) fire();
       if (sandboxRules.current.noCooldown) skillEffects.resetCooldowns();
       skillEffects.update(delta);
-      if (passives.regenPerTick > 0) {
+      if (passives.regenPerTick > 0 && !isSpectator && health.current > 0) {
         regenTimer -= delta;
         if (regenTimer <= 0) {
           regenTimer = 2;
@@ -2170,12 +2602,12 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
 
       // 主玩家输入驱动与更新
       if (localPlayer && ready) {
-        localPlayer.godMode = sandboxRules.current.godMode;
+        localPlayer.godMode = Boolean(isSpectator || sandboxRules.current.godMode);
         localPlayer.setMotion(motion.current);
         localPlayer.setSpeed(skillEffects.speed(localPlayer.getBaseSpeed()) * buffSpeedMult);
 
         const dir = new THREE.Vector3();
-        if (!sandboxOpen.current && !chatOpen.current) {
+        if (localPlayer.isAlive && health.current > 0 && !sandboxOpen.current && !chatOpen.current) {
           if (keys.has('KeyW') || keys.has('ArrowUp')) dir.z += 1;
           if (keys.has('KeyS') || keys.has('ArrowDown')) dir.z -= 1;
           if (keys.has('KeyA') || keys.has('ArrowLeft')) dir.x += 1;
@@ -2190,7 +2622,7 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
         const wasFlying = localPlayer.isFlying;
         localPlayer.setInput(dir, yaw, false);
         localPlayer.update(delta);
-        if (wasFlying !== localPlayer.isFlying) {
+        if (wasFlying !== localPlayer.isFlying && !isSpectator) {
           if (!wasFlying && localPlayer.isFlying) {
             combatEffects.spawnStatusText(localPlayer.modelGroup.position, '🪽 长按空格展翼爬升！[空格爬升 / Shift或C或Ctrl俯冲]', '#38bdf8');
           }
@@ -2199,7 +2631,7 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
         if (petMixer) petMixer.update(delta);
 
         // 1:1 发射翅膀双翼尖粒子拖尾 (vfx_wing*_trail.vfx)
-        if (localPlayer.hasWings && (localPlayer.isFlying || localPlayer.isMoving || !localPlayer.isGrounded)) {
+        if (!isSpectator && localPlayer.hasWings && (localPlayer.isFlying || localPlayer.isMoving || !localPlayer.isGrounded)) {
           const wingTips = localPlayer.getWingTipPositions();
           if (wingTips) {
             combatEffects.spawnWingTrail(wingTips.left, wingTips.right, wingTips.wingId, localPlayer.isFlying);
@@ -2207,17 +2639,28 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
         }
 
         botManager.autoRespawn = normalizedMode === 'kill' ? false : sandboxRules.current.autoRespawnBots;
-        botManager.update(delta, localPlayer, skillEffects.isStealthed());
+        botManager.update(delta, localPlayer, skillEffects.isStealthed() || Boolean(isSpectator));
 
         cameraController?.update(delta, mapCollider.collisionMeshes);
 
         const currentPos = localPlayer.modelGroup.position;
         const currentYaw = localPlayer.modelGroup.rotation.y;
-        if (nowMs - (positionRef.current as any).lastTime > 50 || !(positionRef.current as any).lastTime) {
-          (positionRef.current as any).lastTime = nowMs;
+        if (!isSpectator && (nowMs - lastPositionSyncAt >= 45 || lastPositionSyncAt === 0)) {
+          const dtSec = Math.max(0.016, (nowMs - (prevSyncTime || nowMs - 45)) / 1000);
+          const vx = Math.round(((currentPos.x - prevSyncPos.x) / dtSec) * 100) / 100;
+          const vy = Math.round(((currentPos.y - prevSyncPos.y) / dtSec) * 100) / 100;
+          const vz = Math.round(((currentPos.z - prevSyncPos.z) / dtSec) * 100) / 100;
+          prevSyncPos.copy(currentPos);
+          prevSyncTime = nowMs;
+          lastPositionSyncAt = nowMs;
           positionRef.current(currentPos.x, currentPos.y, currentPos.z, currentYaw, {
+            vx,
+            vy,
+            vz,
             isFlying: localPlayer.isFlying,
-            wingId: wingAttachment?.id ?? '',
+            wingId: wingAttachmentRef.current?.id ?? '',
+            petId: activePetIdRef.current || 'dragon',
+            berserkScale: localPlayer.battleAvatar?.root?.scale?.x ?? 1,
             weaponIndex: selected,
             weaponId: weapons[selected]?.id ?? '',
             stealthed: skillEffects.isStealthed(),
@@ -2241,7 +2684,7 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
             }
           }
           const enemyNear = botEnemyNear || remoteEnemyNear;
-          if (dist < 6.5 && !enemyNear) {
+          if (!isSpectator && dist < 6.5 && !enemyNear) {
             occupyProgress = Math.min(100, occupyProgress + delta * 22);
           } else if (enemyNear && dist >= 6.5) {
             occupyProgress = Math.max(-100, occupyProgress - delta * 14);
@@ -2254,7 +2697,12 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
             occupyTickTimer += delta;
             if (occupyTickTimer >= 3.0) {
               occupyTickTimer = 0;
-              objectiveScoreRef.current(2, 0, '', { occupyProgress });
+              objectiveScoreRef.current(
+                myTeamRef.current === 'red' ? 2 : 0,
+                myTeamRef.current === 'blue' ? 2 : 0,
+                '',
+                { occupyProgress }
+              );
             }
           }
           statusText =
@@ -2480,11 +2928,24 @@ function BattleScene({ map, customMap, roomId, modeId, damageBonusMult, hasPetCo
   }, [map, character.jobId, character.name, creation, assets, avatarPreset, weapons.map((w) => w.id).join(','), active, paused]);
 
   return <div className="battle-canvas" ref={mountRef} data-gameplay-canvas />;
-}
+}, (prev, next) =>
+  prev.map === next.map &&
+  prev.customMap === next.customMap &&
+  prev.roomId === next.roomId &&
+  prev.myUserId === next.myUserId &&
+  prev.myTeam === next.myTeam &&
+  prev.wingAttachment === next.wingAttachment &&
+  prev.activePetId === next.activePetId &&
+  prev.weapons === next.weapons &&
+  prev.slots === next.slots &&
+  prev.roomPlayers === next.roomPlayers &&
+  prev.remoteStats === next.remoteStats &&
+  prev.voiceParticipants === next.voiceParticipants
+);
 
 export default function Gameplay({ room, character, creation, assets, avatarPreset, wingAttachment, quickbar, skills, levels, bossSkills = [],
   volume, effectsVolume, onVolume, onEffectsVolume, onExit, onQuit = onExit }: {
-  room: RoomConfig & { id?: string; players?: Record<string, any> };
+  room: RoomConfig & { id?: string; host?: string; spectator?: boolean; players?: Record<string, any> };
   character: SavedCharacter;
   creation: CreationAssets;
   assets: LobbyAssets;
@@ -2627,7 +3088,12 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   }, [room.players]);
 
   const myUserId = useMemo(() => {
-    const me = Object.values(room.players || {}).find((p: any) => p.username === character.name);
+    if ((character as any)?.userId && Number((character as any).userId) > 0) {
+      return Number((character as any).userId);
+    }
+    const me =
+      Object.values(livePlayers || {}).find((p: any) => p?.username === character.name) ||
+      Object.values(room.players || {}).find((p: any) => p?.username === character.name);
     if (me && (me as any).userId) return Number((me as any).userId);
     const savedId = Number(localStorage.getItem('userId') || 0);
     if (savedId > 0) return savedId;
@@ -2637,9 +3103,28 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
       hash |= 0;
     }
     return (Math.abs(hash) % 900000) + 100000;
-  }, [room.players, character.name]);
+  }, [character, room.players, livePlayers]);
+
+  const isSpectator = Boolean(room.spectator);
+  const myTeam: 'red' | 'blue' = useMemo(() => {
+    const me =
+      livePlayers[String(myUserId)] ||
+      Object.values(livePlayers || {}).find((p: any) => p.username === character.name);
+    if (me?.team === 'blue') return 'blue';
+    if (me?.team === 'red') return 'red';
+    return room.host === character.name || !room.host ? 'red' : 'blue';
+  }, [livePlayers, myUserId, character.name, room.host]);
+  const [pingMs, setPingMs] = useState<number>(12);
 
   const otherPlayersRef = useRef<Record<string, { buffer: Array<{ x: number; y?: number; z: number; yaw: number; time: number; [k: string]: any }> }>>({});
+  const hasValidPosRef = useRef(false);
+  const lastRemoteHpStateAtRef = useRef<Record<string, number>>({});
+  const latestLocalPosRef = useRef<{ x: number; y: number; z: number; yaw: number; extra?: Record<string, any> }>({
+    x: 0,
+    y: 1.54,
+    z: 0,
+    yaw: 0,
+  });
   const [selected, setSelected] = useState(0);
   const [ammo, setAmmo] = useState<number[]>([]);
   const [reserves, setReserves] = useState<number[]>([]);
@@ -2727,6 +3212,7 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
     setHealth(maxHealth);
     setAmmo(weapons.map(magazine));
     control.current?.useBattleItem('ticket_anabiosis');
+    wsRef.current?.sendJSON({ type: 'respawn_sync', userId: myUserId, hp: maxHealth });
     pushKillFeed(`🎫 [${character.name}] 使用了复活币 (ticket_anabiosis) 原地满血复活！`, '#fbbf24');
   };
 
@@ -2798,31 +3284,46 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
     }
   };
 
+  const lastRespawnAtRef = useRef(0);
+  const performLocalRespawn = (broadcastToServer = false) => {
+    const now = performance.now();
+    if (now - lastRespawnAtRef.current < 800) return;
+    lastRespawnAtRef.current = now;
+    setRespawnCountdown(0);
+    setWatchCamMode('player');
+    control.current?.setWatchCameraMode('player');
+    setHealth(maxHealth);
+    const fullAmmo = weapons.map(magazine);
+    ammoRef.current = fullAmmo;
+    setAmmo(fullAmmo);
+    control.current?.respawnPlayer();
+    if (broadcastToServer) {
+      wsRef.current?.sendJSON({ type: 'respawn_sync', userId: myUserId, hp: maxHealth });
+    }
+  };
+
   // Respawn countdown when player HP reaches 0
   useEffect(() => {
-    if (health > 0 || respawnCountdown > 0) return;
+    if (health > 0 || respawnCountdown > 0 || isSpectator) return;
+    control.current?.diePlayer();
     setPlayerDeaths((d) => d + 1);
-    setScoreBlue((b) => b + 1);
-    pushKillFeed(`💀 [${character.name}] 阵亡，3 秒后于红方基地重整复活 (可按 [H] 使用复活币立即复活)`, '#f87171');
+    if (myTeam === 'red') setScoreBlue((b) => b + 1);
+    else setScoreRed((r) => r + 1);
+    pushKillFeed(`💀 [${character.name}] 阵亡，3 秒后于${myTeam === 'blue' ? '蓝方' : '红方'}基地重整复活 (可按 [H] 使用复活币立即复活)`, '#f87171');
     setRespawnCountdown(3);
-  }, [health]);
+  }, [health, isSpectator, myTeam]);
 
   useEffect(() => {
     if (respawnCountdown <= 0) return;
     const t = window.setTimeout(() => {
       if (respawnCountdown <= 1) {
-        setRespawnCountdown(0);
-        setWatchCamMode('player');
-        control.current?.setWatchCameraMode('player');
-        setHealth(maxHealth);
-        setAmmo(weapons.map(magazine));
-        control.current?.respawnPlayer();
+        performLocalRespawn(true);
       } else {
         setRespawnCountdown((c) => c - 1);
       }
     }, 1000);
     return () => window.clearTimeout(t);
-  }, [respawnCountdown, maxHealth, weapons]);
+  }, [respawnCountdown, maxHealth, weapons, myUserId]);
 
   // Trigger post-match settlement (game_balance.lua) when timer expires
   useEffect(() => {
@@ -2834,7 +3335,7 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   // Ensure leaving or closing browser during battle immediately removes player and closes room if empty
   useEffect(() => {
     const rId = room.id;
-    if (!rId || rId === 'practice' || rId === 'default-room') return;
+    if (!rId || rId === 'practice' || rId === 'default-room' || isSpectator) return;
     const onUnload = () => {
       try {
         fetch(`/api/rooms/${rId}/leave?username=${encodeURIComponent(character.name)}`, {
@@ -2845,29 +3346,41 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
     };
     window.addEventListener('beforeunload', onUnload);
     return () => window.removeEventListener('beforeunload', onUnload);
-  }, [room.id, character.name]);
+  }, [room.id, character.name, isSpectator]);
 
   useEffect(() => {
     const roomId = room.id ?? 'practice';
     const gameUrl = `${WS_BASE}?roomId=${roomId}&playerId=${myUserId}`;
     const sigUrl = `${WS_BASE.replace('/ws', '/webrtc')}?roomId=${roomId}&playerId=${myUserId}`;
-    const ws = new WebRTCClient(gameUrl, sigUrl, () => {
-      logDebug(`[Network] WebRTC DataChannel OPENED! 握手成功`);
+    const sendImmediateSync = (client: WebRTCClient) => {
+      if (isSpectator || !hasValidPosRef.current) return;
+      const lp = latestLocalPosRef.current;
       sequenceRef.current++;
-      ws.sendMove(myUserId, position.x, position.y, position.z, position.yaw, sequenceRef.current, {
+      client.sendMove(myUserId, lp.x, lp.y, lp.z, lp.yaw, sequenceRef.current, {
+        ...(lp.extra || {}),
         username: character.name,
+        level: character.level,
         jobId: character.jobId,
+        team: myTeam,
         appearance: character.appearance,
         weaponIds: weapons.map((w) => w.id),
       });
+    };
+    const ws = new WebRTCClient(gameUrl, sigUrl, () => {
+      logDebug(`[Network] WebRTC DataChannel OPENED! 握手成功`);
+      sendImmediateSync(ws);
     });
     wsRef.current = ws;
+
+    const pingTimer = window.setInterval(() => {
+      ws.sendJSON({ type: 'ping', clientTs: performance.now() });
+    }, 2000);
 
     const voiceMgr = new VoiceChatManager({
       roomId,
       userId: myUserId || character.name,
       username: character.name,
-      team: 'red',
+      team: myTeam,
       externalSendJSON: (pkt) => ws.sendJSON(pkt),
     });
     voiceManagerRef.current = voiceMgr;
@@ -2875,12 +3388,34 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
 
     ws.onMessage = (msg) => {
       try {
+        if (msg.type === 'pong') {
+          if (typeof msg.clientTs === 'number') {
+            const rtt = Math.max(1, Math.round(performance.now() - msg.clientTs));
+            setPingMs(rtt);
+          }
+          return;
+        }
         if (voiceMgr.handleServerMessage(msg)) return;
         if (msg.type === 'room_closed') {
           onExit();
           return;
         }
+        if (msg.type === 'request_sync') {
+          if (String(msg.requesterId ?? '') !== String(myUserId)) {
+            sendImmediateSync(ws);
+          }
+          return;
+        }
+        if (msg.type === 'room_update' || msg.type === 'start_game') {
+          if (msg.room?.players) {
+            setLivePlayers((prev) => ({ ...prev, ...msg.room.players }));
+          }
+          return;
+        }
         if (msg.type === 'join') {
+          if (msg.room?.players) {
+            setLivePlayers((prev) => ({ ...prev, ...msg.room.players }));
+          }
           if (msg.userId && msg.username) {
             setLivePlayers((prev) => ({
               ...prev,
@@ -2888,7 +3423,7 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
                 ...(prev[String(msg.userId)] || {}),
                 userId: msg.userId,
                 username: msg.username,
-                jobId: msg.jobId || prev[String(msg.userId)]?.jobId || 'commando',
+                jobId: msg.jobId || prev[String(msg.userId)]?.jobId || 'guardian',
                 appearance: msg.appearance || prev[String(msg.userId)]?.appearance,
                 weaponIds: msg.weaponIds || prev[String(msg.userId)]?.weaponIds,
                 team: msg.team || prev[String(msg.userId)]?.team || 'blue',
@@ -2897,6 +3432,9 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
             if (msg.username !== character.name) {
               pushKillFeed(`🚀 [${msg.username}] 加入了战场！`, '#38bdf8');
             }
+          }
+          if (String(msg.userId ?? '') !== String(myUserId)) {
+            sendImmediateSync(ws);
           }
           return;
         }
@@ -2930,58 +3468,106 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
           if (msg.userId == myUserId) {
             if (msg.hp < healthRef.current) {
               triggerHurtFlash();
+              control.current?.applyLocalHitEffect(msg);
+            }
+            if (msg.hp <= 0) {
+              control.current?.diePlayer();
             }
             setHealth(msg.hp);
           } else if (msg.userId != null) {
-            setRemoteStats((prev) => ({
-              ...prev,
-              [String(msg.userId)]: {
-                kills: prev[String(msg.userId)]?.kills ?? 0,
-                deaths: prev[String(msg.userId)]?.deaths ?? 0,
-                hp: msg.hp,
-              },
-            }));
+            const uidStr = String(msg.userId);
+            const nextHp = Number(msg.hp ?? MAX_HEALTH);
+            control.current?.handleRemoteHealthUpdate(
+              uidStr,
+              nextHp,
+              msg.attackerId != myUserId ? Number(msg.damage ?? 0) : 0,
+              Boolean(msg.crit),
+              msg
+            );
+            const now = performance.now();
+            const lastStateAt = lastRemoteHpStateAtRef.current[uidStr] || 0;
+            if (nextHp <= 0 || nextHp >= MAX_HEALTH || now - lastStateAt >= 220) {
+              lastRemoteHpStateAtRef.current[uidStr] = now;
+              setRemoteStats((prev) => ({
+                ...prev,
+                [uidStr]: {
+                  kills: prev[uidStr]?.kills ?? 0,
+                  deaths: prev[uidStr]?.deaths ?? 0,
+                  hp: nextHp,
+                },
+              }));
+            }
           }
         } else if (msg.type === 'sync' && msg.userId != myUserId) {
+          if (!Number.isFinite(Number(msg.x)) || !Number.isFinite(Number(msg.z))) return;
           const uidStr = String(msg.userId);
           if (!otherPlayersRef.current[uidStr]) {
             logDebug(`[Network] 接收到玩家数据 (userId=${uidStr})，开始渲染`);
             otherPlayersRef.current[uidStr] = { buffer: [] };
           }
-          if (msg.username && !livePlayersRef.current[uidStr]) {
-            setLivePlayers((prev) => ({
-              ...prev,
-              [uidStr]: {
-                userId: msg.userId,
-                username: msg.username,
-                jobId: msg.jobId || 'commando',
-                appearance: msg.appearance,
-                weaponIds: msg.weaponIds,
-                team: msg.team || 'blue',
-              },
-            }));
+          if (msg.username) {
+            setLivePlayers((prev) => {
+              const existing = prev[uidStr];
+              if (
+                existing &&
+                existing.username === msg.username &&
+                (!msg.appearance || existing.appearance) &&
+                (!msg.jobId || existing.jobId === msg.jobId) &&
+                (!msg.team || existing.team === msg.team)
+              ) {
+                return prev;
+              }
+              return {
+                ...prev,
+                [uidStr]: {
+                  ...(existing || {}),
+                  userId: msg.userId,
+                  username: msg.username,
+                  level: msg.level || existing?.level || 1,
+                  jobId: msg.jobId || existing?.jobId || 'guardian',
+                  appearance: msg.appearance || existing?.appearance,
+                  weaponIds: msg.weaponIds || existing?.weaponIds,
+                  team: msg.team || existing?.team || 'blue',
+                },
+              };
+            });
           }
           const buffer = otherPlayersRef.current[uidStr].buffer;
+          const prevEntry = buffer[buffer.length - 1];
+          const nx = Number(msg.x);
+          const nz = Number(msg.z);
+          if (msg.respawned || (prevEntry && Math.hypot(nx - prevEntry.x, nz - prevEntry.z) > 15)) {
+            buffer.length = 0;
+          }
           buffer.push({
-            x: msg.x,
-            y: typeof msg.y === 'number' ? msg.y : undefined,
-            z: msg.z,
-            yaw: msg.yaw,
-            isFlying: msg.isFlying,
-            wingId: msg.wingId,
-            weaponIndex: msg.weaponIndex,
-            weaponId: msg.weaponId,
-            stealthed: msg.stealthed,
-            shieldGuarding: msg.shieldGuarding,
-            username: msg.username,
-            jobId: msg.jobId,
-            appearance: msg.appearance,
-            weaponIds: msg.weaponIds,
+            x: nx,
+            y: typeof msg.y === 'number' && Number.isFinite(msg.y) ? msg.y : prevEntry?.y,
+            z: nz,
+            yaw: Number.isFinite(Number(msg.yaw)) ? Number(msg.yaw) : (prevEntry?.yaw ?? 0),
+            vx: msg.vx,
+            vy: msg.vy,
+            vz: msg.vz,
+            isFlying: msg.isFlying ?? prevEntry?.isFlying,
+            wingId: msg.wingId ?? prevEntry?.wingId,
+            petId: msg.petId ?? prevEntry?.petId,
+            berserkScale: msg.berserkScale ?? prevEntry?.berserkScale,
+            weaponIndex: msg.weaponIndex ?? prevEntry?.weaponIndex,
+            weaponId: msg.weaponId ?? prevEntry?.weaponId,
+            stealthed: msg.stealthed ?? prevEntry?.stealthed,
+            shieldGuarding: msg.shieldGuarding ?? prevEntry?.shieldGuarding,
+            username: msg.username || prevEntry?.username,
+            level: msg.level || prevEntry?.level,
+            jobId: msg.jobId || prevEntry?.jobId,
+            team: msg.team || prevEntry?.team,
+            appearance: msg.appearance || prevEntry?.appearance,
+            weaponIds: msg.weaponIds || prevEntry?.weaponIds,
             time: performance.now(),
           });
           if (buffer.length > 20) buffer.shift();
         } else if (msg.type === 'fire' && msg.userId != myUserId) {
           control.current?.handleRemoteFire(msg);
+        } else if (msg.type === 'emote' && msg.userId != myUserId) {
+          control.current?.handleRemoteEmote(msg);
         } else if (msg.type === 'skill_cast' && msg.userId != myUserId) {
           control.current?.handleRemoteSkill(msg);
           if (msg.feedText) {
@@ -3002,11 +3588,11 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
           const killerName =
             msg.killerId == myUserId
               ? character.name
-              : livePlayersRef.current[killerUid]?.username || `玩家#${killerUid}`;
+              : msg.killerName || livePlayersRef.current[killerUid]?.username || `玩家#${killerUid}`;
           const victimName =
             msg.victimId == myUserId
               ? character.name
-              : livePlayersRef.current[victimUid]?.username || `玩家#${victimUid}`;
+              : msg.victimName || livePlayersRef.current[victimUid]?.username || `玩家#${victimUid}`;
           if (msg.killerId == myUserId) {
             setPlayerKills((k) => k + 1);
           } else if (killerUid) {
@@ -3019,7 +3605,9 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
               },
             }));
           }
-          if (victimUid && msg.victimId != myUserId) {
+          if (msg.victimId == myUserId) {
+            control.current?.diePlayer();
+          } else if (victimUid) {
             setRemoteStats((prev) => ({
               ...prev,
               [victimUid]: {
@@ -3028,9 +3616,9 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
                 hp: 0,
               },
             }));
+            control.current?.handleRemoteKill(msg.victimId);
           }
           pushKillFeed(`⚔️ [${killerName}] 击败了 [${victimName}]`, msg.killerId == myUserId ? '#34d399' : '#f87171');
-          control.current?.handleRemoteKill(msg.victimId);
         } else if (msg.type === 'chat') {
           const senderName = msg.sender || '战友';
           const textContent = msg.content || '';
@@ -3050,7 +3638,7 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
           }
         } else if (msg.type === 'respawn') {
           if (msg.userId == myUserId) {
-            setHealth(maxHealth);
+            performLocalRespawn(false);
           } else {
             const uidStr = String(msg.userId ?? '');
             if (uidStr) {
@@ -3072,13 +3660,14 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
     };
 
     return () => {
+      window.clearInterval(pingTimer);
       unsubVoice();
       voiceMgr.destroy();
       voiceManagerRef.current = null;
       ws.close();
       wsRef.current = null;
     };
-  }, [room.id, myUserId, character.name]);
+  }, [room.id, myUserId, character.name, isSpectator]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -3243,20 +3832,35 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
     };
   }, [showScoreboard, showVoteKickModal, voiceWheelOpen, chatChannel, respawnCountdown, medkitsLeft, buffItemsLeft, reviveTicketsLeft, slots, character.name]);
 
+  const lastHitMarkerUiAtRef = useRef(0);
   const triggerHitMarker = (crit = false) => {
-    setHitMarker({ active: true, crit });
+    const now = performance.now();
+    if (crit || now - lastHitMarkerUiAtRef.current >= 95) {
+      lastHitMarkerUiAtRef.current = now;
+      setHitMarker((prev) => (prev.active && prev.crit === crit ? prev : { active: true, crit }));
+    }
     window.clearTimeout(hitTimerRef.current);
     hitTimerRef.current = window.setTimeout(() => setHitMarker({ active: false, crit: false }), 160);
   };
 
+  const lastRecoilUiAtRef = useRef(0);
   const triggerRecoil = (spread: number) => {
-    setRecoilSpread(spread);
+    const now = performance.now();
+    if (now - lastRecoilUiAtRef.current >= 95) {
+      lastRecoilUiAtRef.current = now;
+      setRecoilSpread((prev) => (Math.abs(prev - spread) < 0.002 ? prev : spread));
+    }
     window.clearTimeout(recoilTimerRef.current);
     recoilTimerRef.current = window.setTimeout(() => setRecoilSpread(0), 120);
   };
 
+  const lastHurtFlashUiAtRef = useRef(0);
   const triggerHurtFlash = () => {
-    setHurtFlash(true);
+    const now = performance.now();
+    if (now - lastHurtFlashUiAtRef.current >= 140) {
+      lastHurtFlashUiAtRef.current = now;
+      setHurtFlash((prev) => (prev ? prev : true));
+    }
     window.clearTimeout(hurtTimerRef.current);
     hurtTimerRef.current = window.setTimeout(() => setHurtFlash(false), 260);
   };
@@ -3302,6 +3906,8 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
     control.current?.fire();
   };
 
+  const lastAmmoUiAtRef = useRef(0);
+  const ammoFlushTimerRef = useRef(0);
   const onShot = () => {
     if (sandboxRulesRef.current.infiniteAmmo) return true;
     const index = selectedRef.current;
@@ -3309,7 +3915,14 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
     if (curAmmo < 1) return false;
     const nextAmmo = curAmmo - 1;
     ammoRef.current = ammoRef.current.map((value, slot) => slot === index ? nextAmmo : value);
-    setAmmo(ammoRef.current);
+    const now = performance.now();
+    window.clearTimeout(ammoFlushTimerRef.current);
+    if (nextAmmo <= 0 || now - lastAmmoUiAtRef.current >= 85) {
+      lastAmmoUiAtRef.current = now;
+      setAmmo(ammoRef.current);
+    } else {
+      ammoFlushTimerRef.current = window.setTimeout(() => setAmmo([...ammoRef.current]), 85);
+    }
     if (nextAmmo <= 0) {
       window.setTimeout(() => {
         if ((ammoRef.current[selectedRef.current] ?? 0) <= 0) {
@@ -3342,19 +3955,29 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   };
 
   const reportPosition = (x: number, y: number, z: number, yaw: number, extra?: Record<string, any>) => {
-    if (wsRef.current) {
+    hasValidPosRef.current = true;
+    latestLocalPosRef.current = { x, y, z, yaw, extra };
+    if (wsRef.current && !isSpectator) {
       sequenceRef.current++;
+      // Only send heavy appearance & weaponIds metadata on every 40th packet (~1.2s) to keep 33Hz sync packets tiny (~140B)
+      const includeFullMeta = sequenceRef.current % 40 === 1;
       wsRef.current.sendMove(myUserId, x, y, z, yaw, sequenceRef.current, {
         ...extra,
         username: character.name,
+        level: character.level,
         jobId: character.jobId,
-        appearance: character.appearance,
-        weaponIds: weapons.map((w) => w.id),
+        team: myTeam,
+        ...(includeFullMeta
+          ? {
+              appearance: character.appearance,
+              weaponIds: weapons.map((w) => w.id),
+            }
+          : {}),
       });
     }
     voiceManagerRef.current?.updateLocalTransform(x, y, z, yaw);
     setPosition((previous) =>
-      Math.abs(previous.x - x) + Math.abs((previous.y ?? 0) - y) + Math.abs(previous.z - z) + Math.abs(previous.yaw - yaw) > 2.0
+      Math.abs(previous.x - x) + Math.abs((previous.y ?? 0) - y) + Math.abs(previous.z - z) + Math.abs(previous.yaw - yaw) > 1.2
         ? { x, y, z, yaw }
         : previous
     );
@@ -3390,10 +4013,14 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
 
   const finishAndExit = () => {
     const rId = room.id ?? '';
-    if (rId && rId !== 'practice' && rId !== 'default-room') {
+    if (rId && rId !== 'practice' && rId !== 'default-room' && !isSpectator) {
       void apiFetch(`/rooms/${rId}/leave?username=${encodeURIComponent(character.name)}`, {
         method: 'POST',
       }).catch(() => undefined);
+    }
+    if (isSpectator) {
+      onExit();
+      return;
     }
     void apiFetch('/battle/settle', {
       method: 'POST',
@@ -3403,7 +4030,7 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
         mapName: room.mapName,
         kills: playerKills,
         deaths: playerDeaths,
-        victory: scoreRed >= scoreBlue,
+        victory: myTeam === 'blue' ? scoreBlue >= scoreRed : scoreRed >= scoreBlue,
       }),
     }).catch(() => undefined).finally(() => onExit());
   };
@@ -3427,9 +4054,13 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
       map={chosenMap}
       customMap={customMap}
       roomId={room.id ?? 'practice'}
+      myUserId={myUserId}
+      myTeam={myTeam}
+      isSpectator={isSpectator}
       modeId={room.modeId || 'team'}
       damageBonusMult={damageBonusMult}
       hasPetCompanion={hasPetCompanion}
+      activePetId={activePetId}
       wingAttachment={resolvedWingAttachment}
       character={character}
       creation={creation}
@@ -3449,9 +4080,10 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
       onBotsChange={setBots}
       onBotKill={(botName = '蓝方卫兵', weaponName = '武器') => {
         setPlayerKills((k) => k + 1);
-        setScoreRed((prev) => prev + 1);
+        if (myTeam === 'blue') setScoreBlue((prev) => prev + 1);
+        else setScoreRed((prev) => prev + 1);
         pushKillFeed(`⚔️ [${character.name}] 使用 ${weaponName} 击杀了 [${botName}]`, '#34d399');
-        wsRef.current?.sendJSON({ type: 'bot_kill', team: 'red' });
+        wsRef.current?.sendJSON({ type: 'bot_kill', team: myTeam });
       }}
       onObjectiveScore={(redDelta, blueDelta, feedText, extra) => {
         if (redDelta > 0) {
@@ -3506,6 +4138,13 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
           ...evt,
         });
       }}
+      onEmoteEvent={(evt) => {
+        wsRef.current?.sendJSON({
+          type: 'emote',
+          userId: myUserId,
+          ...evt,
+        });
+      }}
       onSkillEvent={(evt) => {
         wsRef.current?.sendJSON({
           type: 'skill_cast',
@@ -3515,6 +4154,8 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
       }}
       otherPlayers={otherPlayersRef}
       roomPlayers={livePlayers}
+      remoteStats={remoteStats}
+      voiceParticipants={voiceSnap?.participants}
       logDebug={logDebug}
       onShot={onShot}
       onHotbar={(next) => {
@@ -3567,7 +4208,13 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
         triggerHurtFlash();
         setHealth((value) => Math.max(0, value - amount));
       }}
-      onHeal={(amount) => setHealth((value) => Math.min(maxHealth, value + amount))}
+      onHeal={(amount) => {
+        setHealth((value) => {
+          const nextHp = Math.min(maxHealth, value + amount);
+          wsRef.current?.sendJSON({ type: 'heal_sync', userId: myUserId, hp: nextHp });
+          return nextHp;
+        });
+      }}
       onPause={() => setPaused(true)} />}
 
     {!ready && <div className="battle-loading" role="status">{error || `${chosenMap?.name || room.mapName} · 战场加载中…`}</div>}
@@ -3630,6 +4277,9 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
           }}
         >
           <span style={{ color: '#38bdf8' }}>[{room.modeName || '团队竞技'}]</span>
+          {isSpectator && (
+            <span style={{ color: '#c084fc', fontSize: 12 }}>👁️ 观战模式 (按 F1/F2/F3 切换视角)</span>
+          )}
           <span>{objectiveState.statusText}</span>
           {damageBonusMult > 1 && (
             <span style={{ color: '#fbbf24', fontSize: 11 }}>
@@ -3641,6 +4291,16 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
               🔋 能量转化 {hotbar.transferEnergy}%
             </span>
           )}
+          <span
+            style={{
+              color: pingMs < 45 ? '#34d399' : pingMs < 100 ? '#fbbf24' : '#f87171',
+              fontSize: 11,
+              fontFamily: 'monospace',
+            }}
+            title="实时网络往返延迟 (RTT)"
+          >
+            📶 {pingMs}ms
+          </span>
         </div>
 
         {/* Boss HP Bar for Expedition / Boss Mode */}
@@ -4520,7 +5180,37 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
 
     <aside className="battle-minimap" aria-label="小地图">
       <div className="battle-map-image" style={mapArt ? { backgroundImage: `url(${BASE}${mapArt})` } : undefined}>
-        <span className="battle-map-marker" style={{ left: `${THREE.MathUtils.clamp(markerX, 5, 95)}%`, top: `${THREE.MathUtils.clamp(markerY, 5, 95)}%`, transform: `translate(-50%, -50%) rotate(${-position.yaw}rad)` }}>▲</span>
+        <span className="battle-map-marker" style={{ left: `${THREE.MathUtils.clamp(markerX, 5, 95)}%`, top: `${THREE.MathUtils.clamp(markerY, 5, 95)}%`, transform: `translate(-50%, -50%) rotate(${-position.yaw}rad)` }} title={character.name}>▲</span>
+        {Object.entries(otherPlayersRef.current || {}).map(([uidStr, stateObj]) => {
+          if (String(uidStr) === String(myUserId) || !stateObj?.buffer?.length) return null;
+          const latest = stateObj.buffer[stateObj.buffer.length - 1];
+          if (!latest || latest.stealthed) return null;
+          const rx = bounds?.length ? 50 + ((latest.x - bounds[0]) / bounds[2]) * 100 : 50;
+          const ry = bounds?.length ? 50 - ((latest.z - bounds[1]) / bounds[3]) * 100 : 50;
+          const pInfo = livePlayers[uidStr];
+          const pName = pInfo?.username || latest.username || `玩家#${uidStr}`;
+          const isRed = (pInfo?.team || latest.team) === 'red';
+          return (
+            <span
+              key={`mm-${uidStr}`}
+              title={pName}
+              style={{
+                position: 'absolute',
+                left: `${THREE.MathUtils.clamp(rx, 6, 94)}%`,
+                top: `${THREE.MathUtils.clamp(ry, 6, 94)}%`,
+                transform: 'translate(-50%, -50%)',
+                width: 9,
+                height: 9,
+                borderRadius: '50%',
+                background: isRed ? '#ef4444' : '#38bdf8',
+                border: '1.5px solid #ffffff',
+                boxShadow: '0 0 6px rgba(0,0,0,0.8)',
+                pointerEvents: 'none',
+                zIndex: 3,
+              }}
+            />
+          );
+        })}
       </div>
       <span className="battle-map-name">{chosenMap?.name || room.mapName}</span>
     </aside>

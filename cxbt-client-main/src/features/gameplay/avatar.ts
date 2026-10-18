@@ -37,6 +37,7 @@ export type BattleAvatar = {
   spurt: () => void;
   hit?: () => void;
   die?: () => void;
+  revive?: () => void;
   playSkillAnim?: (skillAnimName: string) => Promise<void>;
   /** Fades the avatar while the stealth skill is active. */
   setGhost: (on: boolean) => void;
@@ -422,6 +423,13 @@ export async function createBattleAvatar(assets: CreationAssets, preset: Creatio
         stopUpper();
         play(commonDeathClip, true);
       }
+    },
+    revive() {
+      stopUpper();
+      transient = 0;
+      moving = false;
+      flying = false;
+      base();
     },
     async playSkillAnim(skillAnimName: string) {
       try {

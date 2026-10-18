@@ -1,11 +1,20 @@
 import * as THREE from 'three';
 
+export interface FloatingTextPoolItem {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  texture: any;
+  material: any;
+  sprite: any;
+}
+
 export interface FloatingDamageText {
   sprite: any;
   position: any;
   velocity: any;
   lifetime: number;
   maxLifetime: number;
+  poolItem?: FloatingTextPoolItem;
 }
 
 export interface SparkParticle {
@@ -39,7 +48,11 @@ export class CombatEffectsManager {
   public muzzleLight: any;
   public muzzleFlashGroup: any;
 
+  private static sharedSparkTorusGeo = new THREE.TorusGeometry(0.12, 0.025, 6, 12);
+  private static sharedSparkBoxGeo = new THREE.BoxGeometry(0.05, 0.05, 0.05);
+
   private floatingTexts: FloatingDamageText[] = [];
+  private floatingTextPool: FloatingTextPoolItem[] = [];
   private sparks: SparkParticle[] = [];
   private explosions: ExplosionEffect[] = [];
   private muzzleTimer: number = 0;
@@ -52,6 +65,7 @@ export class CombatEffectsManager {
   constructor(scene: any) {
     this.scene = scene;
     this.initVfxTextures();
+    this.initFloatingTextPool(10);
 
     // 枪口火焰动态光源
     this.muzzleLight = new THREE.PointLight(0xffb03a, 0, 14);
@@ -126,6 +140,45 @@ export class CombatEffectsManager {
 
     this.muzzleFlashGroup.visible = false;
     scene.add(this.muzzleFlashGroup);
+  }
+
+  private createFloatingTextPoolItem(): FloatingTextPoolItem | null {
+    const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false
+    });
+    const sprite = new THREE.Sprite(material);
+    return { canvas, ctx, texture, material, sprite };
+  }
+
+  private initFloatingTextPool(size: number) {
+    for (let i = 0; i < size; i++) {
+      const item = this.createFloatingTextPoolItem();
+      if (item) this.floatingTextPool.push(item);
+    }
+  }
+
+  private acquireFloatingTextItem(): FloatingTextPoolItem | null {
+    if (this.floatingTextPool.length > 0) {
+      return this.floatingTextPool.pop()!;
+    }
+    if (this.floatingTexts.length >= 10) {
+      for (let i = 0; i < this.floatingTexts.length; i++) {
+        if (this.floatingTexts[i].poolItem) {
+          const recycled = this.floatingTexts.splice(i, 1)[0];
+          this.scene.remove(recycled.sprite);
+          return recycled.poolItem!;
+        }
+      }
+    }
+    return this.createFloatingTextPoolItem();
   }
 
   private initVfxTextures() {
@@ -569,7 +622,7 @@ export class CombatEffectsManager {
   }
 
   /**
-   * 生成 3D 浮动伤害跳字
+   * 生成 3D 浮动伤害跳字 (复用预分配 CanvasTexture/Sprite 对象池，彻底消除开火命中时的 Canvas/WebGL 创建卡顿)
    */
   public spawnFloatingDamage(
     pos: any,
@@ -577,14 +630,18 @@ export class CombatEffectsManager {
     isHeadshot: boolean = false,
     isPlayer: boolean = false
   ) {
+    const now = performance.now();
+    const lastSpawnAt = (this as any)._lastFloatingDmgAt || 0;
+    if (now - lastSpawnAt < 55 && this.floatingTexts.length > 3) {
+      return;
+    }
+    (this as any)._lastFloatingDmgAt = now;
     const rounded = Math.max(1, Math.round(damage));
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 64;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const item = this.acquireFloatingTextItem();
+    if (!item) return;
 
-    ctx.clearRect(0, 0, 256, 64);
+    const { ctx, texture, material, sprite } = item;
+    ctx.clearRect(0, 0, 320, 64);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
@@ -593,46 +650,43 @@ export class CombatEffectsManager {
 
     ctx.lineWidth = 5;
     ctx.strokeStyle = isHeadshot ? '#7f1d1d' : (isPlayer ? '#450a0a' : '#0f172a');
-    ctx.strokeText(text, 128, 32);
+    ctx.strokeText(text, 160, 32);
 
     ctx.fillStyle = isHeadshot ? '#fbbf24' : (isPlayer ? '#ef4444' : '#f8fafc');
-    ctx.fillText(text, 128, 32);
+    ctx.fillText(text, 160, 32);
 
-    const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
-    const material = new THREE.SpriteMaterial({
-      map: texture,
-      transparent: true,
-      depthTest: false
-    });
-    const sprite = new THREE.Sprite(material);
-    sprite.position.copy(pos).add(new THREE.Vector3((Math.random() - 0.5) * 0.3, 0.35, (Math.random() - 0.5) * 0.3));
+    material.opacity = 1;
+    sprite.position.set(
+      pos.x + (Math.random() - 0.5) * 0.3,
+      pos.y + 0.35,
+      pos.z + (Math.random() - 0.5) * 0.3
+    );
     const scale = isHeadshot ? 1.7 : 1.3;
     sprite.scale.set(scale * 1.5, scale * 0.4, 1);
     this.scene.add(sprite);
 
-    const maxLifetime = isHeadshot ? 1.15 : 0.85;
+    const maxLifetime = isHeadshot ? 1.0 : 0.75;
     this.floatingTexts.push({
       sprite,
       position: sprite.position,
       velocity: new THREE.Vector3((Math.random() - 0.5) * 0.6, 2.1 + Math.random() * 0.8, (Math.random() - 0.5) * 0.6),
       lifetime: maxLifetime,
-      maxLifetime
+      maxLifetime,
+      poolItem: item
     });
   }
 
   /**
-   * 生成 3D 浮动治疗跳字
+   * 生成 3D 浮动治疗跳字 (复用预分配对象池，消除复活/加血瞬间的 GPU 纹理创建卡顿)
    */
   public spawnFloatingHeal(pos: any, amount: number) {
     const rounded = Math.max(1, Math.round(amount));
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 64;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const item = this.acquireFloatingTextItem();
+    if (!item) return;
 
-    ctx.clearRect(0, 0, 256, 64);
+    const { ctx, texture, material, sprite } = item;
+    ctx.clearRect(0, 0, 320, 64);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
@@ -641,20 +695,18 @@ export class CombatEffectsManager {
 
     ctx.lineWidth = 5;
     ctx.strokeStyle = '#064e3b';
-    ctx.strokeText(text, 128, 32);
+    ctx.strokeText(text, 160, 32);
 
     ctx.fillStyle = '#4ade80';
-    ctx.fillText(text, 128, 32);
+    ctx.fillText(text, 160, 32);
 
-    const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
-    const material = new THREE.SpriteMaterial({
-      map: texture,
-      transparent: true,
-      depthTest: false
-    });
-    const sprite = new THREE.Sprite(material);
-    sprite.position.copy(pos).add(new THREE.Vector3((Math.random() - 0.5) * 0.25, 0.45, (Math.random() - 0.5) * 0.25));
+    material.opacity = 1;
+    sprite.position.set(
+      pos.x + (Math.random() - 0.5) * 0.25,
+      pos.y + 0.45,
+      pos.z + (Math.random() - 0.5) * 0.25
+    );
     sprite.scale.set(1.9, 0.5, 1);
     this.scene.add(sprite);
 
@@ -662,17 +714,25 @@ export class CombatEffectsManager {
       sprite,
       position: sprite.position,
       velocity: new THREE.Vector3((Math.random() - 0.5) * 0.4, 1.9, (Math.random() - 0.5) * 0.4),
-      lifetime: 0.95,
-      maxLifetime: 0.95
+      lifetime: 0.85,
+      maxLifetime: 0.85,
+      poolItem: item
     });
   }
 
   /**
-   * 生成撞墙与命中四溅火花 (融合原版 vfx_Glow_Flare / vfx_spark_group 贴图闪光)
+   * 生成撞墙与命中四溅火花 (融合原版 vfx_Glow_Flare / vfx_spark_group 贴图闪光，共享几何体消除 GC)
    */
   public spawnImpactSpark(point: any, color: number = 0xfef08a) {
+    const now = performance.now();
+    const lastSparkAt = (this as any)._lastImpactSparkAt || 0;
+    if (now - lastSparkAt < 28 && this.sparks.length > 24) {
+      return;
+    }
+    (this as any)._lastImpactSparkAt = now;
+
     const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.12, 0.025, 6, 12),
+      CombatEffectsManager.sharedSparkTorusGeo,
       new THREE.MeshBasicMaterial({
         color,
         transparent: true,
@@ -681,6 +741,7 @@ export class CombatEffectsManager {
         depthWrite: false
       })
     );
+    ring.userData.sharedGeo = true;
     ring.position.copy(point);
     ring.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
     this.scene.add(ring);
@@ -711,18 +772,18 @@ export class CombatEffectsManager {
       });
     }
 
-    for (let i = 0; i < 5; i++) {
-      const geo = new THREE.BoxGeometry(0.05, 0.05, 0.05);
+    for (let i = 0; i < 2; i++) {
       const mat = new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? color : 0xf97316, transparent: true, opacity: 0.95 });
-      const mesh = new THREE.Mesh(geo, mat);
+      const mesh = new THREE.Mesh(CombatEffectsManager.sharedSparkBoxGeo, mat);
+      mesh.userData.sharedGeo = true;
       mesh.position.copy(point);
       this.scene.add(mesh);
       this.sparks.push({
         mesh,
         velocity: new THREE.Vector3((Math.random() - 0.5) * 5.5, 1.8 + Math.random() * 3.8, (Math.random() - 0.5) * 5.5),
         rotSpeed: new THREE.Vector3(10, 12, 8),
-        lifetime: 0.22,
-        maxLifetime: 0.22
+        lifetime: 0.20,
+        maxLifetime: 0.20
       });
     }
   }
@@ -1131,12 +1192,10 @@ export class CombatEffectsManager {
    * 生成 3D 状态提示跳字（如：☠️ 毒刃中毒、🦠 瘟疫感染、🩸 生命傀儡、💔 要害虚弱、🛡️ 盾牌格挡）
    */
   public spawnStatusText(pos: any, label: string, colorHex: string = '#c084fc') {
-    const canvas = document.createElement('canvas');
-    canvas.width = 320;
-    canvas.height = 64;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const item = this.acquireFloatingTextItem();
+    if (!item) return;
 
+    const { ctx, texture, material, sprite } = item;
     ctx.clearRect(0, 0, 320, 64);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -1147,20 +1206,18 @@ export class CombatEffectsManager {
     ctx.fillStyle = colorHex;
     ctx.fillText(label, 160, 32);
 
-    const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
-    const sprite = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false })
-    );
-    sprite.position.copy(pos).add(new THREE.Vector3(0, 0.75, 0));
+    material.opacity = 1;
+    sprite.position.set(pos.x, pos.y + 0.75, pos.z);
     sprite.scale.set(2.2, 0.48, 1);
     this.scene.add(sprite);
     this.floatingTexts.push({
       sprite,
       position: sprite.position,
       velocity: new THREE.Vector3(0, 1.5, 0),
-      lifetime: 1.15,
-      maxLifetime: 1.15
+      lifetime: 1.0,
+      maxLifetime: 1.0,
+      poolItem: item
     });
   }
 
@@ -1229,20 +1286,24 @@ export class CombatEffectsManager {
 
       if (ft.lifetime <= 0) {
         this.scene.remove(ft.sprite);
-        ft.sprite.material.map?.dispose();
-        ft.sprite.material.dispose();
+        if (ft.poolItem) {
+          this.floatingTextPool.push(ft.poolItem);
+        } else {
+          ft.sprite.material.map?.dispose();
+          ft.sprite.material.dispose();
+        }
         this.floatingTexts.splice(i, 1);
       }
     }
 
-    while (this.sparks.length > 120) {
+    while (this.sparks.length > 80) {
       const oldest = this.sparks.shift();
       if (oldest) {
         this.scene.remove(oldest.mesh);
         oldest.mesh.material?.dispose?.();
         oldest.mesh.traverse?.((c: any) => {
           if (c.isMesh) {
-            c.geometry?.dispose();
+            if (!c.userData?.sharedGeo) c.geometry?.dispose();
             c.material?.dispose();
           }
         });
@@ -1290,7 +1351,7 @@ export class CombatEffectsManager {
         }
         sp.mesh.traverse?.((c: any) => {
           if (c.isMesh) {
-            c.geometry?.dispose();
+            if (!c.userData?.sharedGeo) c.geometry?.dispose();
             c.material?.dispose();
           }
         });
@@ -1311,7 +1372,7 @@ export class CombatEffectsManager {
         this.scene.remove(exp.mesh);
         exp.mesh.traverse?.((c: any) => {
           if (c.isMesh) {
-            c.geometry?.dispose();
+            if (!c.userData?.sharedGeo) c.geometry?.dispose();
             c.material?.dispose();
           }
         });
@@ -1339,11 +1400,16 @@ export class CombatEffectsManager {
       ft.sprite.material.dispose();
     }
     this.floatingTexts = [];
+    for (const item of this.floatingTextPool) {
+      item.texture?.dispose();
+      item.material?.dispose();
+    }
+    this.floatingTextPool = [];
     for (const sp of this.sparks) {
       this.scene.remove(sp.mesh);
       sp.mesh.traverse?.((c: any) => {
         if (c.isMesh) {
-          c.geometry?.dispose();
+          if (!c.userData?.sharedGeo) c.geometry?.dispose();
           c.material?.dispose();
         }
       });
@@ -1353,7 +1419,7 @@ export class CombatEffectsManager {
       this.scene.remove(exp.mesh);
       exp.mesh.traverse?.((c: any) => {
         if (c.isMesh) {
-          c.geometry?.dispose();
+          if (!c.userData?.sharedGeo) c.geometry?.dispose();
           c.material?.dispose();
         }
       });

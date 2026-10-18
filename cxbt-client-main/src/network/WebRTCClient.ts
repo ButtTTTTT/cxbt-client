@@ -1,16 +1,35 @@
 export class WebRTCClient {
-  private gameWs: WebSocket; // Game events
+  private gameWs!: WebSocket;
+  private gameUrl: string;
+  private onReadyCallback?: () => void;
+  private closedByApp = false;
+  private reconnectTimer: number | null = null;
+  private pendingQueue: string[] = [];
   public onMessage?: (msg: any) => void;
 
   constructor(gameUrl: string, _signalingUrl?: string, onReady?: () => void) {
-    this.gameWs = new WebSocket(gameUrl);
-    
+    this.gameUrl = gameUrl;
+    this.onReadyCallback = onReady;
+    this.connect();
+  }
+
+  private connect() {
+    if (this.closedByApp) return;
+    try {
+      this.gameWs = new WebSocket(this.gameUrl);
+    } catch {
+      this.scheduleReconnect();
+      return;
+    }
+
     this.gameWs.onopen = () => {
-      console.log('Game WebSocket opened!');
-      if (onReady) onReady();
+      while (this.pendingQueue.length > 0 && this.gameWs.readyState === WebSocket.OPEN) {
+        const payload = this.pendingQueue.shift();
+        if (payload) this.gameWs.send(payload);
+      }
+      if (this.onReadyCallback) this.onReadyCallback();
     };
 
-    // Game WS handles game logic events from Redis
     this.gameWs.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
@@ -19,11 +38,34 @@ export class WebRTCClient {
         console.error('WebSocket message parsing error:', err);
       }
     };
+
+    this.gameWs.onclose = () => {
+      if (!this.closedByApp) {
+        this.scheduleReconnect();
+      }
+    };
+
+    this.gameWs.onerror = () => {
+      // onclose will handle reconnection
+    };
   }
-  
+
+  private scheduleReconnect() {
+    if (this.closedByApp || this.reconnectTimer !== null) return;
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connect();
+    }, 600);
+  }
+
   sendJSON(obj: any) {
-    if (this.gameWs.readyState === WebSocket.OPEN) {
-      this.gameWs.send(JSON.stringify(obj));
+    const raw = JSON.stringify(obj);
+    if (this.gameWs && this.gameWs.readyState === WebSocket.OPEN) {
+      this.gameWs.send(raw);
+    } else if (!this.closedByApp && obj?.type !== 'sync') {
+      if (this.pendingQueue.length < 32) {
+        this.pendingQueue.push(raw);
+      }
     }
   }
 
@@ -49,7 +91,14 @@ export class WebRTCClient {
   }
 
   close() {
-    this.gameWs.close();
+    this.closedByApp = true;
+    if (this.reconnectTimer !== null) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    try {
+      this.gameWs?.close();
+    } catch {}
   }
 }
 
