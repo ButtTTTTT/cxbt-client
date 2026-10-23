@@ -788,22 +788,42 @@ export default function ModelViewer() {
                 </option>
               ))}
             </optgroup>
-            <optgroup label="── 16 项造型卡展示姿态 (Card Poses) ──">
-              {Array.from({ length: 8 }, (_, i) => i + 1).map(n => (
-                <option key={`cp-${n}`} value={`lobby:card/pose_${n}`}>
-                  🃏 卡片登场姿态 #{n} (card/pose_{n})
+            {/* 结算翻牌 3D 角色动作与换装间动作选项 (对应 public/assets/lobby/animations/card 与 avatar) */}
+            <optgroup label="Card Poses (card_01..09)">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
+                <option key={`cp-${n}`} value={`lobby:card/card_0${n}`}>
+                  Card Flip #{n} (card/card_0{n})
                 </option>
               ))}
-              {Array.from({ length: 8 }, (_, i) => i + 1).map(n => (
-                <option key={`ci-${n}`} value={`lobby:card/idle_${n}`}>
-                  🃏 卡片待机姿态 #{n} (card/idle_{n})
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
+                <option key={`ci-${n}`} value={`lobby:card/card_0${n}_pose`}>
+                  Card Pose #{n} (card/card_0{n}_pose)
                 </option>
               ))}
             </optgroup>
-            <optgroup label="── 角色更衣室姿态 (Avatar Room) ──">
-              {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
-                <option key={`ap-${n}`} value={`lobby:avatar/avatar_pose_${n}`}>
-                  🪞 更衣室展示姿态 #{n} (avatar_pose_{n})
+            <optgroup label="Avatar Room Poses (avatar/*)">
+              {[
+                'character_change',
+                'coat',
+                'pants',
+                'shoesc',
+                'hair',
+                'gloves',
+                'helmet',
+                'beardb',
+                'trinket',
+                'trinket_coat',
+                'danceb',
+                'dancec',
+                'wina',
+                'losea',
+                'standa',
+                'standb',
+                'ready',
+                'chosea',
+              ].map(animName => (
+                <option key={`ap-${animName}`} value={`lobby:avatar/${animName}`}>
+                  Avatar Room ({animName})
                 </option>
               ))}
             </optgroup>

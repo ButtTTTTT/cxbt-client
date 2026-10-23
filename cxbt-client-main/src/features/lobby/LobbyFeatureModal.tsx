@@ -597,6 +597,19 @@ export default function LobbyFeatureModal({
                               } catch {
                                 // Still allow 3D live preview even if offline
                               }
+                              // 根据换装部位槽位自动匹配原版换装间专属展示动作 (09_换装间与结算卡牌动作)
+                              const slotAnimMap: Record<string, string> = {
+                                hair: 'animations/avatar/hair.json',
+                                helmet: 'animations/avatar/helmet.json',
+                                mask: 'animations/avatar/beardb.json',
+                                cloth: 'animations/avatar/coat.json',
+                                pant: 'animations/avatar/pants.json',
+                                shoulder: 'animations/avatar/trinket_coat.json',
+                                wrist: 'animations/avatar/gloves_a.json',
+                                gloves: 'animations/avatar/gloves.json',
+                                boot: 'animations/avatar/shoesc.json',
+                              };
+                              const dressingAnim = slotAnimMap[part.slot] || 'animations/avatar/trinket.json';
                               onSelectBagItem?.({
                                 id: part.id,
                                 name: part.name,
@@ -608,7 +621,7 @@ export default function LobbyFeatureModal({
                                   texture: part.textureUrl,
                                   bone: 'avatar_part',
                                   animation: null,
-                                  characterAnimation: null,
+                                  characterAnimation: dressingAnim,
                                 },
                               });
                               notify(`已穿戴解密 3D 部件【${part.name}】至大厅角色模型！`);

@@ -6,7 +6,8 @@ import type { SavedCharacter } from '../characterCreation/character';
 import { initialAppearance, type CreationAssets, type CreationAttachment, type CreationPreset, type CreationWeapon } from '../characterCreation/assets';
 import type { LobbyAssets } from '../lobby/assets';
 import type { RoomConfig } from '../gameMode/CreateRoomDialog';
-import { createBattleAvatar, type BattleAvatar } from './avatar';
+import { createBattleAvatar, resolveMoveDirection, type BattleAvatar } from './avatar';
+import CharacterPreview from '../characterCreation/CharacterPreview';
 import { createBattleAudio } from './audio';
 import BattleHud from './BattleHud';
 import { BATTLE_QUICK_KEYS } from './hud';
@@ -106,6 +107,7 @@ type BattleControl = {
   equipPet: (petId: string) => void;
   useBattleItem: (itemId: string) => boolean;
   setWatchCameraMode: (mode: 'player' | 'chase' | 'free') => void;
+  playCardPose?: (cardIdx: number, poseOnly?: boolean) => void;
 };
 type HotbarState = {
   cooldowns: number[];
@@ -1717,6 +1719,9 @@ const BattleScene = memo(function BattleScene({ map, customMap, roomId, myUserId
           cam.heightOffset = 4.2;
         }
       },
+      playCardPose(cardIdx: number, poseOnly = false) {
+        void localPlayer?.battleAvatar?.playCardPose?.(cardIdx, poseOnly);
+      },
     };
 
     const lockPointer = () => {
@@ -2555,7 +2560,20 @@ const BattleScene = memo(function BattleScene({ map, customMap, roomId, myUserId
                   void remoteEntity.equipWing(wAtt);
                 }
               }
-              remoteEntity.battleAvatar.setMoving(speed > 0.15 || Boolean(latest?.isFlying));
+              // 根据远端玩家世界位移速度向量与角色朝向偏航角的夹角，实时解算八方向奔跑姿态
+              const worldDx = (Number(latest?.vx) || 0) !== 0
+                ? Number(latest.vx)
+                : (remoteEntity.modelGroup.position.x - oldPos.x) / Math.max(0.001, delta);
+              const worldDz = (Number(latest?.vz) || 0) !== 0
+                ? Number(latest.vz)
+                : (remoteEntity.modelGroup.position.z - oldPos.z) / Math.max(0.001, delta);
+              const rYaw = remoteEntity.modelGroup.rotation.y || 0;
+              const cosY = Math.cos(-rYaw);
+              const sinY = Math.sin(-rYaw);
+              const localX = worldDx * cosY + worldDz * sinY;
+              const localZ = -worldDx * sinY + worldDz * cosY;
+              const remoteMoveDir = speed > 0.15 ? resolveMoveDirection(localX, localZ) : 'run';
+              remoteEntity.battleAvatar.setMoving(speed > 0.15 || Boolean(latest?.isFlying), remoteMoveDir);
               remoteEntity.battleAvatar.update(delta);
               if (latest?.isFlying) {
                 const wingTips = remoteEntity.getWingTipPositions();
@@ -3050,6 +3068,9 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
   const [showScoreboard, setShowScoreboard] = useState(false);
   const [showSettlement, setShowSettlement] = useState(false);
   const [flippedCards, setFlippedCards] = useState<Record<number, { name: string; icon: string; amount: string; rarity: string }>>({});
+  // 结算翻牌 3D 角色动作状态 (对应 card_01..09.json 与 card_01..09_pose.json)
+  const [settlementCardAnim, setSettlementCardAnim] = useState<string>('animations/card/card_01_pose.json');
+  const settlementPoseTimerRef = useRef<number | null>(null);
   const damageBonusMult = useMemo(() => Math.max(1, 1 + Math.max(0, (character.power ?? 1500) - 1500) / 2500), [character.power]);
   const [hasPetCompanion] = useState(true);
   const [activePetId, setActivePetId] = useState<string>(
@@ -3983,7 +4004,23 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
     );
   };
 
+  // 触发结算翻牌 3D 角色动作：先播放入场翻牌动作 card_0X.json，随后衔接定格展示动作 card_0X_pose.json
+  const triggerSettlementCardAnim = (cardNumber: number) => {
+    const safeIdx = Math.max(1, Math.min(9, Math.round(cardNumber || 1)));
+    const padded = `0${safeIdx}`;
+    setSettlementCardAnim(`animations/card/card_${padded}.json`);
+    control.current?.playCardPose?.(safeIdx, false);
+    if (settlementPoseTimerRef.current) {
+      window.clearTimeout(settlementPoseTimerRef.current);
+    }
+    settlementPoseTimerRef.current = window.setTimeout(() => {
+      setSettlementCardAnim(`animations/card/card_${padded}_pose.json`);
+      control.current?.playCardPose?.(safeIdx, true);
+    }, 1250);
+  };
+
   const handleFlipRewardCard = async (cardIdx: number) => {
+    triggerSettlementCardAnim(cardIdx + 1);
     if (flippedCards[cardIdx] || Object.keys(flippedCards).length >= 3) return;
     try {
       const data = await apiFetch('/battle/flip-card', {
@@ -5667,6 +5704,65 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
                   <div style={{ color: '#94a3b8', fontSize: 11 }}>强化火力加成</div>
                   <div style={{ fontSize: 20, fontWeight: 'bold', color: '#a78bfa' }}>
                     +{Math.round((damageBonusMult - 1) * 100)}%
+                  </div>
+                </div>
+              </div>
+              {/* 结算翻牌 3D 角色动作实时预览窗口 (调用 09_换装间与结算卡牌动作 card_01..09.json) */}
+              <div
+                style={{
+                  position: 'relative',
+                  height: 175,
+                  borderRadius: 10,
+                  overflow: 'hidden',
+                  border: '1px solid #1e293b',
+                  background: 'radial-gradient(circle at 50% 35%, rgba(56,189,248,0.18), rgba(9,13,22,0.95))',
+                  marginBottom: 8,
+                }}
+              >
+                <CharacterPreview
+                  assets={creation}
+                  appearance={character.appearance}
+                  preset={avatarPreset ?? creation.jobs[character.jobId].presets[character.appearance.gender]}
+                  weapons={weapons.slice(0, 1)}
+                  weaponIndex={null}
+                  animation={settlementCardAnim}
+                  attachment={resolvedWingAttachment}
+                  motion
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 8,
+                    right: 8,
+                    bottom: 6,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <span style={{ fontSize: 10, color: '#fde68a', background: 'rgba(15,23,42,0.82)', padding: '2px 6px', borderRadius: 4 }}>
+                    Card Pose: {settlementCardAnim.replace('animations/card/', '').replace('.json', '')}
+                  </span>
+                  <div style={{ display: 'flex', gap: 3 }}>
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => triggerSettlementCardAnim(n)}
+                        style={{
+                          padding: '1px 5px',
+                          fontSize: 10,
+                          borderRadius: 4,
+                          border: settlementCardAnim.includes(`0${n}`) ? '1px solid #fbbf24' : '1px solid #475569',
+                          background: settlementCardAnim.includes(`0${n}`) ? '#78350f' : 'rgba(15,23,42,0.8)',
+                          color: '#f8fafc',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        P{n}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>

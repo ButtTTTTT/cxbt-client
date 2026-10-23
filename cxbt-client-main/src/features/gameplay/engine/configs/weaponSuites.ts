@@ -266,11 +266,43 @@ export const WEAPON_SUITES: WeaponActionSet[] = [
   }
 ];
 
+// 为每个武器套件自动挂载八方向跑与四方向翻滚动作映射
+const DIRECTIONAL_SUITE_CLIPS = [
+  'runback',
+  'runleft',
+  'runright',
+  'runforwardleft',
+  'runforwardright',
+  'runbackleft',
+  'runbackright',
+  'rollback',
+  'rollleft',
+  'rollright'
+] as const;
+
+for (const suite of WEAPON_SUITES) {
+  for (const dirKey of DIRECTIONAL_SUITE_CLIPS) {
+    if (!suite.actions[dirKey]) {
+      suite.actions[dirKey] = `/assets/gameplay/animations/${suite.id}-${dirKey}.json`;
+    }
+  }
+}
+
 export const ACTION_LABELS: Record<string, string> = {
   idle: '待机 (Idle)',
   run: '奔跑 (Run)',
+  runback: 'Run Back (stdrunback)',
+  runleft: 'Run Left (stdrunleft)',
+  runright: 'Run Right (stdrunright)',
+  runforwardleft: 'Run Forward-Left (stdrunforwardleft)',
+  runforwardright: 'Run Forward-Right (stdrunforwardright)',
+  runbackleft: 'Run Back-Left (stdrunbackleft)',
+  runbackright: 'Run Back-Right (stdrunbackright)',
   jump: '跳跃 (Jump)',
   roll: '战术翻滚 (Roll)',
+  rollback: 'Roll Back (stdrollback)',
+  rollleft: 'Roll Left (stdrollleft)',
+  rollright: 'Roll Right (stdrollright)',
   attack: '攻击/射击 (Attack)',
   attack2: '连击二段 (Attack 2)',
   attack3: '连击三段 (Attack 3)',

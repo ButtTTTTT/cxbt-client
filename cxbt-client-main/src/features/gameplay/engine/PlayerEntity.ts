@@ -5,6 +5,12 @@ import type { WeaponPartConfig } from './configs/weaponSuites';
 import { createStylizedWeaponMesh, enhanceLoadedWeaponModel } from './ProceduralWeaponBuilder';
 
 import { buildFullAvatar, type BuildAvatarOptions } from './avatarBuilder';
+import {
+  resolveMoveDirection,
+  resolveRollDirection,
+  type MoveDirection,
+  type RollDirection,
+} from '../avatar';
 
 const LOWER_BODY_BONES = new Set([
   'root', 'torso', 'hip',
@@ -102,6 +108,9 @@ export class PlayerEntity {
   private targetCameraYaw: number = 0;
   public isMoving: boolean = false;
   public aimAtCrosshair: boolean = true;
+  // 八方向移动与四方向翻滚当前枚举状态
+  public currentMoveDir: MoveDirection = 'run';
+  public currentRollDir: RollDirection = 'roll';
 
   // 环境碰撞与地图适配接口
   private collisionEnv: CollisionEnvironment | null = null;
@@ -1048,9 +1057,16 @@ export class PlayerEntity {
     }
 
     if (this.battleAvatar) {
-      this.battleAvatar.roll();
+      this.currentRollDir = (this.isMoving && (this.aimAtCrosshair || this.isAttacking))
+        ? resolveRollDirection(this.targetDirection.x, this.targetDirection.z)
+        : 'roll';
+      this.battleAvatar.roll(this.currentRollDir);
     } else {
-      this.playAction('roll', 0.12, false);
+      this.currentRollDir = (this.isMoving && (this.aimAtCrosshair || this.isAttacking))
+        ? resolveRollDirection(this.targetDirection.x, this.targetDirection.z)
+        : 'roll';
+      const rollActionKey = this.actions[this.currentRollDir] ? this.currentRollDir : 'roll';
+      this.playAction(rollActionKey, 0.12, false);
     }
     this.events.onRoll?.();
     return true;
@@ -1082,7 +1098,10 @@ export class PlayerEntity {
       this.activeAttackAction = 'attack';
       this.attackDuration = 0.35;
       this.attackTimer = this.attackDuration;
-      this.battleAvatar.setMoving(this.isMoving && !this.isJumping && !this.isRolling);
+      this.currentMoveDir = (this.isMoving && (this.aimAtCrosshair || this.isAttacking))
+        ? resolveMoveDirection(this.targetDirection.x, this.targetDirection.z)
+        : 'run';
+      this.battleAvatar.setMoving(this.isMoving && !this.isJumping && !this.isRolling, this.currentMoveDir);
       this.battleAvatar.attack(chosenIdx);
       this.events.onAttack?.('attack');
       return true;
@@ -1216,7 +1235,10 @@ export class PlayerEntity {
       this.isReloading = true;
       this.reloadDuration = 1.2;
       this.reloadTimer = 1.2;
-      this.battleAvatar.setMoving(this.isMoving && !this.isJumping && !this.isRolling);
+      this.currentMoveDir = (this.isMoving && (this.aimAtCrosshair || this.isAttacking))
+        ? resolveMoveDirection(this.targetDirection.x, this.targetDirection.z)
+        : 'run';
+      this.battleAvatar.setMoving(this.isMoving && !this.isJumping && !this.isRolling, this.currentMoveDir);
       this.battleAvatar.reload();
       this.events.onReload?.();
       return true;
@@ -1501,18 +1523,24 @@ export class PlayerEntity {
 
   public getCurrentAction(): string {
     if (this.isFlying) return 'fly';
-    if (this.isMoving && this.isAttacking) return `${this.activeAttackAction}+run`;
-    if (this.isMoving) return 'run';
+    if (this.isMoving && this.isAttacking) return `${this.activeAttackAction}+${this.currentMoveDir}`;
+    if (this.isMoving) return this.currentMoveDir;
     if (this.isAttacking) return this.activeAttackAction;
     if (this.isReloading) return 'reload';
     if (this.isJumping) return this.jumpStage >= 2 ? 'jump2' : 'jump';
-    if (this.isRolling) return 'roll';
+    if (this.isRolling) return this.currentRollDir;
     return this.currentActionName;
   }
 
   public getLoadedActions(): string[] {
     if (this.battleAvatar) {
-      return ['idle', 'run', 'jump', 'jump2', 'fly', 'roll', 'attack', 'reload', 'spurt'];
+      return [
+        'idle',
+        'run', 'runback', 'runleft', 'runright', 'runforwardleft', 'runforwardright', 'runbackleft', 'runbackright',
+        'jump', 'jump2', 'fly',
+        'roll', 'rollback', 'rollleft', 'rollright',
+        'attack', 'reload', 'spurt'
+      ];
     }
     return Object.keys(this.actions);
   }
@@ -1646,20 +1674,26 @@ export class PlayerEntity {
       if (this.hitTimer <= 0) this.isHitStun = false;
     }
 
-    // 3. 动画状态机决策 (优先委托给 BattleAvatar，或者使用内部 mixer 上下半身混合)
+    // 3. 动画状态机决策 (优先委托给 BattleAvatar，或者使用内部 mixer 八向移动 + 四向翻滚 + 上下半身混合)
+    this.currentMoveDir = (this.isMoving && (this.aimAtCrosshair || this.isAttacking))
+      ? resolveMoveDirection(this.targetDirection.x, this.targetDirection.z)
+      : 'run';
     if (this.battleAvatar) {
-      this.battleAvatar.setMoving(this.isMoving && (!this.isJumping || this.isFlying) && !this.isRolling);
+      this.battleAvatar.setMoving(
+        this.isMoving && (!this.isJumping || this.isFlying) && !this.isRolling,
+        this.currentMoveDir
+      );
       this.battleAvatar.update(delta);
     } else if (this.isAlive) {
       let nextAction = 'idle';
-      if (this.isRolling && this.actions['roll']) {
-        nextAction = 'roll';
+      if (this.isRolling && (this.actions[this.currentRollDir] || this.actions['roll'])) {
+        nextAction = this.actions[this.currentRollDir] ? this.currentRollDir : 'roll';
       } else if (this.isFlying && (this.actions['fly'] || this.actions['jump'])) {
         nextAction = this.actions['fly'] ? 'fly' : 'jump';
       } else if (this.isJumping && this.actions['jump']) {
         nextAction = 'jump';
-      } else if (this.isMoving && this.actions['run']) {
-        nextAction = 'run';
+      } else if (this.isMoving && (this.actions[this.currentMoveDir] || this.actions['run'])) {
+        nextAction = this.actions[this.currentMoveDir] ? this.currentMoveDir : 'run';
         if (this.isAttacking && this.upperActions[this.activeAttackAction] && this.currentUpperActionName !== this.activeAttackAction) {
           this.playUpperAction(this.activeAttackAction);
         } else if (this.isReloading && this.upperActions['reload'] && this.currentUpperActionName !== 'reload') {
@@ -1678,7 +1712,7 @@ export class PlayerEntity {
       }
 
       if (this.currentActionName !== nextAction && this.actions[nextAction]) {
-        const isOneShot = ['roll', 'attack', 'attack2', 'attack3', 'spurt', 'reload', 'hit'].includes(nextAction);
+        const isOneShot = ['roll', 'rollback', 'rollleft', 'rollright', 'attack', 'attack2', 'attack3', 'spurt', 'reload', 'hit'].includes(nextAction);
         this.playAction(nextAction, 0.12, !isOneShot);
       }
 

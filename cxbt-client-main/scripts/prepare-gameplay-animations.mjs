@@ -1,4 +1,4 @@
-﻿// Convert AvatarStar .anim clips into the gameplay animation JSON used by avatar.ts.
+// Convert AvatarStar .anim clips into the gameplay animation JSON used by avatar.ts.
 //
 // The .anim container is: u32 version, u32 nodeCount, then per node
 //   u32 nameLength, char[nameLength], u32 frameCount, u32 floatCount, f32[floatCount]
@@ -80,7 +80,23 @@ export function serializeClip(clip) {
     + `"duration":${number(clip.duration)},"tracks":[${tracks}]}`;
 }
 
-const CLIPS = [['attack1', 'stdshoot1'], ['attack2', 'stdshoot2'], ['attack3', 'stdshoot3'], ['spurt', 'stdspurt1']];
+// 武器连击、冲刺、八方向奔跑与四方向战术翻滚动作映射表
+const CLIPS = [
+  ['attack1', 'stdshoot1'],
+  ['attack2', 'stdshoot2'],
+  ['attack3', 'stdshoot3'],
+  ['spurt', 'stdspurt1'],
+  ['runback', 'stdrunback'],
+  ['runleft', 'stdrunleft'],
+  ['runright', 'stdrunright'],
+  ['runforwardleft', 'stdrunforwardleft'],
+  ['runforwardright', 'stdrunforwardright'],
+  ['runbackleft', 'stdrunbackleft'],
+  ['runbackright', 'stdrunbackright'],
+  ['rollback', 'stdrollback'],
+  ['rollleft', 'stdrollleft'],
+  ['rollright', 'stdrollright'],
+];
 
 function main() {
   const sets = new Set();

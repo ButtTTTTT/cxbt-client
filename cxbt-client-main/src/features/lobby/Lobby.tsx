@@ -336,6 +336,8 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
       setAvatarCard(item.avatarCard);
       setPreviewJob(character.jobId);
       setAppearance(initialAppearance(item.avatarCard.preset, character.appearance.gender));
+      // 切换造型卡时触发换装间专属变身展示动作
+      setAnimation('animations/avatar/character_change.json');
       try { localStorage.setItem(`avatarstar.skin.${character.userId}.${character.name}`, item.avatarCard.id); } catch { /* Keep the current selection in memory. */ }
       setStatus(`${item.name} · 已切换造型`);
       return;
@@ -611,6 +613,51 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
             <button className="lobby-art-button" style={buttonArt('button')} onClick={reset}>重置</button>
             <button style={art('rotateLeft')} aria-label="向左旋转角色" onClick={() => setRotation((value) => value - Math.PI / 6)} />
             <button style={art('rotateRight')} aria-label="向右旋转角色" onClick={() => setRotation((value) => value + Math.PI / 6)} />
+            {/* 换装间与结算卡牌 3D 动作快速预览选择器 */}
+            <select
+              aria-label="Preview Card and Avatar Pose"
+              value={animation || ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                setAnimation(val || undefined);
+              }}
+              style={{
+                marginLeft: 4,
+                padding: '2px 4px',
+                fontSize: 11,
+                borderRadius: 4,
+                background: 'rgba(15, 23, 42, 0.85)',
+                color: '#fde68a',
+                border: '1px solid #475569',
+                maxWidth: 112,
+              }}
+            >
+              <option value="">Default Pose</option>
+              <option value="animations/avatar/character_change.json">Avatar Change</option>
+              <option value="animations/avatar/coat.json">Avatar Coat</option>
+              <option value="animations/avatar/pants.json">Avatar Pants</option>
+              <option value="animations/avatar/shoesc.json">Avatar Shoes</option>
+              <option value="animations/avatar/hair.json">Avatar Hair</option>
+              <option value="animations/avatar/danceb.json">Avatar Dance B</option>
+              <option value="animations/avatar/dancec.json">Avatar Dance C</option>
+              <option value="animations/card/card_01.json">Card Flip 01</option>
+              <option value="animations/card/card_02.json">Card Flip 02</option>
+              <option value="animations/card/card_03.json">Card Flip 03</option>
+              <option value="animations/card/card_04.json">Card Flip 04</option>
+              <option value="animations/card/card_05.json">Card Flip 05</option>
+              <option value="animations/card/card_06.json">Card Flip 06</option>
+              <option value="animations/card/card_07.json">Card Flip 07</option>
+              <option value="animations/card/card_08.json">Card Flip 08</option>
+              <option value="animations/card/card_09.json">Card Flip 09</option>
+              <option value="animations/card/card_01_pose.json">Card Pose 01</option>
+              <option value="animations/card/card_02_pose.json">Card Pose 02</option>
+              <option value="animations/card/card_03_pose.json">Card Pose 03</option>
+              <option value="animations/card/card_04_pose.json">Card Pose 04</option>
+              <option value="animations/card/card_05_pose.json">Card Pose 05</option>
+              <option value="animations/card/card_06_pose.json">Card Pose 06</option>
+              <option value="animations/card/card_08_pose.json">Card Pose 08</option>
+              <option value="animations/card/card_09_pose.json">Card Pose 09</option>
+            </select>
           </div>
           <div className="lobby-character-stats" style={art('stats')}>
             <span className="lobby-stats-title" style={art('statsTitle')}>角色属性</span>
