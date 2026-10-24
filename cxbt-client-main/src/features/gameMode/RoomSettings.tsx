@@ -20,6 +20,21 @@ type RoomSettingsProps = {
 
 const TEAM_SLOTS = Array.from({ length: 8 }, (_, index) => index);
 
+// 根据房间成员的职业标识解析对应的职业图标路径
+const JOB_ICON_PATHS: Record<string, string> = {
+  guardian: 'assets/creation/ui/job-guardian.png',
+  gunner: 'assets/creation/ui/job-gunner.png',
+  assassin: 'assets/creation/ui/job-assassin.png',
+  biochemist: 'assets/creation/ui/job-biochemist.png',
+};
+
+function resolvePlayerJobIcon(jobId: string | undefined, fallbackIcon: string): string {
+  if (jobId && JOB_ICON_PATHS[jobId]) {
+    return `${import.meta.env.BASE_URL}${JOB_ICON_PATHS[jobId]}`;
+  }
+  return fallbackIcon;
+}
+
 function art(assets: LobbyAssets, key: string): CSSProperties {
   return { backgroundImage: `url("${lobbyUrl(assets.ui[key])}")` };
 }
@@ -450,7 +465,7 @@ export default function RoomSettings({ assets, room, hostName, hostIcon, onLeave
                   aria-label={occupied ? `${player.username}，${isHost ? '房主' : '玩家'}，${side === 'red' ? '红队' : '蓝队'}` : `${side === 'red' ? '红队' : '蓝队'}空位 ${slot + 1}`}
                   disabled={!available || occupied} onClick={() => void switchTeam(side)}>
                   {occupied && <>
-                    <img className="room-player-job" src={hostIcon} alt="" />
+                    <img className="room-player-job" src={resolvePlayerJobIcon(player.jobId, hostIcon)} alt="" />
                     <span className="room-player-name">
                       LV {player.level || 1} {player.username} {isSpeaking ? '🔊' : ''}
                       {!isHost && player.ready && (

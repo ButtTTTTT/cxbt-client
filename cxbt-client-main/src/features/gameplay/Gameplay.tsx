@@ -1112,31 +1112,35 @@ const BattleScene = memo(function BattleScene({ map, customMap, roomId, myUserId
             plantedBombMesh.visible = true;
           }
           audio.play('grenade', 0.65);
+          // 按玩家实际所属阵营发放爆破安包积分
+          const isBlueTeam = myTeamRef.current === 'blue';
           objectiveScoreRef.current(
-            2,
-            0,
-            `💣 [${character.name}] 已在爆破点安放 C4 雷包！35秒引爆倒计时开始！`,
+            isBlueTeam ? 0 : 2,
+            isBlueTeam ? 2 : 0,
+            `[${character.name}] planted C4 at bomb site! 35s countdown started!`,
             { bombPlanted: true, bombTimer: 35, bombPos: [pPos.x, pPos.y + 0.35, pPos.z] }
           );
         } else {
           bombPlanted = false;
           if (plantedBombMesh) plantedBombMesh.visible = false;
+          const isBlueTeam = myTeamRef.current === 'blue';
           objectiveScoreRef.current(
-            3,
-            0,
-            `🛠️ [${character.name}] 成功拆除了高危雷包！`,
+            isBlueTeam ? 0 : 3,
+            isBlueTeam ? 3 : 0,
+            `[${character.name}] defused the C4 bomb!`,
             { bombPlanted: false }
           );
         }
       } else if (normalizedMode === 'flag') {
+        const isBlueTeam = myTeamRef.current === 'blue';
         if (!carryingFlag && blueFlagMesh) {
           carryingFlag = true;
           blueFlagMesh.visible = false;
           if (carriedFlagMesh) carriedFlagMesh.visible = true;
           objectiveScoreRef.current(
-            1,
-            0,
-            `🚩 [${character.name}] 突袭夺取了蓝方战旗！请护送回己方基地！`,
+            isBlueTeam ? 0 : 1,
+            isBlueTeam ? 1 : 0,
+            `[${character.name}] captured the enemy flag! Escort it back to base!`,
             { carryingFlag: true }
           );
         } else if (carryingFlag) {
@@ -1145,13 +1149,14 @@ const BattleScene = memo(function BattleScene({ map, customMap, roomId, myUserId
           if (carriedFlagMesh) carriedFlagMesh.visible = false;
           healRef.current(600);
           objectiveScoreRef.current(
-            5,
-            0,
-            `🏆 [${character.name}] 成功将战旗护送回红方旗座！红队 +5 分！`,
+            isBlueTeam ? 0 : 5,
+            isBlueTeam ? 5 : 0,
+            `[${character.name}] delivered the flag to base! +5 points!`,
             { carryingFlag: false }
           );
         }
       } else if (normalizedMode === 'treasure') {
+        const isBlueTeam = myTeamRef.current === 'blue';
         treasuresCollected += 1;
         healRef.current(500);
         buffDamageMult = 1.35;
@@ -1159,9 +1164,9 @@ const BattleScene = memo(function BattleScene({ map, customMap, roomId, myUserId
         buffExpireAt = performance.now() + 12000;
         activeBuffLabel = '⚡ 宝箱狂暴增益 (伤害+35% / 移速+22%)';
         objectiveScoreRef.current(
-          3,
-          0,
-          `💎 [${character.name}] 开启了黄金宝箱 (#${treasuresCollected})！红队 +3 分！`,
+          isBlueTeam ? 0 : 3,
+          isBlueTeam ? 3 : 0,
+          `[${character.name}] opened Golden Chest (#${treasuresCollected})! +3 points!`,
           { treasuresCollected }
         );
       } else {
@@ -2730,22 +2735,32 @@ const BattleScene = memo(function BattleScene({ map, customMap, roomId, myUserId
                 ? `占点模式 · 蓝队控制核心 (${Math.round(Math.abs(occupyProgress))}%)`
                 : `占点模式 · 前往中央黄环占领据点 (${Math.round(Math.max(0, occupyProgress))}%)`;
         } else if (normalizedMode === 'flag') {
+          const isBlueTeam = myTeamRef.current === 'blue';
           if (!carryingFlag && blueFlagMesh && currentPos.distanceTo(blueFlagMesh.position) < 3.5) {
             carryingFlag = true;
             blueFlagMesh.visible = false;
             if (carriedFlagMesh) carriedFlagMesh.visible = true;
-            objectiveScoreRef.current(1, 0, `🚩 [${character.name}] 夺取了蓝方战旗！护送回红方旗座！`);
+            objectiveScoreRef.current(
+              isBlueTeam ? 0 : 1,
+              isBlueTeam ? 1 : 0,
+              `[${character.name}] captured the enemy flag! Escort it back to base!`
+            );
           } else if (carryingFlag && redFlagMesh && currentPos.distanceTo(redFlagMesh.position) < 4.0) {
             carryingFlag = false;
             if (blueFlagMesh) blueFlagMesh.visible = true;
             if (carriedFlagMesh) carriedFlagMesh.visible = false;
             healRef.current(600);
-            objectiveScoreRef.current(5, 0, `🏆 [${character.name}] 护送战旗抵达基地！红队 +5 分！`);
+            objectiveScoreRef.current(
+              isBlueTeam ? 0 : 5,
+              isBlueTeam ? 5 : 0,
+              `[${character.name}] delivered the flag to base! +5 points!`
+            );
           }
           statusText = carryingFlag
             ? '夺旗先锋 · 🚩 已夺取敌旗！快返回红方基地旗座得分 (或按 [E] 立即交付)'
             : '夺旗先锋 · 突袭蓝方旗座夺取战旗 (可按 [E] 快速交互)';
         } else if (normalizedMode === 'treasure') {
+          const isBlueTeam = myTeamRef.current === 'blue';
           for (const item of treasureChests) {
             if (item.respawnAt > 0) {
               if (nowMs >= item.respawnAt) {
@@ -2764,11 +2779,16 @@ const BattleScene = memo(function BattleScene({ map, customMap, roomId, myUserId
               buffSpeedMult = 1.22;
               buffExpireAt = nowMs + 12000;
               activeBuffLabel = '⚡ 黄金宝箱增益 (伤害+35% / 移速+22%)';
-              objectiveScoreRef.current(3, 0, `💎 [${character.name}] 拾取了黄金宝箱 (#${treasuresCollected})！红队 +3 分！`);
+              objectiveScoreRef.current(
+                isBlueTeam ? 0 : 3,
+                isBlueTeam ? 3 : 0,
+                `[${character.name}] collected Golden Chest (#${treasuresCollected})! +3 points!`
+              );
             }
           }
           statusText = `夺宝奇兵 · 已收集宝箱 ${treasuresCollected} 个 ${activeBuffLabel ? `| ${activeBuffLabel}` : '| 靠近发光宝箱或按 [E] 拾取'}`;
         } else if (normalizedMode === 'blast') {
+          const isBlueTeam = myTeamRef.current === 'blue';
           if (bombPlanted) {
             bombTimer = Math.max(0, bombTimer - delta);
             if (plantedBombMesh) {
@@ -2784,13 +2804,18 @@ const BattleScene = memo(function BattleScene({ map, customMap, roomId, myUserId
               audio.play('grenade-explode', 0.85);
               roundNumber += 1;
               botManager.reviveAllBots();
-              objectiveScoreRef.current(5, 0, `💥 C4 雷包成功引爆！红队赢下第 ${roundNumber - 1} 回合 (+5 分)！`);
+              objectiveScoreRef.current(
+                isBlueTeam ? 0 : 5,
+                isBlueTeam ? 5 : 0,
+                `C4 bomb detonated! Round ${roundNumber - 1} won (+5 points)!`
+              );
             }
             statusText = `爆破模式 · 💣 C4 已安放！引爆倒计时 ${Math.ceil(bombTimer)}s (按 [E] 交互)`;
           } else {
             statusText = `爆破模式 (第 ${roundNumber} 回合) · 前往爆破点按 [E] 安放 C4 雷包`;
           }
         } else if (normalizedMode === 'kill') {
+          const isBlueTeam = myTeamRef.current === 'blue';
           const aliveEnemies = botManager.getAliveTargets().length;
           if (aliveEnemies === 0 && botManager.bots.length > 0) {
             roundResetCooldown += delta;
@@ -2799,7 +2824,11 @@ const BattleScene = memo(function BattleScene({ map, customMap, roomId, myUserId
               roundNumber += 1;
               botManager.reviveAllBots();
               healRef.current(800);
-              objectiveScoreRef.current(4, 0, `⚔️ 全歼敌军！红队赢下第 ${roundNumber - 1} 回合！`);
+              objectiveScoreRef.current(
+                isBlueTeam ? 0 : 4,
+                isBlueTeam ? 4 : 0,
+                `All enemies eliminated! Round ${roundNumber - 1} won!`
+              );
             }
             statusText = `团队歼灭 · 第 ${roundNumber} 回合肃清完成！正在部署下一波敌军...`;
           } else {
@@ -3360,7 +3389,8 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
     if (!rId || rId === 'practice' || rId === 'default-room' || isSpectator) return;
     const onUnload = () => {
       try {
-        fetch(`/api/rooms/${rId}/leave?username=${encodeURIComponent(character.name)}`, {
+        // 使用带后端地址与鉴权头的 apiFetch 通知服务端退房，避免相对路径请求到前端开发端口产生 404
+        void apiFetch(`/rooms/${rId}/leave?username=${encodeURIComponent(character.name)}`, {
           method: 'POST',
           keepalive: true,
         }).catch(() => undefined);
@@ -4025,13 +4055,16 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
     }, 1250);
   };
 
+  // 根据本地玩家当前所属阵营计算对局胜负状态
+  const isLocalVictory = myTeam === 'blue' ? scoreBlue >= scoreRed : scoreRed >= scoreBlue;
+
   const handleFlipRewardCard = async (cardIdx: number) => {
     triggerSettlementCardAnim(cardIdx + 1);
     if (flippedCards[cardIdx] || Object.keys(flippedCards).length >= 3) return;
     try {
       const data = await apiFetch('/battle/flip-card', {
         method: 'POST',
-        body: JSON.stringify({ cardIndex: cardIdx, modeId: room.modeId, victory: scoreRed >= scoreBlue }),
+        body: JSON.stringify({ cardIndex: cardIdx, modeId: room.modeId, victory: isLocalVictory }),
       });
       if (data?.reward) {
         setFlippedCards((prev) => ({ ...prev, [cardIdx]: data.reward }));
@@ -5587,8 +5620,21 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
               </tr>
             </thead>
             <tbody>
-              <tr style={{ borderBottom: '1px solid #1e293b', background: 'rgba(239, 68, 68, 0.14)' }}>
-                <td style={{ padding: 8, color: '#f87171', fontWeight: 'bold' }}>红队 (我)</td>
+              <tr
+                style={{
+                  borderBottom: '1px solid #1e293b',
+                  background: myTeam === 'blue' ? 'rgba(59, 130, 246, 0.14)' : 'rgba(239, 68, 68, 0.14)',
+                }}
+              >
+                <td
+                  style={{
+                    padding: 8,
+                    color: myTeam === 'blue' ? '#60a5fa' : '#f87171',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  {myTeam === 'blue' ? 'BLUE (ME)' : 'RED (ME)'}
+                </td>
                 <td style={{ padding: 8, fontWeight: 'bold' }}>{character.name}</td>
                 <td style={{ padding: 8, color: '#34d399' }}>{playerKills}</td>
                 <td style={{ padding: 8 }}>{playerDeaths}</td>
@@ -5668,13 +5714,13 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <img
-                src={`${BASE}ui/${scoreRed >= scoreBlue ? 'skin_jiesuan_shengli.png' : 'skin_jiesuan_shibai.png'}`}
-                alt={scoreRed >= scoreBlue ? '胜利' : '完赛'}
+                src={`${BASE}ui/${isLocalVictory ? 'skin_jiesuan_shengli.png' : 'skin_jiesuan_shibai.png'}`}
+                alt={isLocalVictory ? 'Victory' : 'Match Complete'}
                 style={{ height: 54, objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.6))' }}
               />
               <div>
-                <div style={{ fontSize: 26, fontWeight: 900, color: scoreRed >= scoreBlue ? '#fbbf24' : '#93c5fd' }}>
-                  {scoreRed >= scoreBlue ? '🏆 战役大捷 VICTORY!' : '🛡️ 虽败犹荣 MATCH COMPLETE'}
+                <div style={{ fontSize: 26, fontWeight: 900, color: isLocalVictory ? '#fbbf24' : '#93c5fd' }}>
+                  {isLocalVictory ? 'VICTORY!' : 'MATCH COMPLETE'}
                 </div>
                 <div style={{ fontSize: 13, color: '#cbd5e1', marginTop: 4 }}>
                   地图: {chosenMap?.name || room.mapName} | 模式: {room.modeName || '团队竞技'} | 比分: 红队 {scoreRed} - {scoreBlue} 蓝队

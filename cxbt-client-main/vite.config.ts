@@ -12,6 +12,21 @@ export default defineConfig({
     host: '0.0.0.0', // 强制监听所有网卡，解决 localhost 拒绝连接的问题
     port: 3333,
     open: true,
+    // 配置本地开发服务器反向代理，确保相对路径的接口与 WebSocket 请求能够正确转发至 Go 后端服务
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8081',
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: 'ws://127.0.0.1:8081',
+        ws: true,
+      },
+      '/webrtc': {
+        target: 'ws://127.0.0.1:8081',
+        ws: true,
+      },
+    },
     // 忽略海量静态资源与构建产物的 Chokidar 文件监听，消除 Node 进程高内存与磁盘 I/O 占满
     watch: {
       ignored: [
