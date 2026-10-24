@@ -138,9 +138,12 @@ func RegisterPdeFeatureRoutes(r *gin.Engine) {
 			userStamina[userID] = stamina
 			luckDrawMu.Unlock()
 			c.JSON(http.StatusOK, gin.H{
-				"position":   pos,
-				"totalTiles": 42,
-				"stamina":    stamina,
+				"position":      pos % 42,
+				"laps":          pos / 42,
+				"freeRollsLeft": stamina / 10,
+				"totalTiles":    42,
+				"stamina":       stamina,
+				"character":     char,
 			})
 		})
 
@@ -148,21 +151,39 @@ func RegisterPdeFeatureRoutes(r *gin.Engine) {
 			userID := c.GetUint("userId")
 			var char SavedCharacter
 			if err := DB.Where("user_id = ?", userID).First(&char).Error; err != nil {
-				c.JSON(http.StatusNotFound, gin.H{"error": "角色不存在"})
+				c.JSON(http.StatusNotFound, gin.H{"error": "Character not found"})
 				return
 			}
 
 			luckDrawMu.Lock()
 			stamina := char.LuckDrawStamina
-			if stamina < 10 {
-				stamina = 100 // Auto refill stamina for smooth gameplay
+			gemCost := 0
+			if stamina >= 10 {
+				stamina -= 10
+			} else {
+				gemCost = 20
 			}
-			stamina -= 10
+			if gemCost > 0 && char.Gems < gemCost {
+				luckDrawMu.Unlock()
+				c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient gems for extra roll (need 20 gems)"})
+				return
+			}
+			char.Gems -= gemCost
+
+			prevTotalPos := char.LuckDrawPos
+			if prevTotalPos < 0 {
+				prevTotalPos = 0
+			}
 			dice := rand.Intn(6) + 1
-			newPos := (char.LuckDrawPos + dice) % 42
-			char.LuckDrawPos = newPos
+			nextTotalPos := prevTotalPos + dice
+			prevLaps := prevTotalPos / 42
+			newLaps := nextTotalPos / 42
+			completedLap := newLaps > prevLaps
+			newPos := nextTotalPos % 42
+
+			char.LuckDrawPos = nextTotalPos
 			char.LuckDrawStamina = stamina
-			userBoardPos[userID] = newPos
+			userBoardPos[userID] = nextTotalPos
 			userStamina[userID] = stamina
 			luckDrawMu.Unlock()
 
@@ -179,21 +200,34 @@ func RegisterPdeFeatureRoutes(r *gin.Engine) {
 			var reward tileReward
 			switch {
 			case newPos%7 == 0:
-				reward = tileReward{Title: "👑 黄金秘宝大奖格", Icon: "👑", Coins: 2500, Gems: 120, ItemID: "stabilizer_super", ItemName: "高纯度稳压剂", Category: "material"}
+				reward = tileReward{Title: "Jackpot Vault Tile", Icon: "👑", Coins: 2500, Gems: 120, ItemID: "stabilizer_super", ItemName: "High-Purity Stabilizer", Category: "items"}
 			case newPos%5 == 0:
-				reward = tileReward{Title: "🐉 远征首领宝箱格", Icon: "🐉", Coins: 1500, Gems: 60, ItemID: "pet_dragon_shard", ItemName: "暗黑巨龙宠物结晶", Category: "pet"}
+				reward = tileReward{Title: "Expedition Boss Chest", Icon: "🐉", Coins: 1500, Gems: 60, ItemID: "pet_dragon_shard", ItemName: "Dark Dragon Shard", Category: "items"}
 			case newPos%3 == 0:
-				reward = tileReward{Title: "💎 强化晶石补给格", Icon: "💎", Coins: 800, Gems: 35, ItemID: "enhance_stone_lv3", ItemName: "三级强化石", Category: "material"}
+				reward = tileReward{Title: "Enhancement Stone Supply", Icon: "💎", Coins: 800, Gems: 35, ItemID: "enhance_stone_lv3", ItemName: "Lv.3 Enhancement Stone", Category: "items"}
 			case newPos%2 == 0:
-				reward = tileReward{Title: "🪙 战星金币袋格", Icon: "🪙", Coins: 1200, Gems: 15}
+				reward = tileReward{Title: "Gold Coin Pouch", Icon: "🪙", Coins: 1200, Gems: 15}
 			default:
-				reward = tileReward{Title: "⚡ 战术能量补给格", Icon: "⚡", Coins: 650, Gems: 25, ItemID: "blueprint_weapon", ItemName: "传奇武器制造图纸", Category: "material"}
+				reward = tileReward{Title: "Tactical Energy Supply", Icon: "⚡", Coins: 650, Gems: 25, ItemID: "blueprint_weapon", ItemName: "Weapon Blueprint", Category: "items"}
 			}
 
-			char.Coins += reward.Coins
-			char.Gems += reward.Gems
+			lapBonusCoins := 0
+			lapBonusGems := 0
+			if completedLap {
+				lapBonusCoins = 10000
+				lapBonusGems = 50
+			}
+
+			char.Coins += reward.Coins + lapBonusCoins
+			char.Gems += reward.Gems + lapBonusGems
 			char.Exp += 85
+			for char.Exp >= char.Level*100 {
+				char.Exp -= char.Level * 100
+				char.Level++
+				char.Power += 150
+			}
 			DB.Save(&char)
+			SetCachedCharacter(char)
 
 			if reward.ItemID != "" {
 				var existing Inventory
@@ -211,17 +245,24 @@ func RegisterPdeFeatureRoutes(r *gin.Engine) {
 				}
 			}
 
+			msg := fmt.Sprintf("Rolled %d -> Tile #%d [%s]: +%d Coins, +%d Gems!", dice, newPos+1, reward.Title, reward.Coins+lapBonusCoins, reward.Gems+lapBonusGems)
+			if completedLap {
+				msg = fmt.Sprintf("Rolled %d -> Completed Lap #%d! Bonus +10000 Coins & +50 Gems!", dice, newLaps)
+			}
+
 			c.JSON(http.StatusOK, gin.H{
-				"dice":       dice,
-				"lastDice":   dice,
-				"position":   newPos,
-				"totalTiles": 42,
-				"stamina":    stamina,
-				"reward":     reward,
-				"coins":      char.Coins,
-				"gems":       char.Gems,
-				"character":  char,
-				"message":    fmt.Sprintf("🎲 投出 %d 点，前进至第 %d 格【%s】，获得 +%d 金币、+%d 宝石！", dice, newPos+1, reward.Title, reward.Coins, reward.Gems),
+				"dice":          dice,
+				"lastDice":      dice,
+				"position":      newPos,
+				"laps":          newLaps,
+				"freeRollsLeft": stamina / 10,
+				"totalTiles":    42,
+				"stamina":       stamina,
+				"reward":        reward,
+				"coins":         char.Coins,
+				"gems":          char.Gems,
+				"character":     char,
+				"message":       msg,
 			})
 		})
 
@@ -326,21 +367,34 @@ func RegisterPdeFeatureRoutes(r *gin.Engine) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
-
-			var char SavedCharacter
-			if err := DB.Where("user_id = ?", userID).First(&char).Error; err != nil {
-				c.JSON(http.StatusNotFound, gin.H{"error": "角色不存在"})
+			if req.SourceCardID != "" && req.SourceCardID == req.TargetCardID {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Source card and target card cannot be identical"})
 				return
 			}
 
-			costCoins := 800
-			if char.Coins < costCoins {
-				char.Coins = costCoins
+			var char SavedCharacter
+			if err := DB.Where("user_id = ?", userID).First(&char).Error; err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Character not found"})
+				return
 			}
-			char.Coins -= costCoins
+
+			useCrystal := req.UseStabilizer || req.UseCrystal
+			if useCrystal {
+				if char.Gems < 80 {
+					c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient gems for Inheritance Crystal (need 80 gems)"})
+					return
+				}
+				char.Gems -= 80
+			} else {
+				if char.Coins < 5000 {
+					c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient coins for inheritance (need 5000 coins)"})
+					return
+				}
+				char.Coins -= 5000
+			}
 
 			inheritRate := 80
-			if req.UseStabilizer || req.UseCrystal {
+			if useCrystal {
 				inheritRate = 100
 			}
 
@@ -349,6 +403,9 @@ func RegisterPdeFeatureRoutes(r *gin.Engine) {
 			errDst := DB.Where("id = ? AND user_id = ?", req.TargetItemID, userID).First(&dstItem).Error
 
 			transferredLevels := 2
+			if useCrystal {
+				transferredLevels = 3
+			}
 			if errSrc == nil && errDst == nil && srcItem.ID != dstItem.ID {
 				if srcItem.EnhanceLevel > 0 {
 					transferredLevels = (srcItem.EnhanceLevel * inheritRate) / 100
@@ -369,14 +426,16 @@ func RegisterPdeFeatureRoutes(r *gin.Engine) {
 			char.Power += transferredLevels * 240
 			char.Level += 1
 			DB.Save(&char)
+			SetCachedCharacter(char)
 
 			c.JSON(http.StatusOK, gin.H{
-				"message":           fmt.Sprintf("角色卡传承成功（传承率 %d%%）！目标星级 +%d，战力提升 +%d！", inheritRate, transferredLevels, transferredLevels*240),
+				"message":           fmt.Sprintf("Card inheritance complete (%d%% rate)! Target rank +%d, Power +%d!", inheritRate, transferredLevels, transferredLevels*240),
 				"inheritRate":       inheritRate,
 				"transferredLevels": transferredLevels,
 				"newPower":          char.Power,
 				"newLevel":          char.Level,
 				"coins":             char.Coins,
+				"gems":              char.Gems,
 				"character":         char,
 			})
 		})
@@ -445,31 +504,49 @@ func RegisterPdeFeatureRoutes(r *gin.Engine) {
 
 			var char SavedCharacter
 			if err := DB.Where("user_id = ?", userID).First(&char).Error; err != nil {
-				c.JSON(http.StatusNotFound, gin.H{"error": "角色不存在"})
+				c.JSON(http.StatusNotFound, gin.H{"error": "Character not found"})
 				return
 			}
 
-			if char.Coins >= recipe.CostCoin {
-				char.Coins -= recipe.CostCoin
+			if char.Coins < recipe.CostCoin {
+				c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Insufficient coins: need %d coins", recipe.CostCoin)})
+				return
 			}
-			if char.Gems >= recipe.CostGem {
-				char.Gems -= recipe.CostGem
+			if char.Gems < recipe.CostGem {
+				c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Insufficient gems: need %d gems", recipe.CostGem)})
+				return
 			}
+			char.Coins -= recipe.CostCoin
+			char.Gems -= recipe.CostGem
 			char.Power += recipe.PowerAdd
 			DB.Save(&char)
+			SetCachedCharacter(char)
 
-			item := Inventory{
-				UserID:       userID,
-				ItemID:       req.RecipeID,
-				ItemName:     recipe.Name,
-				Category:     recipe.Category,
-				Count:        1,
-				EnhanceLevel: recipe.Upgrade,
+			targetItemID := req.ItemID
+			if targetItemID == "" {
+				targetItemID = req.RecipeID
 			}
-			DB.Create(&item)
+			var item Inventory
+			if err := DB.Where("user_id = ? AND item_id = ?", userID, targetItemID).First(&item).Error; err == nil {
+				item.Count += 1
+				if recipe.Upgrade > item.EnhanceLevel {
+					item.EnhanceLevel = recipe.Upgrade
+				}
+				DB.Save(&item)
+			} else {
+				item = Inventory{
+					UserID:       userID,
+					ItemID:       targetItemID,
+					ItemName:     recipe.Name,
+					Category:     recipe.Category,
+					Count:        1,
+					EnhanceLevel: recipe.Upgrade,
+				}
+				DB.Create(&item)
+			}
 
 			c.JSON(http.StatusOK, gin.H{
-				"message":   fmt.Sprintf("制造成功！已获得【%s】(强化 +%d)，战力 +%d！", recipe.Name, recipe.Upgrade, recipe.PowerAdd),
+				"message":   fmt.Sprintf("Crafted [%s] (+%d)! Power +%d!", recipe.Name, recipe.Upgrade, recipe.PowerAdd),
 				"item":      item,
 				"coins":     char.Coins,
 				"gems":      char.Gems,

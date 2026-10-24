@@ -167,8 +167,8 @@ func AddFriendHandler(c *gin.Context) {
 	}
 
 	var existing Friend
-	if err := DB.Where("user_id = ? AND friend_id = ?", userID, friendChar.UserID).First(&existing).Error; err == nil {
-		c.JSON(http.StatusOK, gin.H{"status": "已经是好友了", "friend": existing})
+	if err := DB.Where("(user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)", userID, friendChar.UserID, friendChar.UserID, userID).First(&existing).Error; err == nil {
+		c.JSON(http.StatusOK, gin.H{"status": "Already friends", "friend": existing})
 		return
 	}
 
@@ -179,13 +179,23 @@ func AddFriendHandler(c *gin.Context) {
 		Status:     "Accepted",
 	}
 	DB.Create(&friendReq)
-	c.JSON(http.StatusOK, gin.H{"status": "添加好友成功", "friend": friendReq})
+	c.JSON(http.StatusOK, gin.H{"status": "Friend added successfully", "friend": friendReq})
 }
 
 func GetFriendsHandler(c *gin.Context) {
 	userID := c.MustGet("userId").(uint)
 	var friends []Friend
 	DB.Where("user_id = ? OR friend_id = ?", userID, userID).Order("id desc").Find(&friends)
+
+	// 当当前用户是被添加方 (FriendID == userID) 时，将展示名称反查为发起方的角色名
+	for i := range friends {
+		if friends[i].FriendID == userID && friends[i].UserID != userID {
+			var initiator SavedCharacter
+			if err := DB.Where("user_id = ?", friends[i].UserID).First(&initiator).Error; err == nil && initiator.Name != "" {
+				friends[i].FriendName = initiator.Name
+			}
+		}
+	}
 
 	// Enrich friend names and also provide recommended players from MySQL 8
 	var recommended []SavedCharacter
@@ -281,23 +291,46 @@ func JoinGuildHandler(c *gin.Context) {
 
 	var guild Guild
 	if err := DB.First(&guild, guildID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "公会不存在"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Guild not found"})
 		return
 	}
 
 	char := getOrCreateCharacter(userID)
-	DB.Where("user_id = ?", userID).Delete(&GuildMember{})
+
+	// 检查玩家是否已经在某个公会中，若已在目标公会则幂等返回，若在其他公会则先扣减原公会人数
+	var prevMember GuildMember
+	if err := DB.Where("user_id = ?", userID).First(&prevMember).Error; err == nil {
+		if prevMember.GuildID == guild.ID {
+			c.JSON(http.StatusOK, gin.H{"guild": guild, "member": prevMember})
+			return
+		}
+		var oldGuild Guild
+		if err2 := DB.First(&oldGuild, prevMember.GuildID).Error; err2 == nil {
+			if oldGuild.MemberCount > 1 {
+				oldGuild.MemberCount--
+				DB.Save(&oldGuild)
+			} else {
+				DB.Delete(&oldGuild)
+			}
+		}
+		DB.Delete(&prevMember)
+	}
 
 	member := GuildMember{
 		GuildID:      guild.ID,
 		UserID:       userID,
 		Username:     char.Name,
-		Role:         "精英成员",
+		Role:         "Member",
 		Contribution: 100,
 	}
 	DB.Create(&member)
 
-	guild.MemberCount++
+	var actualCount int64
+	DB.Model(&GuildMember{}).Where("guild_id = ?", guild.ID).Count(&actualCount)
+	guild.MemberCount = int(actualCount)
+	if guild.MemberCount < 1 {
+		guild.MemberCount = 1
+	}
 	DB.Save(&guild)
 
 	c.JSON(http.StatusOK, gin.H{"guild": guild, "member": member})
@@ -307,14 +340,31 @@ func LeaveGuildHandler(c *gin.Context) {
 	userID := c.MustGet("userId").(uint)
 	var member GuildMember
 	if err := DB.Where("user_id = ?", userID).First(&member).Error; err == nil {
-		var guild Guild
-		if err2 := DB.First(&guild, member.GuildID).Error; err2 == nil && guild.MemberCount > 1 {
-			guild.MemberCount--
-			DB.Save(&guild)
-		}
+		guildID := member.GuildID
 		DB.Delete(&member)
+
+		var guild Guild
+		if err2 := DB.First(&guild, guildID).Error; err2 == nil {
+			var remaining []GuildMember
+			DB.Where("guild_id = ?", guildID).Order("contribution desc, id asc").Find(&remaining)
+			if len(remaining) == 0 {
+				// 最后一名成员退出时自动解散空公会
+				DB.Delete(&guild)
+			} else {
+				guild.MemberCount = len(remaining)
+				// 若会长退出，自动将职位顺延给贡献最高的核心成员
+				if guild.OwnerID == userID {
+					nextOwner := remaining[0]
+					guild.OwnerID = nextOwner.UserID
+					guild.OwnerName = nextOwner.Username
+					nextOwner.Role = "Owner"
+					DB.Save(&nextOwner)
+				}
+				DB.Save(&guild)
+			}
+		}
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "已退出公会"})
+	c.JSON(http.StatusOK, gin.H{"status": "Left guild successfully"})
 }
 
 // --- Mail API ---
@@ -449,45 +499,88 @@ func GetEnhancementsHandler(c *gin.Context) {
 func EnhanceItemHandler(c *gin.Context) {
 	userID := c.MustGet("userId").(uint)
 	var req struct {
-		SlotKey string `json:"slotKey"`
+		SlotKey       string `json:"slotKey"`
+		UseStabilizer bool   `json:"useStabilizer"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.SlotKey == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "请选择强化部位"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Please select an enhancement slot"})
 		return
 	}
 
 	ensureUserEnhancements(userID)
 	var item ItemEnhancement
 	if err := DB.Where("user_id = ? AND slot_key = ?", userID, req.SlotKey).First(&item).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "强化槽位不存在"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Enhancement slot not found"})
 		return
 	}
 	if item.Level >= 15 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "已达到最高强化等级 +15"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Maximum enhancement level +15 reached"})
 		return
 	}
 
 	cost := (item.Level + 1) * 1500
+	gemCost := 0
+	if req.UseStabilizer {
+		gemCost = 15
+	}
+
 	char := getOrCreateCharacter(userID)
 	if char.Coins < cost {
-		c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("金币不足，需要 %d 金币", cost)})
+		c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Insufficient coins: need %d coins", cost)})
+		return
+	}
+	if gemCost > 0 && char.Gems < gemCost {
+		c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Insufficient gems for stabilizer: need %d gems", gemCost)})
 		return
 	}
 
 	char.Coins -= cost
+	char.Gems -= gemCost
+
+	// 计算强化成功率：+5 以下固定 100%，启用稳压剂固定 100%，未启用稳压剂时按阶梯衰减
+	baseRate := 100
+	if item.Level >= 5 && !req.UseStabilizer {
+		baseRate = 100 - (item.Level-4)*10
+		if baseRate < 35 {
+			baseRate = 35
+		}
+	}
+
+	powerAdd := 120
+	if req.UseStabilizer {
+		powerAdd = 165 // 稳压剂额外提供 +45 战斗力加成
+	}
+
+	roll := int(time.Now().UnixNano()%100) + 1
+	if roll > baseRate {
+		// 未开启稳压剂且高阶强化未命中概率时保持原等级不掉级，仅消耗金币
+		DB.Save(&char)
+		SetCachedCharacter(char)
+		advanceMissionProgress(userID, "career_enhance", 1)
+		c.JSON(http.StatusOK, gin.H{
+			"item":      item,
+			"character": char,
+			"success":   false,
+			"message":   fmt.Sprintf("Enhancement attempt on [%s] failed (%d%% rate). Enable stabilizer for 100%% success!", item.SlotName, baseRate),
+		})
+		return
+	}
+
 	item.Level++
-	item.BonusPower += 120
+	item.BonusPower += powerAdd
 	item.BonusHP += 80
-	char.Power += 120
+	char.Power += powerAdd
 
 	DB.Save(&item)
 	DB.Save(&char)
+	SetCachedCharacter(char)
 	advanceMissionProgress(userID, "career_enhance", 1)
 
 	c.JSON(http.StatusOK, gin.H{
 		"item":      item,
 		"character": char,
-		"message":   fmt.Sprintf("强化成功！【%s】提升至 +%d，战斗力 +120！", item.SlotName, item.Level),
+		"success":   true,
+		"message":   fmt.Sprintf("Enhanced [%s] to +%d! Power +%d!", item.SlotName, item.Level, powerAdd),
 	})
 }
 

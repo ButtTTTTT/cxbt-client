@@ -122,6 +122,8 @@ export default function LobbyFeatureModal({
     try { return 'pet_' + (localStorage.getItem('avatarstar.activePet') || 'dragon'); } catch { return 'pet_dragon'; }
   });
 
+  const [ownedInventory, setOwnedInventory] = useState<any[]>([]);
+
   const notify = (msg: string) => {
     setToast(msg);
     onStatus(msg);
@@ -148,6 +150,11 @@ export default function LobbyFeatureModal({
             .then((r) => (r.ok ? r.json() : null))
             .then((cat) => {
               if (cat && Array.isArray(cat.parts)) setAvatarParts(cat.parts);
+            })
+            .catch(() => undefined);
+          apiFetch('/inventory')
+            .then((inv) => {
+              if (Array.isArray(inv)) setOwnedInventory(inv);
             })
             .catch(() => undefined);
         }
@@ -249,23 +256,37 @@ export default function LobbyFeatureModal({
           {title === '公会' && (
             <>
               {guildsData.myGuild ? (
-                <div className="lobby-feature-card" style={{ borderColor: '#f59e0b' }}>
-                  <div className="lobby-feature-card-info">
-                    <strong>当前所属公会：{guildsData.myGuild.name} (Lv.{guildsData.myGuild.level})</strong>
-                    <small>会长：{guildsData.myGuild.ownerName} · 成员数：{guildsData.myGuild.memberCount} · 公告：{guildsData.myGuild.notice}</small>
+                <>
+                  <div className="lobby-feature-card" style={{ borderColor: '#f59e0b' }}>
+                    <div className="lobby-feature-card-info">
+                      <strong>当前所属公会：{guildsData.myGuild.name} (Lv.{guildsData.myGuild.level})</strong>
+                      <small>会长：{guildsData.myGuild.ownerName} · 成员数：{guildsData.myGuild.memberCount} · 公告：{guildsData.myGuild.notice}</small>
+                    </div>
+                    <button
+                      className="lobby-feature-btn danger"
+                      onClick={async () => {
+                        await apiFetch('/guilds/leave', { method: 'POST' });
+                        const refreshed = await apiFetch('/guilds');
+                        setGuildsData(refreshed);
+                        notify('Left guild successfully');
+                      }}
+                    >
+                      退出公会
+                    </button>
                   </div>
-                  <button
-                    className="lobby-feature-btn danger"
-                    onClick={async () => {
-                      await apiFetch('/guilds/leave', { method: 'POST' });
-                      const refreshed = await apiFetch('/guilds');
-                      setGuildsData(refreshed);
-                      notify('已退出公会');
-                    }}
-                  >
-                    退出公会
-                  </button>
-                </div>
+                  {(guildsData.memberList?.length ?? 0) > 0 && (
+                    <div className="lobby-feature-grid" style={{ marginBottom: 8 }}>
+                      {guildsData.memberList.map((m: any) => (
+                        <div key={m.ID || m.userId} className="lobby-feature-card">
+                          <div className="lobby-feature-card-info">
+                            <strong>{m.username} <span style={{ color: '#38bdf8' }}>({m.role})</span></strong>
+                            <small>Contribution: {m.contribution ?? 100}</small>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="lobby-feature-row-form">
                   <input
@@ -504,6 +525,10 @@ export default function LobbyFeatureModal({
                     <button
                       className="lobby-feature-btn"
                       onClick={async () => {
+                        if (sourceCard === targetCard) {
+                          notify('Source card and target card must be different');
+                          return;
+                        }
                         try {
                           const res = await apiFetch('/card-inherit', {
                             method: 'POST',
@@ -514,9 +539,9 @@ export default function LobbyFeatureModal({
                             }),
                           });
                           if (res?.character) syncChar(res.character);
-                          notify(res?.message || '角色卡属性传承完成！');
+                          notify(res?.message || 'Card inheritance completed!');
                         } catch (e: any) {
-                          notify(e.message || '传承失败');
+                          notify(e.message || 'Card inheritance failed');
                         }
                       }}
                     >
@@ -638,11 +663,12 @@ export default function LobbyFeatureModal({
                 <div className="lobby-feature-grid">
                   {shopItems.map((item, idx) => {
                     const price = 2500 + (idx % 5) * 800;
+                    const ownedCount = ownedInventory.find((inv: any) => inv.itemId === item.id)?.count ?? 0;
                     return (
                       <div key={item.id} className="lobby-feature-card">
                         <img src={lobbyUrl(item.icon)} alt="" style={{ width: 44, height: 44, objectFit: 'contain' }} />
                         <div className="lobby-feature-card-info" style={{ flex: 1 }}>
-                          <strong>{item.name}</strong>
+                          <strong>{item.name} {ownedCount > 0 && <span style={{ color: '#34d399', fontSize: 11 }}>(x{ownedCount})</span>}</strong>
                           <small>编号: {item.id} · 购买立享战力 +80</small>
                           <small style={{ color: '#fbbf24' }}>售价: {price} 金币</small>
                         </div>
@@ -661,10 +687,18 @@ export default function LobbyFeatureModal({
                                 }),
                               });
                               if (res?.character) syncChar(res.character);
+                              if (res?.item) {
+                                setOwnedInventory((prev) => {
+                                  const exists = prev.some((it: any) => it.itemId === item.id);
+                                  return exists
+                                    ? prev.map((it: any) => (it.itemId === item.id ? res.item : it))
+                                    : [res.item, ...prev];
+                                });
+                              }
                               onSelectBagItem?.(item);
-                              notify(`成功入手【${item.name}】并已穿戴预览！`);
+                              notify(res?.status || 'Item purchased and equipped!');
                             } catch (e: any) {
-                              notify(e.message || '购买失败');
+                              notify(e.message || 'Purchase failed');
                             }
                           }}
                         >
@@ -841,6 +875,9 @@ export default function LobbyFeatureModal({
                       </strong>
                       <small>
                         今日剩余免费次数：{luckDrawState.freeRollsLeft ?? 0} 次（超出后每次消耗 20 宝石）。每完成一整圈额外奖赏 +10,000 金币与 +50 宝石！
+                      </small>
+                      <small style={{ color: '#38bdf8' }}>
+                        Stamina: {luckDrawState.stamina ?? 100} / 100
                       </small>
                     </div>
                     <button

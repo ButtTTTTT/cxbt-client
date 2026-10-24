@@ -55,15 +55,52 @@ export function skillTip(skill: Skill, level: number): string {
 export function useSkillAllocation(assets: SkillAssets | undefined, jobId: CreationJob) {
   const skills = useMemo(() => assets?.jobs[jobId]?.skills ?? [], [assets, jobId]);
   const maxLevel = assets?.maxLevel ?? 5;
-  const [levels, setLevels] = useState<number[]>(() => skills.map(() => SKILL_BASE_LEVEL));
-  const [pending, setPending] = useState<number[]>(() => skills.map(() => SKILL_BASE_LEVEL));
-  useEffect(() => { setLevels(skills.map(() => SKILL_BASE_LEVEL)); setPending(skills.map(() => SKILL_BASE_LEVEL)); }, [skills]);
+  const storageKey = `avatarstar.skills.${jobId}`;
+
+  // 从本地持久化存储读取已保存的职业技能加点方案
+  const readSavedLevels = (skillList: Skill[]): number[] => {
+    const fallback = skillList.map(() => SKILL_BASE_LEVEL);
+    if (!skillList.length) return fallback;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      if (
+        Array.isArray(parsed) &&
+        parsed.length === skillList.length &&
+        parsed.every((v) => typeof v === 'number' && v >= 0 && v <= maxLevel) &&
+        parsed.reduce((acc, v) => acc + v, 0) <= SKILL_POINTS
+      ) {
+        return parsed;
+      }
+    } catch {}
+    return fallback;
+  };
+
+  const [levels, setLevels] = useState<number[]>(() => readSavedLevels(skills));
+  const [pending, setPending] = useState<number[]>(() => readSavedLevels(skills));
+
+  useEffect(() => {
+    const loaded = readSavedLevels(skills);
+    setLevels(loaded);
+    setPending(loaded);
+  }, [skills, storageKey]);
+
   const read = (values: number[], index: number) => values[index] ?? 0;
   const points = SKILL_POINTS - pending.reduce((total, value) => total + value, 0);
   const dirty = skills.some((_, index) => read(pending, index) !== read(levels, index));
   const add = (index: number) => setPending((values) => values.map((value, i) => i === index && value < maxLevel && points > 0 ? value + 1 : value));
   const remove = (index: number) => setPending((values) => values.map((value, i) => i === index && value > read(levels, index) ? value - 1 : value));
-  const commit = () => setLevels(pending.map((value) => value));
-  const reset = () => { setLevels(skills.map(() => 0)); setPending(skills.map(() => 0)); };
+  const commit = () => {
+    const committed = pending.map((value) => value);
+    setLevels(committed);
+    try { localStorage.setItem(storageKey, JSON.stringify(committed)); } catch {}
+  };
+  const reset = () => {
+    const zeroed = skills.map(() => 0);
+    setLevels(zeroed);
+    setPending(zeroed);
+    try { localStorage.setItem(storageKey, JSON.stringify(zeroed)); } catch {}
+  };
   return { skills, levels, pending, points, dirty, maxLevel, add, remove, commit, reset, read };
 }

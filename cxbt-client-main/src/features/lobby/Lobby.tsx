@@ -496,6 +496,15 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
   const level = charState.level ?? 1;
   const exp = charState.exp ?? 0;
   const maxExp = level * 100;
+  // 根据角色当前等级与战斗力动态计算大厅六维战斗属性
+  const powerVal = charState.power ?? 1500;
+  const bonusScale = Math.max(0, powerVal - 1500);
+  const statHp = String(3201 + (level - 1) * 180 + Math.round(bonusScale * 0.65));
+  const statStamina = String(100 + Math.min(50, (level - 1) * 2));
+  const statVitality = String(120 + (level - 1) * 6 + Math.round(bonusScale * 0.04));
+  const statRecovery = String(85 + (level - 1) * 5 + Math.round(bonusScale * 0.03));
+  const statArmor = String(240 + (level - 1) * 16 + Math.round(bonusScale * 0.12));
+  const statPierce = String(180 + (level - 1) * 14 + Math.round(bonusScale * 0.12));
 
   return <main className="lobby-viewport">
     <div className={`lobby-screen${practiceRoom ? ' lobby-practice-screen' : ''}`} data-lobby-ready="true" style={{ transform: `scale(${scale})`, backgroundImage: `url("${assetUrl(creation.ui.background)}")` }}
@@ -664,7 +673,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
           <div className="lobby-character-stats" style={art('stats')}>
             <span className="lobby-stats-title" style={art('statsTitle')}>角色属性</span>
             <div className="lobby-stat-modes">战场 <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => moduleDialog('冒险远征')}>冒险远征</span></div>
-            <div className="lobby-stat-values">{[['生命值', '3201', 1], ['耐力值', '100', 6], ['活力值', '120', 2], ['恢复力', '85', 3], ['护甲值', '240', 4], ['破甲值', '180', 5]].map(([label, value, icon]) =>
+            <div className="lobby-stat-values">{[['生命值', statHp, 1], ['耐力值', statStamina, 6], ['活力值', statVitality, 2], ['恢复力', statRecovery, 3], ['护甲值', statArmor, 4], ['破甲值', statPierce, 5]].map(([label, value, icon]) =>
               <div key={label}><img src={lobbyUrl(assets.ui[`stat${icon}`])} alt="" /><span>{label}</span><b>{value}</b></div>)}</div>
           </div>
         </section>
