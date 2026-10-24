@@ -1,8 +1,12 @@
-import { useState } from 'react';
-import ModelViewer from './modes/ModelViewer';
-import CharacterController from './modes/CharacterController';
-import MapEditor from './modes/MapEditor';
-import { PdeToolchainStudio } from './modes/PdeToolchainStudio';
+import { lazy, Suspense, useState } from 'react';
+
+// 沙盒四大子模式按需懒加载，避免同时初始化多个 WebGL 渲染引擎与编辑器模块
+const ModelViewer = lazy(() => import('./modes/ModelViewer'));
+const CharacterController = lazy(() => import('./modes/CharacterController'));
+const MapEditor = lazy(() => import('./modes/MapEditor'));
+const PdeToolchainStudio = lazy(() =>
+  import('./modes/PdeToolchainStudio').then((mod) => ({ default: mod.PdeToolchainStudio }))
+);
 
 export default function SandboxApp() {
   const [activeMode, setActiveMode] = useState<'viewer' | 'controller' | 'editor' | 'pde'>('controller');
@@ -109,20 +113,20 @@ export default function SandboxApp() {
 
       {/* 模式渲染区 */}
       <div style={{ flex: 1, position: 'relative' }}>
-        {activeMode === 'viewer' && <ModelViewer />}
-        {activeMode === 'controller' && <CharacterController initialMapId={playtestMapId} />}
-        {activeMode === 'editor' && (
-          <MapEditor
-            onPlaytestMap={(mapId) => {
-              setPlaytestMapId(mapId);
-              setActiveMode('controller');
-            }}
-          />
-        )}
-        {activeMode === 'pde' && <PdeToolchainStudio />}
+        <Suspense fallback={<div style={{ color: '#94a3b8', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading sandbox mode...</div>}>
+          {activeMode === 'viewer' && <ModelViewer />}
+          {activeMode === 'controller' && <CharacterController initialMapId={playtestMapId} />}
+          {activeMode === 'editor' && (
+            <MapEditor
+              onPlaytestMap={(mapId) => {
+                setPlaytestMapId(mapId);
+                setActiveMode('controller');
+              }}
+            />
+          )}
+          {activeMode === 'pde' && <PdeToolchainStudio />}
+        </Suspense>
       </div>
     </div>
   );
 }
-
-

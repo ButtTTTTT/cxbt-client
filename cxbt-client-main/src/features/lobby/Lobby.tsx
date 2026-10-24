@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import CharacterPreview from '../characterCreation/CharacterPreview';
 import { assetUrl, CREATION_JOBS, initialAppearance, loadCreationAssets, type Appearance, type CreationAssets, type CreationAttachment, type CreationJob, type CreationWeapon } from '../characterCreation/assets';
 import { fetchCharacterFromServer, type SavedCharacter } from '../characterCreation/character';
@@ -6,14 +6,16 @@ import { apiFetch } from '../../api';
 import GameModeLobby from '../gameMode/GameModeLobby';
 import PracticeRoom, { type ApiRoom } from '../gameMode/PracticeRoom';
 import type { RoomConfig } from '../gameMode/CreateRoomDialog';
-import Gameplay from '../gameplay/Gameplay';
 import { loadLobbyAssets, lobbyUrl, type AvatarCard, type InventoryCategory, type InventoryItem, type LobbyAssets } from './assets';
 import GlobalChat from './GlobalChat';
-import LobbyFeatureModal from './LobbyFeatureModal';
 import SettingsMenu from './SettingsMenu';
 import SkillPanel from './SkillPanel';
 import { loadSkillAssets, useSkillAllocation, type SkillAssets } from './skills';
 import './Lobby.css';
+
+// 按需懒加载重型战斗引擎与大厅多功能弹窗，避免进入大厅时同步解析近 600KB 的战场与 Lua 数据表
+const Gameplay = lazy(() => import('../gameplay/Gameplay'));
+const LobbyFeatureModal = lazy(() => import('./LobbyFeatureModal'));
 
 const PAGE_SIZE = 24;
 const NO_WEAPONS: CreationWeapon[] = [];
@@ -420,7 +422,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
   });
 
   if (!assets || !creation) return <main className="lobby-viewport"><p role="status">{error || '正在进入大厅…'}</p></main>;
-  if (battleRoom) return <Gameplay room={battleRoom} character={charState} creation={creation} assets={assets}
+  if (battleRoom) return <Suspense fallback={<main className="lobby-viewport"><p role="status">Loading battle...</p></main>}><Gameplay room={battleRoom} character={charState} creation={creation} assets={assets}
     avatarPreset={avatarCard?.preset} wingAttachment={equippedWing}
     quickbar={quickbar} skills={jobSkillList} bossSkills={bossSkillList} levels={allocation.levels}
     volume={volume} effectsVolume={effectsVolume} onVolume={setVolume} onEffectsVolume={setEffectsVolume}
@@ -429,7 +431,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
       void fetchCharacterFromServer().then((latest) => {
         if (latest) setCharState(latest);
       });
-    }} onQuit={onQuit} />;
+    }} onQuit={onQuit} /></Suspense>;
   const art = (key: string): CSSProperties => ({ backgroundImage: `url("${lobbyUrl(assets.ui[key])}")` });
   const buttonArt = (key: string): CSSProperties => ({ '--art': `url("${lobbyUrl(assets.ui[`${key}_normal`])}")`,
     '--hover-art': `url("${lobbyUrl(assets.ui[`${key}_hover`])}")`, '--down-art': `url("${lobbyUrl(assets.ui[`${key}_down`])}")` } as CSSProperties);
@@ -818,7 +820,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
       {settingsOpen && <SettingsMenu assets={assets} volume={volume} effectsVolume={effectsVolume} motion={motion}
         onVolume={setVolume} onEffectsVolume={setEffectsVolume} onMotion={setMotion} onClose={() => setSettingsOpen(false)}
         onExit={onExit} onQuit={() => { audioRef.current?.pause(); weaponAudioRef.current?.pause(); onQuit(); }} />}
-      {dialog && <LobbyFeatureModal
+      {dialog && <Suspense fallback={null}><LobbyFeatureModal
         title={dialog.title}
         assets={assets}
         character={charState}
@@ -827,7 +829,7 @@ export default function Lobby({ character, onExit, onQuit = onExit }: { characte
         onStartRoom={setBattleRoom}
         onStatus={setStatus}
         onClose={() => setDialog(undefined)}
-      />}
+      /></Suspense>}
     </div>
   </main>;
 }

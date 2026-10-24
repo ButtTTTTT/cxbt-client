@@ -7,6 +7,57 @@ import { createStylizedWeaponMesh, enhanceLoadedWeaponModel } from '../gameplay/
 
 type IdleData = { fps: number; duration?: number; tracks: { name: string; positions: number[][]; rotations: number[][] }[] };
 
+// 模块级动作 JSON 与 GLB 二进制字节流缓存，避免在背包切换武器、翅膀或动作时重复发起几十个 HTTP 请求与 JSON 反序列化
+const previewAnimDataCache = new Map<string, Promise<IdleData>>();
+const previewGlbBufferCache = new Map<string, Promise<ArrayBuffer>>();
+
+function fetchCachedAnimData(url: string): Promise<IdleData> {
+  const cached = previewAnimDataCache.get(url);
+  if (cached) return cached;
+  const promise = fetch(url)
+    .then(async (res) => {
+      if (!res.ok) throw new Error('Failed to load animation');
+      return (await res.json()) as IdleData;
+    })
+    .catch((err) => {
+      previewAnimDataCache.delete(url);
+      throw err;
+    });
+  previewAnimDataCache.set(url, promise);
+  return promise;
+}
+
+function loadCachedGltfScene(loader: any, url: string): Promise<any> {
+  let bufPromise = previewGlbBufferCache.get(url);
+  if (!bufPromise) {
+    bufPromise = fetch(url)
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Failed to load model');
+        return await res.arrayBuffer();
+      })
+      .catch((err) => {
+        previewGlbBufferCache.delete(url);
+        throw err;
+      });
+    previewGlbBufferCache.set(url, bufPromise);
+  }
+  return bufPromise.then(
+    (buffer) =>
+      new Promise<any>((resolve, reject) => {
+        if (typeof loader.parse === 'function') {
+          loader.parse(
+            buffer.slice(0),
+            '',
+            (gltf: any) => resolve(gltf.scene),
+            (err: any) => reject(err)
+          );
+        } else {
+          loader.loadAsync(url).then((gltf: any) => resolve(gltf.scene), reject);
+        }
+      })
+  );
+}
+
 export default function CharacterPreview({ assets, preset, appearance, motion, weapons, weaponIndex, animation, attachment, rotation = 0, view = 'full' }: {
   assets: CreationAssets;
   preset: CreationPreset;
@@ -27,6 +78,7 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
   const weaponControllerRef = useRef<((value: number | null) => void) | null>(null);
   const weaponRef = useRef(weaponIndex);
   const rotationRef = useRef(rotation);
+  const dirtyRef = useRef(true);
   const [status, setStatus] = useState('loading');
   useEffect(() => () => {
     const renderer = rendererRef.current;
@@ -38,12 +90,20 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
   useEffect(() => {
     appearanceRef.current = appearance;
     controllerRef.current?.(appearance);
+    dirtyRef.current = true;
   }, [appearance]);
-  useEffect(() => { motionRef.current = motion; }, [motion]);
-  useEffect(() => { rotationRef.current = rotation; }, [rotation]);
+  useEffect(() => {
+    motionRef.current = motion;
+    dirtyRef.current = true;
+  }, [motion]);
+  useEffect(() => {
+    rotationRef.current = rotation;
+    dirtyRef.current = true;
+  }, [rotation]);
   useEffect(() => {
     weaponRef.current = weaponIndex;
     weaponControllerRef.current?.(weaponIndex);
+    dirtyRef.current = true;
   }, [weaponIndex]);
 
   useEffect(() => {
@@ -57,6 +117,8 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
     let root: any;
     let dragX: number | null = null;
     let yaw = -0.035;
+    let lastRenderedYaw = Number.NaN;
+    dirtyRef.current = true;
     const scenes: any[] = [];
     const textures = new Set<any>();
     const materials = new Set<any>();
@@ -88,13 +150,13 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
     setStatus('loading');
 
     const loadModel = async (path: string) => {
-      const gltf = await loader.loadAsync(assetUrl(path));
+      const gltfScene = await loadCachedGltfScene(loader, assetUrl(path));
       if (disposed) {
-        disposeCacheScene(gltf.scene);
+        disposeCacheScene(gltfScene);
         throw new Error('disposed');
       }
-      scenes.push(gltf.scene);
-      return gltf.scene;
+      scenes.push(gltfScene);
+      return gltfScene;
     };
     const loadTexture = async (path: string) => {
       const texture = await textureLoader.loadAsync(assetUrl(path));
@@ -117,16 +179,12 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
     };
 
     const build = async () => {
-      const [body, bodyMap, rawIdleResponse] = await Promise.all([
+      const [body, bodyMap, rawIdle] = await Promise.all([
         loadModel(assets.models.body01),
         loadTexture(preset.body),
-        fetch(assetUrl(animation ?? 'idle.json')).catch(() => null),
+        fetchCachedAnimData(assetUrl(animation ?? 'idle.json')).catch(() => null),
       ]);
-      const idleResponse = (rawIdleResponse && rawIdleResponse.ok)
-        ? rawIdleResponse
-        : await fetch(assetUrl('idle.json'));
-      if (!idleResponse.ok) throw new Error('待机动画加载失败');
-      const idle: IdleData = await idleResponse.json();
+      const idle: IdleData = rawIdle ?? (await fetchCachedAnimData(assetUrl('idle.json')));
       if (disposed) return;
       root = body;
       let skeleton: any;
@@ -204,6 +262,7 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
         mouthMaterial.map = mouthMaps[value.mouth];
         const selected = preset.accessorySets[value.accessory];
         accessories.forEach((part, index) => { part.visible = selected.includes(index); });
+        dirtyRef.current = true;
       };
       controllerRef.current(appearanceRef.current);
       const makeClip = (data: IdleData, name: string, boneNames: { has: (name: string) => boolean } = boneIndices) => new THREE.AnimationClip(name, (data.duration && data.duration > 0) ? data.duration : -1, data.tracks.flatMap((track) => {
@@ -233,9 +292,8 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
           model.scale.setScalar(0.95);
           root.add(model);
           if (attachment.animation) {
-            const response = await fetch(assetUrl(attachment.animation));
-            if (response.ok) {
-              const data: IdleData = await response.json();
+            const data = await fetchCachedAnimData(assetUrl(attachment.animation)).catch(() => null);
+            if (data) {
               if (disposed) return;
               const names = new Set<string>();
               model.traverse((object: any) => { if (object.isBone) names.add(object.name); });
@@ -276,9 +334,8 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
           offset.add(model);
           host.add(offset);
           if (attachment.animation) {
-            const response = await fetch(assetUrl(attachment.animation)).catch(() => null);
-            if (response && response.ok) {
-              const data: IdleData = await response.json();
+            const data = await fetchCachedAnimData(assetUrl(attachment.animation)).catch(() => null);
+            if (data) {
               if (disposed) return;
               const names = new Set<string>();
               model.traverse((object: any) => { if (object.isBone && object !== anchor) names.add(object.name); });
@@ -293,9 +350,7 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
         }
       }
       const weaponModels = await Promise.all(weapons.map(async (weapon) => {
-        const response = await fetch(assetUrl(animation ?? weapon.animation));
-        if (!response.ok) throw new Error(`${weapon.label}动作加载失败`);
-        const data: IdleData = await response.json();
+        const data = await fetchCachedAnimData(assetUrl(animation ?? weapon.animation));
         const parts: any[] = [];
         for (const part of weapon.parts ?? []) {
           try {
@@ -338,9 +393,11 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
         mixer.stopAllAction();
         mixer.clipAction(value === null ? idleClip : weaponModels[value].clip).reset().play();
         mixer.update(0);
+        dirtyRef.current = true;
       };
       weaponControllerRef.current(weaponRef.current);
       scene.add(root);
+      dirtyRef.current = true;
       renderer.render(scene, camera);
       mount.dataset.loadedPreset = preset.id;
       setStatus('ready');
@@ -355,6 +412,7 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height, false);
+      dirtyRef.current = true;
     };
     const observer = new ResizeObserver(resize);
     observer.observe(mount);
@@ -367,6 +425,7 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
       if (dragX === null) return;
       yaw += (event.clientX - dragX) * 0.008;
       dragX = event.clientX;
+      dirtyRef.current = true;
     };
     const pointerUp = () => { dragX = null; };
     mount.addEventListener('pointerdown', pointerDown);
@@ -377,9 +436,21 @@ export default function CharacterPreview({ assets, preset, appearance, motion, w
     const animate = (now: number) => {
       const delta = Math.min((now - previous) / 1000, 0.05);
       previous = now;
-      if (motionRef.current) { mixer?.update(delta); attachmentMixer?.update(delta); }
-      if (root) root.rotation.y = yaw + rotationRef.current;
-      renderer.render(scene, camera);
+      const nextYaw = yaw + rotationRef.current;
+      const yawChanged = Math.abs(nextYaw - lastRenderedYaw) > 0.0001;
+      // 仅在开启动作播放、拖拽旋转或存在脏标记时执行 WebGL 渲染，消除左上角静态头像框 60fps 空跑重绘
+      if (motionRef.current || yawChanged || dirtyRef.current) {
+        if (motionRef.current) {
+          mixer?.update(delta);
+          attachmentMixer?.update(delta);
+        }
+        if (root) {
+          root.rotation.y = nextYaw;
+          lastRenderedYaw = nextYaw;
+        }
+        renderer.render(scene, camera);
+        dirtyRef.current = false;
+      }
       frame = requestAnimationFrame(animate);
     };
     frame = requestAnimationFrame(animate);

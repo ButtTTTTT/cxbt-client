@@ -31,10 +31,16 @@ export const SKILL_BASE_LEVEL = 1;
 export const SKILL_POINTS = 15;
 export const BOSS_SKILL_SLOTS = 6;
 
+// 内存级技能数据缓存，避免大厅重挂载时重复拉取解析 skills.json
+let cachedSkillAssets: SkillAssets | null = null;
+
 export async function loadSkillAssets(signal?: AbortSignal): Promise<SkillAssets> {
+  if (cachedSkillAssets) return cachedSkillAssets;
   const response = await fetch(lobbyUrl('skills.json'), { signal });
   if (!response.ok) throw new Error('技能素材加载失败');
-  return response.json() as Promise<SkillAssets>;
+  const data = await response.json() as SkillAssets;
+  cachedSkillAssets = data;
+  return data;
 }
 
 export function skillTip(skill: Skill, level: number): string {

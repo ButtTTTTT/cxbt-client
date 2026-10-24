@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import './App.css';
-import CharacterCreation from './features/characterCreation/CharacterCreation';
-import Lobby from './features/lobby/Lobby';
 import ProfessionSelect from './features/professionSelect/ProfessionSelect';
 import { readCharacter, fetchCharacterFromServer } from './features/characterCreation/character';
 import AuthOverlay from './features/auth/AuthOverlay';
 import { clearToken, getToken } from './api';
 import { CREATION_JOBS, type CreationJob } from './features/characterCreation/assets';
+
+// 路由级代码按需懒加载，避免在登录界面或职业选择阶段提前解析大厅与三维捏脸模块
+const CharacterCreation = lazy(() => import('./features/characterCreation/CharacterCreation'));
+const Lobby = lazy(() => import('./features/lobby/Lobby'));
 
 const selectedJob = (): CreationJob => {
   const id = new URLSearchParams(location.search).get('job');
@@ -113,20 +115,28 @@ function App() {
   };
 
   if (!isAuth) return <AuthOverlay onLogin={() => setIsAuth(true)} />;
-  if (inLobby && character) return <Lobby character={character} onExit={() => {
-    setInLobby(false);
-    setStarted(false);
-    history.pushState(null, '', import.meta.env.BASE_URL);
-  }} onQuit={quit} />;
-  if (started || inLobby) return <CharacterCreation key={jobId} jobId={jobId} onComplete={created => {
-    setCharacter(created);
-    setStarted(false);
-    resume();
-  }} onBack={() => {
-    setStarted(false);
-    setInLobby(false);
-    history.pushState(null, '', `${import.meta.env.BASE_URL}?job=${jobId}`);
-  }} />;
+  if (inLobby && character) return (
+    <Suspense fallback={<main className="lobby-viewport"><p role="status">Loading lobby...</p></main>}>
+      <Lobby character={character} onExit={() => {
+        setInLobby(false);
+        setStarted(false);
+        history.pushState(null, '', import.meta.env.BASE_URL);
+      }} onQuit={quit} />
+    </Suspense>
+  );
+  if (started || inLobby) return (
+    <Suspense fallback={<main className="lobby-viewport"><p role="status">Loading character creation...</p></main>}>
+      <CharacterCreation key={jobId} jobId={jobId} onComplete={created => {
+        setCharacter(created);
+        setStarted(false);
+        resume();
+      }} onBack={() => {
+        setStarted(false);
+        setInLobby(false);
+        history.pushState(null, '', `${import.meta.env.BASE_URL}?job=${jobId}`);
+      }} />
+    </Suspense>
+  );
 
   return <ProfessionSelect jobId={jobId} onChoose={setJobId} onCreate={() => {
     setStarted(true);

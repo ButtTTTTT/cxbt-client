@@ -41,10 +41,16 @@ export function initialAppearance(preset: CreationPreset, gender = 0): Appearanc
   return { gender, hair: preset.defaultHair, eyes: 0, mouth: 0, accessory: preset.accessorySets.length - 1 };
 }
 
+// 内存级角色创建配置缓存，避免在大厅与创角界面切换时重复发起网络请求解析 JSON
+let cachedCreationAssets: CreationAssets | null = null;
+
 export async function loadCreationAssets(signal?: AbortSignal): Promise<CreationAssets> {
+  if (cachedCreationAssets) return cachedCreationAssets;
   const response = await fetch(assetUrl('config.json'), { signal });
   if (!response.ok) throw new Error('角色素材加载失败，请重试');
-  return response.json();
+  const data: CreationAssets = await response.json();
+  cachedCreationAssets = data;
+  return data;
 }
 
 // select_character.lua: jobPower, and game_text.lua: UI_profession_*_desc.

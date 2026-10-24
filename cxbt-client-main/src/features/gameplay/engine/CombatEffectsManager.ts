@@ -50,6 +50,13 @@ export class CombatEffectsManager {
 
   private static sharedSparkTorusGeo = new THREE.TorusGeometry(0.12, 0.025, 6, 12);
   private static sharedSparkBoxGeo = new THREE.BoxGeometry(0.05, 0.05, 0.05);
+  // 静态模块级特效贴图与序列帧缓存，避免每次进入战场时重复发起 42 个贴图网络解码请求及显存泄漏
+  private static sharedVfxCacheInitialized = false;
+  private static sharedFireCoreFrames: any[] = [];
+  private static sharedFireSmokeFrames: any[] = [];
+  private static sharedSparkTileFrames: any[] = [];
+  private static sharedVfxTextures: Record<string, any> = {};
+  private static pendingMuzzleJetCallbacks: Array<(tex: any) => void> = [];
 
   private floatingTexts: FloatingDamageText[] = [];
   private floatingTextPool: FloatingTextPoolItem[] = [];
@@ -181,7 +188,36 @@ export class CombatEffectsManager {
     return this.createFloatingTextPoolItem();
   }
 
+  private applyMuzzleJetTexture(tex: any) {
+    if (!tex || !this.muzzleFlashGroup) return;
+    const jetA = this.muzzleFlashGroup.getObjectByName('muzzle_jet_a');
+    const jetB = this.muzzleFlashGroup.getObjectByName('muzzle_jet_b');
+    if (jetA?.material) {
+      jetA.material.map = tex;
+      jetA.material.needsUpdate = true;
+    }
+    if (jetB?.material) {
+      jetB.material.map = tex;
+      jetB.material.needsUpdate = true;
+    }
+  }
+
   private initVfxTextures() {
+    this.fireCoreFrames = CombatEffectsManager.sharedFireCoreFrames;
+    this.fireSmokeFrames = CombatEffectsManager.sharedFireSmokeFrames;
+    this.sparkTileFrames = CombatEffectsManager.sharedSparkTileFrames;
+    this.vfxTextures = CombatEffectsManager.sharedVfxTextures;
+
+    const existingJetTex = CombatEffectsManager.sharedVfxTextures['vfx_muzzle_flash_shotgun_side_07'];
+    if (existingJetTex) {
+      queueMicrotask(() => this.applyMuzzleJetTexture(existingJetTex));
+    } else {
+      CombatEffectsManager.pendingMuzzleJetCallbacks.push((tex) => this.applyMuzzleJetTexture(tex));
+    }
+
+    if (CombatEffectsManager.sharedVfxCacheInitialized) return;
+    CombatEffectsManager.sharedVfxCacheInitialized = true;
+
     const loader = new THREE.TextureLoader();
     const baseUrl = `${import.meta.env.BASE_URL || '/'}assets/gameplay/vfx/`;
     const slice4x4 = (file: string, target: any[]) => {
@@ -203,9 +239,9 @@ export class CombatEffectsManager {
         () => undefined
       );
     };
-    slice4x4('vfx_fire_small_d.png', this.fireCoreFrames);
-    slice4x4('vfx_fire_small_d2.png', this.fireSmokeFrames);
-    slice4x4('vfx_spark_tile.png', this.sparkTileFrames);
+    slice4x4('vfx_fire_small_d.png', CombatEffectsManager.sharedFireCoreFrames);
+    slice4x4('vfx_fire_small_d2.png', CombatEffectsManager.sharedFireSmokeFrames);
+    slice4x4('vfx_spark_tile.png', CombatEffectsManager.sharedSparkTileFrames);
 
     const textureKeys = [
       'vfx_glow',
@@ -253,18 +289,10 @@ export class CombatEffectsManager {
         `${baseUrl}${key}.png`,
         (tex: any) => {
           tex.colorSpace = THREE.SRGBColorSpace;
-          this.vfxTextures[key] = tex;
-          if (key === 'vfx_muzzle_flash_shotgun_side_07' && this.muzzleFlashGroup) {
-            const jetA = this.muzzleFlashGroup.getObjectByName('muzzle_jet_a');
-            const jetB = this.muzzleFlashGroup.getObjectByName('muzzle_jet_b');
-            if (jetA?.material) {
-              jetA.material.map = tex;
-              jetA.material.needsUpdate = true;
-            }
-            if (jetB?.material) {
-              jetB.material.map = tex;
-              jetB.material.needsUpdate = true;
-            }
+          CombatEffectsManager.sharedVfxTextures[key] = tex;
+          if (key === 'vfx_muzzle_flash_shotgun_side_07') {
+            const cbs = CombatEffectsManager.pendingMuzzleJetCallbacks.splice(0);
+            for (const cb of cbs) cb(tex);
           }
         },
         undefined,

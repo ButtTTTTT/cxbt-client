@@ -3139,6 +3139,7 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
 
   const otherPlayersRef = useRef<Record<string, { buffer: Array<{ x: number; y?: number; z: number; yaw: number; time: number; [k: string]: any }> }>>({});
   const hasValidPosRef = useRef(false);
+  const lastMinimapUiAtRef = useRef(0);
   const lastRemoteHpStateAtRef = useRef<Record<string, number>>({});
   const latestLocalPosRef = useRef<{ x: number; y: number; z: number; yaw: number; extra?: Record<string, any> }>({
     x: 0,
@@ -3997,11 +3998,16 @@ export default function Gameplay({ room, character, creation, assets, avatarPres
       });
     }
     voiceManagerRef.current?.updateLocalTransform(x, y, z, yaw);
-    setPosition((previous) =>
-      Math.abs(previous.x - x) + Math.abs((previous.y ?? 0) - y) + Math.abs(previous.z - z) + Math.abs(previous.yaw - yaw) > 1.2
-        ? { x, y, z, yaw }
-        : previous
-    );
+    // 节流小地图坐标与朝向的 React 状态更新频率（限制在约 8Hz），避免鼠标快速转动视角时触发整个 6000 行 Gameplay 组件树高频重渲染
+    const nowPosAt = performance.now();
+    if (nowPosAt - lastMinimapUiAtRef.current >= 120) {
+      lastMinimapUiAtRef.current = nowPosAt;
+      setPosition((previous) =>
+        Math.abs(previous.x - x) + Math.abs(previous.z - z) > 1.5 || Math.abs(previous.yaw - yaw) > 0.35
+          ? { x, y, z, yaw }
+          : previous
+      );
+    }
   };
 
   // 触发结算翻牌 3D 角色动作：先播放入场翻牌动作 card_0X.json，随后衔接定格展示动作 card_0X_pose.json

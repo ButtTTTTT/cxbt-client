@@ -31,7 +31,11 @@ export type LobbyAssets = {
 };
 export const lobbyUrl = (path: string) => `${import.meta.env.BASE_URL}assets/lobby/${path}`;
 
+// 内存级大厅与造型卡图鉴缓存，避免从战场结算返回大厅时重复解析近 1MB 的 catalog.json 并执行二次合并遍历
+let cachedLobbyAssets: LobbyAssets | null = null;
+
 export async function loadLobbyAssets(signal?: AbortSignal): Promise<LobbyAssets> {
+  if (cachedLobbyAssets) return cachedLobbyAssets;
   const [response, cardsResponse] = await Promise.all([
     fetch(lobbyUrl('catalog.json'), { signal }),
     fetch(lobbyUrl('../avatar-cards/catalog.json'), { signal }),
@@ -61,6 +65,6 @@ export async function loadLobbyAssets(signal?: AbortSignal): Promise<LobbyAssets
   }
   assets.attachments = attachmentMap;
   assets.counts.avatars = assets.items.filter((item) => item.category === 'avatars').length;
+  cachedLobbyAssets = assets;
   return assets;
 }
-
